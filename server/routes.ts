@@ -183,6 +183,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Nutritionist individual dashboard stats
+  app.get("/api/nutritionists/:id/dashboard", async (req, res) => {
+    try {
+      const nutritionist = await storage.getNutritionist(req.params.id);
+      if (!nutritionist) {
+        return res.status(404).json({ error: "Nutritionist not found" });
+      }
+
+      const patients = await storage.getPatientsByNutritionist(nutritionist.id);
+      const whatsappInstance = await storage.getWhatsappInstanceByNutritionist(nutritionist.id);
+      const messages = whatsappInstance ? await storage.getMessagesByInstance(whatsappInstance.id) : [];
+      
+      const stats = {
+        totalPatients: patients.length,
+        activePatients: patients.filter(p => p.status === 'active').length,
+        totalConsultations: patients.reduce((total, patient) => total + (patient.consultationCount || 0), 0),
+        totalMessages: messages.length,
+        whatsappConnected: whatsappInstance?.status === 'connected',
+        responseRate: "95%"
+      };
+      
+      res.json({
+        nutritionist,
+        stats,
+        recentPatients: patients.slice(-5).reverse(),
+        recentMessages: messages.slice(-10).reverse()
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch nutritionist dashboard" });
+    }
+  });
+
   // Evolution API proxy endpoints
   app.post("/api/evolution/generate-qr/:instanceId", async (req, res) => {
     try {
