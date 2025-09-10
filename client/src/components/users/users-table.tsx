@@ -102,7 +102,7 @@ export default function UsersTable({
                 <SelectValue placeholder="Todas as especializações" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Todas as especializações</SelectItem>
+                <SelectItem value="all">Todas as especializações</SelectItem>
                 <SelectItem value="clinica">Nutrição Clínica</SelectItem>
                 <SelectItem value="esportiva">Nutrição Esportiva</SelectItem>
                 <SelectItem value="pediatrica">Nutrição Pediátrica</SelectItem>

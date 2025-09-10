@@ -15,7 +15,7 @@ export default function Users() {
   const filteredNutritionists = nutritionists?.filter((nutritionist: any) => {
     const matchesSearch = nutritionist.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          nutritionist.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesSpecialization = !selectedSpecialization || nutritionist.specialization === selectedSpecialization;
+    const matchesSpecialization = !selectedSpecialization || selectedSpecialization === "all" || nutritionist.specialization === selectedSpecialization;
     return matchesSearch && matchesSpecialization;
   }) || [];
 
