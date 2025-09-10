@@ -12,24 +12,24 @@ const WHATSAPP_INSTANCES_COLLECTION = "whatsapp_instances";
 const MESSAGES_COLLECTION = "messages";
 const CONSULTATIONS_COLLECTION = "consultations";
 
-// Types for Directus collections (simplified, using Zod-compatible types)
+// Types for Directus collections - using exact Portuguese field names from collection
 export interface DirectusPatient {
   id?: string;
-  nutritionist_id: string;
-  full_name: string;
-  email?: string;
-  phone?: string;
-  whatsapp_number?: string;
-  date_of_birth?: Date;
-  gender?: string;
-  weight?: string;
-  height?: string;
-  medical_history?: string;
-  dietary_restrictions?: string;
-  goals?: string;
-  status?: string;
-  last_consultation?: Date;
-  notes?: string;
+  Nutricionista_responsavel: string;
+  Nome_Completo: string;
+  Email?: string;
+  Telefone?: string;
+  Whatsapp?: string;
+  Data_de_nascimento?: string; // Date as string format "YYYY-MM-DD"
+  Sexo?: string; // Masculino, Feminino, Outros
+  Peso?: number;
+  Altura?: number;
+  Anamise_inicial?: string;
+  Suplementos_e_medicamentos?: string;
+  Metas_e_objetivos?: string;
+  Etapas?: string;
+  Ultima_consulta?: string;
+  Observacoes?: string;
   date_created?: Date;
   date_updated?: Date;
 }
@@ -92,23 +92,50 @@ export interface DirectusConsultation {
 
 // Transform functions between local types and Directus types
 function transformPatientToDirectus(patient: any): DirectusPatient {
-  return {
+  console.log('Transforming patient to Directus:', patient);
+  
+  // Format date as YYYY-MM-DD string
+  let formattedDate: string | undefined;
+  if (patient.dateOfBirth) {
+    const date = new Date(patient.dateOfBirth);
+    if (!isNaN(date.getTime())) {
+      formattedDate = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+    }
+  }
+
+  // Format WhatsApp number - ensure it has country code format
+  let formattedWhatsapp: string | undefined;
+  if (patient.whatsappNumber) {
+    const cleanNumber = patient.whatsappNumber.replace(/\D/g, ''); // Remove non-digits
+    if (cleanNumber.length === 11) {
+      formattedWhatsapp = `55${cleanNumber}`; // Add Brazil country code
+    } else if (cleanNumber.length === 13 && cleanNumber.startsWith('55')) {
+      formattedWhatsapp = cleanNumber; // Already has country code
+    } else {
+      formattedWhatsapp = patient.whatsappNumber; // Use as-is if format unclear
+    }
+  }
+
+  const transformed = {
     Nutricionista_responsavel: patient.nutritionistId,
     Nome_Completo: patient.fullName,
     Email: patient.email,
     Telefone: patient.phone,
-    Whatsapp: patient.whatsappNumber,
-    Data_de_nascimento: patient.dateOfBirth ? new Date(patient.dateOfBirth) : undefined,
+    Whatsapp: formattedWhatsapp,
+    Data_de_nascimento: formattedDate,
     Sexo: patient.gender,
-    Peso: patient.weight,
-    Altura: patient.height,
+    Peso: patient.weight ? parseInt(patient.weight, 10) : undefined,
+    Altura: patient.height ? parseInt(patient.height, 10) : undefined,
     Anamise_inicial: patient.medicalHistory,
     Suplementos_e_medicamentos: patient.dietaryRestrictions,
     Metas_e_objetivos: patient.goals,
-    Etapas: patient.status || 'active',
-    Ultima_consulta: patient.lastConsultation ? new Date(patient.lastConsultation) : undefined,
+    Etapas: patient.status || 'Ativo',
+    Ultima_consulta: patient.lastConsultation,
     Observacoes: patient.notes,
   };
+
+  console.log('Transformed patient data:', transformed);
+  return transformed;
 }
 
 function transformPatientFromDirectus(directusPatient: any): any {
