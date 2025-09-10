@@ -9,6 +9,7 @@ import Register from "@/pages/register";
 import LoginPage from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
 import Users from "@/pages/users";
+import Patients from "@/pages/patients";
 import WhatsApp from "@/pages/whatsapp";
 import Header from "@/components/layout/header";
 import { useEffect } from "react";
@@ -104,6 +105,12 @@ function Router() {
           <ProtectedRoute>
             <Header />
             <Users />
+          </ProtectedRoute>
+        </Route>
+        <Route path="/patients">
+          <ProtectedRoute>
+            <Header />
+            <Patients />
           </ProtectedRoute>
         </Route>
         <Route path="/whatsapp">

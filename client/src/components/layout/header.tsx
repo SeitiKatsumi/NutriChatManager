@@ -5,8 +5,8 @@ export default function Header() {
   const [location, setLocation] = useLocation();
 
   const navItems = [
-    { key: "register", path: "/register", label: "Cadastro" },
     { key: "dashboard", path: "/dashboard", label: "Dashboard" },
+    { key: "patients", path: "/patients", label: "Pacientes" },
     { key: "users", path: "/users", label: "Usuários" },
     { key: "whatsapp", path: "/whatsapp", label: "WhatsApp" },
   ];
@@ -32,7 +32,7 @@ export default function Header() {
               key={item.key}
               onClick={() => setLocation(item.path)}
               className={`font-medium hover:text-primary/80 transition-colors ${
-                currentPath === item.path || (currentPath === "/" && item.path === "/register")
+                currentPath === item.path || (currentPath === "/" && item.path === "/dashboard")
                   ? "text-primary"
                   : "text-muted-foreground hover:text-foreground"
               }`}

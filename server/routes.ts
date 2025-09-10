@@ -2,13 +2,21 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import bcrypt from "bcrypt";
 import { storage } from "./storage";
-import { insertNutritionistSchema, insertWhatsappInstanceSchema } from "@shared/schema";
+import { insertNutritionistSchema, insertWhatsappInstanceSchema, insertPatientSchema } from "@shared/schema";
 import { z } from "zod";
 // Import real API clients (server-side versions)
 import { directusClient } from "./lib/directus.js";
 import { evolutionApiClient } from "./lib/evolution-api.js";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Middleware to check authentication
+  const requireAuth = (req: any, res: any, next: any) => {
+    if (!req.session.user) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+    next();
+  };
+
   // Nutritionists routes
   app.get("/api/nutritionists", async (req, res) => {
     try {
@@ -161,6 +169,136 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Patients routes (protected)
+  app.get("/api/patients", requireAuth, async (req, res) => {
+    try {
+      const nutritionistId = req.session.user.nutritionistId;
+      const patients = await storage.getPatientsByNutritionist(nutritionistId);
+      
+      // Optional filtering by status, name, etc.
+      const { status, search } = req.query;
+      let filteredPatients = patients;
+      
+      if (status && typeof status === 'string') {
+        filteredPatients = filteredPatients.filter(p => p.status === status);
+      }
+      
+      if (search && typeof search === 'string') {
+        const searchLower = search.toLowerCase();
+        filteredPatients = filteredPatients.filter(p => 
+          p.fullName.toLowerCase().includes(searchLower) ||
+          (p.email && p.email.toLowerCase().includes(searchLower)) ||
+          (p.phone && p.phone.includes(search))
+        );
+      }
+      
+      res.json(filteredPatients);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch patients" });
+    }
+  });
+
+  app.get("/api/patients/:id", requireAuth, async (req, res) => {
+    try {
+      const nutritionistId = req.session.user.nutritionistId;
+      const patient = await storage.getPatient(req.params.id);
+      
+      if (!patient) {
+        return res.status(404).json({ error: "Patient not found" });
+      }
+      
+      // Verify ownership - patient must belong to logged nutritionist
+      if (patient.nutritionistId !== nutritionistId) {
+        return res.status(403).json({ error: "Access denied. You can only view your own patients." });
+      }
+      
+      res.json(patient);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch patient" });
+    }
+  });
+
+  app.post("/api/patients", requireAuth, async (req, res) => {
+    try {
+      const nutritionistId = req.session.user.nutritionistId;
+      const validatedData = insertPatientSchema.parse(req.body);
+      
+      // Ensure patient is associated with logged nutritionist
+      const patientData = {
+        ...validatedData,
+        nutritionistId
+      };
+      
+      const patient = await storage.createPatient(patientData);
+      res.status(201).json(patient);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to create patient" });
+    }
+  });
+
+  app.put("/api/patients/:id", requireAuth, async (req, res) => {
+    try {
+      const nutritionistId = req.session.user.nutritionistId;
+      const patientId = req.params.id;
+      
+      // First verify patient exists and belongs to nutritionist
+      const existingPatient = await storage.getPatient(patientId);
+      if (!existingPatient) {
+        return res.status(404).json({ error: "Patient not found" });
+      }
+      
+      if (existingPatient.nutritionistId !== nutritionistId) {
+        return res.status(403).json({ error: "Access denied. You can only update your own patients." });
+      }
+      
+      const validatedData = insertPatientSchema.partial().parse(req.body);
+      
+      // Prevent changing nutritionistId
+      const { nutritionistId: _, ...updateData } = validatedData;
+      
+      const patient = await storage.updatePatient(patientId, updateData);
+      if (!patient) {
+        return res.status(404).json({ error: "Patient not found" });
+      }
+      
+      res.json(patient);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to update patient" });
+    }
+  });
+
+  app.delete("/api/patients/:id", requireAuth, async (req, res) => {
+    try {
+      const nutritionistId = req.session.user.nutritionistId;
+      const patientId = req.params.id;
+      
+      // First verify patient exists and belongs to nutritionist
+      const existingPatient = await storage.getPatient(patientId);
+      if (!existingPatient) {
+        return res.status(404).json({ error: "Patient not found" });
+      }
+      
+      if (existingPatient.nutritionistId !== nutritionistId) {
+        return res.status(403).json({ error: "Access denied. You can only delete your own patients." });
+      }
+      
+      const deleted = await storage.deletePatient(patientId);
+      if (!deleted) {
+        return res.status(404).json({ error: "Patient not found" });
+      }
+      
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete patient" });
+    }
+  });
+
   // Statistics endpoint
   app.get("/api/stats", async (req, res) => {
     try {
@@ -180,14 +318,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to fetch statistics" });
     }
   });
-
-  // Middleware to check authentication
-  const requireAuth = (req: any, res: any, next: any) => {
-    if (!req.session.user) {
-      return res.status(401).json({ error: "Authentication required" });
-    }
-    next();
-  };
 
   // Nutritionist individual dashboard stats (protected)
   app.get("/api/nutritionists/:id/dashboard", requireAuth, async (req, res) => {
