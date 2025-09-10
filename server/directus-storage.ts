@@ -1,37 +1,5 @@
 // @ts-ignore - directus.js doesn't have type declarations
-import { directusClient } from "./lib/directus.js";
-
-import fetch from "node-fetch";
-
-// Create DirectusClient class locally
-class DirectusClient {
-  constructor(baseUrl: string, token: string) {
-    this.baseUrl = baseUrl;
-    this.token = token;
-  }
-
-  baseUrl: string;
-  token: string;
-
-  async request(endpoint: string, options: any = {}) {
-    const url = `${this.baseUrl}${endpoint}`;
-    
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.token}`,
-        ...options.headers,
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Directus API error: ${response.status} ${response.statusText}`);
-    }
-
-    return response.json();
-  }
-}
+import { DirectusClient, directusClient } from "./lib/directus.js";
 import bcrypt from "bcrypt";
 import { randomUUID } from "crypto";
 import type { IStorage } from "./storage";
@@ -211,6 +179,7 @@ export class DirectusStorage implements IStorage {
   // Create a client instance with user token
   private getUserClient(userToken?: string) {
     if (userToken) {
+      // Use the unified DirectusClient from server/lib/directus.js
       return new DirectusClient(
         process.env.DIRECTUS_URL || "https://nutrichatbot.app.11mind.com.br", 
         userToken
@@ -325,15 +294,60 @@ export class DirectusStorage implements IStorage {
 
   async createPatient(insertPatient: any, userToken?: string) {
     try {
+      console.log('=== CREATE PATIENT DIRECTUS DEBUG ===');
+      console.log('insertPatient:', JSON.stringify(insertPatient, null, 2));
+      console.log('userToken provided:', !!userToken);
+      
       const client = this.getUserClient(userToken);
       const directusPatient = transformPatientToDirectus(insertPatient);
-      const response = await client.request(`/items/${PATIENTS_COLLECTION}`, {
+      console.log('directusPatient:', JSON.stringify(directusPatient, null, 2));
+      
+      const response = await client.request(`/items/${PATIENTS_COLLECTION}?fields=*`, {
         method: 'POST',
         body: JSON.stringify(directusPatient),
+        headers: {
+          'Prefer': 'return=representation'
+        }
       });
+      
+      console.log('Directus response:', JSON.stringify(response, null, 2));
+      console.log('Response data:', response?.data);
+      
+      // Handle 204 No Content as success (Directus created the item but didn't return data)
+      if (!response || response.data === null) {
+        console.log('Directus returned success without data (likely 204), creating minimal patient object');
+        
+        // Return a minimal patient object with the data we have
+        return {
+          id: 'created', // Placeholder ID
+          nutritionistId: insertPatient.nutritionistId,
+          fullName: insertPatient.fullName,
+          email: insertPatient.email,
+          phone: insertPatient.phone,
+          whatsappNumber: insertPatient.whatsappNumber,
+          dateOfBirth: insertPatient.dateOfBirth,
+          gender: insertPatient.gender,
+          weight: insertPatient.weight,
+          height: insertPatient.height,
+          medicalHistory: insertPatient.medicalHistory,
+          dietaryRestrictions: insertPatient.dietaryRestrictions,
+          goals: insertPatient.goals,
+          status: insertPatient.status || 'active',
+          lastConsultation: insertPatient.lastConsultation,
+          notes: insertPatient.notes,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+      }
+      
       return transformPatientFromDirectus(response.data);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating patient:', error);
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        response: error.response?.data || error.response
+      });
       throw error;
     }
   }

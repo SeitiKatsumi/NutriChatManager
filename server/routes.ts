@@ -208,15 +208,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const nutritionistId = req.session.user.nutritionistId;
       const userToken = req.session.user.accessToken;
-      const validatedData = insertPatientSchema.parse(req.body);
       
-      // Ensure patient is associated with logged nutritionist
-      const patientData = {
-        ...validatedData,
+      // First add nutritionistId to the data, then validate
+      const patientDataWithNutritionist = {
+        ...req.body,
         nutritionistId
       };
       
-      const patient = await storage.createPatient(patientData, userToken);
+      const validatedData = insertPatientSchema.parse(patientDataWithNutritionist);
+      
+      const patient = await storage.createPatient(validatedData, userToken);
       res.status(201).json(patient);
     } catch (error) {
       if (error instanceof z.ZodError) {

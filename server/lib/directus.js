@@ -17,6 +17,11 @@ class DirectusClient {
   async request(endpoint, options = {}) {
     const url = `${this.baseUrl}${endpoint}`;
     
+    console.log(`[Directus] ${options.method || 'GET'} ${url}`);
+    if (options.body) {
+      console.log(`[Directus] Request body:`, JSON.parse(options.body));
+    }
+    
     const response = await fetch(url, {
       ...options,
       headers: {
@@ -26,11 +31,43 @@ class DirectusClient {
       },
     });
 
+    console.log(`[Directus] Response status: ${response.status} ${response.statusText}`);
+    
     if (!response.ok) {
-      throw new Error(`Directus API error: ${response.status} ${response.statusText}`);
+      const errorText = await response.text();
+      console.log(`[Directus] Error response text:`, errorText);
+      throw new Error(`Directus API error: ${response.status} ${response.statusText} - ${errorText}`);
     }
 
-    return response.json();
+    // Read response text first to handle empty responses gracefully
+    const responseText = await response.text();
+    const contentType = response.headers.get('content-type');
+    
+    console.log(`[Directus] Content-Type: ${contentType}`);
+    console.log(`[Directus] Response text:`, responseText);
+    
+    // If response is empty, return empty object
+    if (!responseText.trim()) {
+      console.log(`[Directus] Empty response, returning empty object`);
+      return { data: null };
+    }
+    
+    // Try to parse as JSON if content-type suggests JSON or if it looks like JSON
+    if ((contentType && contentType.includes('application/json')) || responseText.trim().startsWith('{') || responseText.trim().startsWith('[')) {
+      try {
+        const jsonData = JSON.parse(responseText);
+        console.log(`[Directus] Parsed JSON:`, jsonData);
+        return jsonData;
+      } catch (error) {
+        console.error(`[Directus] JSON parse error:`, error.message);
+        console.error(`[Directus] Response text was:`, responseText);
+        throw new Error(`Failed to parse Directus response as JSON: ${error.message}`);
+      }
+    }
+    
+    // Non-JSON response
+    console.log(`[Directus] Non-JSON response:`, responseText);
+    return { data: responseText };
   }
 
   async getUsers() {
@@ -133,4 +170,4 @@ class DirectusClient {
 
 const directusClient = new DirectusClient(DIRECTUS_URL, DIRECTUS_TOKEN);
 
-export { directusClient };
+export { DirectusClient, directusClient };
