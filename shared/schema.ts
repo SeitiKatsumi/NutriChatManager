@@ -1,167 +1,169 @@
-import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, jsonb, boolean, integer } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const nutritionists = pgTable("nutritionists", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  fullName: text("full_name").notNull(),
-  email: text("email").notNull().unique(),
-  password: text("password").notNull(),
-  crn: text("crn").notNull(), // Professional registration number
-  phone: text("phone"),
-  address: text("address"),
-  specialization: text("specialization"),
-  whatsappNumber: text("whatsapp_number"),
-  welcomeMessage: text("welcome_message"),
-  workingHours: text("working_hours").default("commercial"),
-  status: text("status").default("active"), // active, inactive, pending
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+// Base Zod schemas for validation and type inference
+// These schemas define the data models for our Directus-based storage
+
+// Nutritionist schema
+export const nutritionistSchema = z.object({
+  id: z.string(),
+  fullName: z.string(),
+  email: z.string().email(),
+  password: z.string(),
+  crn: z.string(), // Professional registration number
+  phone: z.string().optional(),
+  address: z.string().optional(),
+  specialization: z.string().optional(),
+  whatsappNumber: z.string().optional(),
+  welcomeMessage: z.string().optional(),
+  workingHours: z.string().default("commercial"),
+  status: z.string().default("active"), // active, inactive, pending
+  createdAt: z.date(),
+  updatedAt: z.date(),
 });
 
-export const whatsappInstances = pgTable("whatsapp_instances", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  nutritionistId: varchar("nutritionist_id").references(() => nutritionists.id),
-  instanceId: text("instance_id").notNull().unique(),
-  instanceName: text("instance_name"),
-  qrCode: text("qr_code"),
-  status: text("status").default("disconnected"), // connected, disconnected, connecting
-  phoneNumber: text("phone_number"),
-  agentName: text("agent_name").default("Assistente NutriBot"),
-  autoResponse: boolean("auto_response").default(true),
-  config: jsonb("config"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-export const messages = pgTable("messages", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  instanceId: varchar("instance_id").references(() => whatsappInstances.id),
-  fromNumber: text("from_number").notNull(),
-  toNumber: text("to_number").notNull(),
-  message: text("message").notNull(),
-  messageType: text("message_type").default("text"), // text, image, audio, etc.
-  isFromBot: boolean("is_from_bot").default(false),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const insertNutritionistSchema = createInsertSchema(nutritionists).omit({
+export const insertNutritionistSchema = nutritionistSchema.omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
 
-export const insertWhatsappInstanceSchema = createInsertSchema(whatsappInstances).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const insertMessageSchema = createInsertSchema(messages).omit({
-  id: true,
-  createdAt: true,
-});
-
+export type Nutritionist = z.infer<typeof nutritionistSchema>;
 export type InsertNutritionist = z.infer<typeof insertNutritionistSchema>;
-export type Nutritionist = typeof nutritionists.$inferSelect;
 
-export type InsertWhatsappInstance = z.infer<typeof insertWhatsappInstanceSchema>;
-export type WhatsappInstance = typeof whatsappInstances.$inferSelect;
-
-export type InsertMessage = z.infer<typeof insertMessageSchema>;
-export type Message = typeof messages.$inferSelect;
-
-// Tabela de pacientes - cada nutricionista terá seus próprios pacientes
-export const patients = pgTable("patients", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  nutritionistId: varchar("nutritionist_id").references(() => nutritionists.id).notNull(),
-  fullName: text("full_name").notNull(),
-  email: text("email"),
-  phone: text("phone"),
-  whatsappNumber: text("whatsapp_number"),
-  dateOfBirth: timestamp("date_of_birth"),
-  gender: text("gender"),
-  weight: text("weight"),
-  height: text("height"),
-  medicalHistory: text("medical_history"),
-  dietaryRestrictions: text("dietary_restrictions"),
-  goals: text("goals"),
-  status: text("status").default("active"), // active, inactive, completed
-  lastConsultation: timestamp("last_consultation"),
-  notes: text("notes"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+// WhatsApp Instance schema
+export const whatsappInstanceSchema = z.object({
+  id: z.string(),
+  nutritionistId: z.string(),
+  instanceId: z.string(), // Evolution API instance ID
+  instanceName: z.string().optional(),
+  qrCode: z.string().optional(),
+  status: z.string().default("disconnected"), // connected, disconnected, connecting
+  phoneNumber: z.string().optional(),
+  agentName: z.string().default("Assistente NutriBot"),
+  autoResponse: z.boolean().default(true),
+  config: z.any().optional(), // JSON config object
+  createdAt: z.date(),
+  updatedAt: z.date(),
 });
 
-// Tabela de consultas/atendimentos
-export const consultations = pgTable("consultations", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  patientId: varchar("patient_id").references(() => patients.id).notNull(),
-  nutritionistId: varchar("nutritionist_id").references(() => nutritionists.id).notNull(),
-  type: text("type").notNull(), // whatsapp, presencial, online
-  duration: integer("duration"), // duração em minutos
-  notes: text("notes"),
-  recommendations: text("recommendations"),
-  status: text("status").default("completed"), // scheduled, completed, cancelled
-  scheduledAt: timestamp("scheduled_at"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const insertPatientSchema = createInsertSchema(patients).omit({
+export const insertWhatsappInstanceSchema = whatsappInstanceSchema.omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
 
-export const insertConsultationSchema = createInsertSchema(consultations).omit({
+export type WhatsappInstance = z.infer<typeof whatsappInstanceSchema>;
+export type InsertWhatsappInstance = z.infer<typeof insertWhatsappInstanceSchema>;
+
+// Message schema
+export const messageSchema = z.object({
+  id: z.string(),
+  instanceId: z.string(),
+  fromNumber: z.string(),
+  toNumber: z.string(),
+  message: z.string(),
+  messageType: z.string().default("text"), // text, image, audio, etc.
+  isFromBot: z.boolean().default(false),
+  createdAt: z.date(),
+});
+
+export const insertMessageSchema = messageSchema.omit({
   id: true,
   createdAt: true,
 });
 
+export type Message = z.infer<typeof messageSchema>;
+export type InsertMessage = z.infer<typeof insertMessageSchema>;
+
+// Patient schema - matches Directus collection "Cadastro_de_Pacientes"
+export const patientSchema = z.object({
+  id: z.string(),
+  nutritionistId: z.string(),
+  fullName: z.string(),
+  email: z.string().email().optional(),
+  phone: z.string().optional(),
+  whatsappNumber: z.string().optional(),
+  dateOfBirth: z.date().optional(),
+  gender: z.string().optional(),
+  weight: z.string().optional(),
+  height: z.string().optional(),
+  medicalHistory: z.string().optional(),
+  dietaryRestrictions: z.string().optional(),
+  goals: z.string().optional(),
+  status: z.string().default("active"), // active, inactive, completed
+  lastConsultation: z.date().optional(),
+  notes: z.string().optional(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
+
+export const insertPatientSchema = patientSchema.omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type Patient = z.infer<typeof patientSchema>;
 export type InsertPatient = z.infer<typeof insertPatientSchema>;
-export type Patient = typeof patients.$inferSelect;
 
+// Consultation schema
+export const consultationSchema = z.object({
+  id: z.string(),
+  patientId: z.string(),
+  nutritionistId: z.string(),
+  type: z.string(), // whatsapp, presencial, online
+  duration: z.number().optional(), // duration in minutes
+  notes: z.string().optional(),
+  recommendations: z.string().optional(),
+  status: z.string().default("completed"), // scheduled, completed, cancelled
+  scheduledAt: z.date().optional(),
+  createdAt: z.date(),
+});
+
+export const insertConsultationSchema = consultationSchema.omit({
+  id: true,
+  createdAt: true,
+});
+
+export type Consultation = z.infer<typeof consultationSchema>;
 export type InsertConsultation = z.infer<typeof insertConsultationSchema>;
-export type Consultation = typeof consultations.$inferSelect;
 
-// Relations
-export const nutritionistRelations = relations(nutritionists, ({ many }) => ({
-  whatsappInstances: many(whatsappInstances),
-  patients: many(patients),
-  consultations: many(consultations),
-}));
+// Validation helpers
+export const validateEmail = (email: string) => {
+  return z.string().email().safeParse(email);
+};
 
-export const patientRelations = relations(patients, ({ one, many }) => ({
-  nutritionist: one(nutritionists, {
-    fields: [patients.nutritionistId],
-    references: [nutritionists.id],
-  }),
-  consultations: many(consultations),
-}));
+export const validatePhone = (phone: string) => {
+  return z.string().min(10).max(15).safeParse(phone);
+};
 
-export const whatsappInstanceRelations = relations(whatsappInstances, ({ one, many }) => ({
-  nutritionist: one(nutritionists, {
-    fields: [whatsappInstances.nutritionistId],
-    references: [nutritionists.id],
-  }),
-  messages: many(messages),
-}));
+export const validateCRN = (crn: string) => {
+  return z.string().min(4).max(20).safeParse(crn);
+};
 
-export const messageRelations = relations(messages, ({ one }) => ({
-  whatsappInstance: one(whatsappInstances, {
-    fields: [messages.instanceId],
-    references: [whatsappInstances.id],
-  }),
-}));
+// Extended validation schemas for forms
+export const loginSchema = z.object({
+  email: z.string().email("Invalid email format"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+});
 
-export const consultationRelations = relations(consultations, ({ one }) => ({
-  patient: one(patients, {
-    fields: [consultations.patientId],
-    references: [patients.id],
-  }),
-  nutritionist: one(nutritionists, {
-    fields: [consultations.nutritionistId],
-    references: [nutritionists.id],
-  }),
-}));
+export const registerSchema = insertNutritionistSchema.extend({
+  confirmPassword: z.string(),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"],
+});
+
+export const patientFormSchema = insertPatientSchema.extend({
+  email: z.string().email().optional().or(z.literal("")),
+});
+
+export const consultationFormSchema = insertConsultationSchema.extend({
+  date: z.string(), // For form handling
+  time: z.string(), // For form handling
+});
+
+export type LoginForm = z.infer<typeof loginSchema>;
+export type RegisterForm = z.infer<typeof registerSchema>;
+export type PatientForm = z.infer<typeof patientFormSchema>;
+export type ConsultationForm = z.infer<typeof consultationFormSchema>;
