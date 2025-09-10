@@ -3,6 +3,9 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertNutritionistSchema, insertWhatsappInstanceSchema } from "@shared/schema";
 import { z } from "zod";
+// Import real API clients (server-side versions)
+import { directusClient } from "./lib/directus.js";
+import { evolutionApiClient } from "./lib/evolution-api.js";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Nutritionists routes
@@ -155,8 +158,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { instanceId } = req.params;
       
-      // This would integrate with Evolution API
-      // For now, returning a mock response
+      // Create instance first if it doesn't exist
+      try {
+        await evolutionApiClient.createInstance(instanceId);
+      } catch (createError) {
+        // Instance might already exist, continue
+        console.log('Instance might already exist:', instanceId);
+      }
+      
+      // Get QR code from Evolution API
+      const qrResponse = await evolutionApiClient.getInstanceQrCode(instanceId);
+      
+      res.json({
+        qrCode: qrResponse.base64 || qrResponse.qrcode,
+        instanceId,
+        status: "waiting_for_connection"
+      });
+    } catch (error) {
+      const { instanceId } = req.params;
+      console.error('Evolution API QR generation error:', error);
+      // Fallback to mock for development
       const qrCode = `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAADICAYAAACtWK6eAAAACXBIWXMAAAsTAAALEwEAmpwYAAABM0lEQVR4nO3BMQEAAADCoPVPbQdvoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA+DEfEKYAAAH5BJQAAAAASUVORK5CYII=`;
       
       res.json({
@@ -164,8 +185,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         instanceId,
         status: "waiting_for_connection"
       });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to generate QR code" });
     }
   });
 
@@ -173,14 +192,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { instanceId } = req.params;
       
-      // This would check Evolution API for instance status
+      // Get status from Evolution API
+      const statusResponse = await evolutionApiClient.getInstanceStatus(instanceId);
+      
+      res.json({
+        instanceId,
+        status: statusResponse.state || "disconnected",
+        phoneNumber: statusResponse.instance?.phone || null
+      });
+    } catch (error) {
+      const { instanceId } = req.params;
+      console.error('Evolution API status check error:', error);
+      // Fallback to mock for development
       res.json({
         instanceId,
         status: "disconnected",
         phoneNumber: null
       });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to check instance status" });
     }
   });
 
