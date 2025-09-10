@@ -1,0 +1,189 @@
+import type { Express } from "express";
+import { createServer, type Server } from "http";
+import { storage } from "./storage";
+import { insertNutritionistSchema, insertWhatsappInstanceSchema } from "@shared/schema";
+import { z } from "zod";
+
+export async function registerRoutes(app: Express): Promise<Server> {
+  // Nutritionists routes
+  app.get("/api/nutritionists", async (req, res) => {
+    try {
+      const nutritionists = await storage.listNutritionists();
+      res.json(nutritionists);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch nutritionists" });
+    }
+  });
+
+  app.get("/api/nutritionists/:id", async (req, res) => {
+    try {
+      const nutritionist = await storage.getNutritionist(req.params.id);
+      if (!nutritionist) {
+        return res.status(404).json({ error: "Nutritionist not found" });
+      }
+      res.json(nutritionist);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch nutritionist" });
+    }
+  });
+
+  app.post("/api/nutritionists", async (req, res) => {
+    try {
+      const validatedData = insertNutritionistSchema.parse(req.body);
+      
+      // Check if email already exists
+      const existing = await storage.getNutritionistByEmail(validatedData.email);
+      if (existing) {
+        return res.status(409).json({ error: "Email already registered" });
+      }
+
+      const nutritionist = await storage.createNutritionist(validatedData);
+      res.status(201).json(nutritionist);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to create nutritionist" });
+    }
+  });
+
+  app.put("/api/nutritionists/:id", async (req, res) => {
+    try {
+      const validatedData = insertNutritionistSchema.partial().parse(req.body);
+      const nutritionist = await storage.updateNutritionist(req.params.id, validatedData);
+      
+      if (!nutritionist) {
+        return res.status(404).json({ error: "Nutritionist not found" });
+      }
+      
+      res.json(nutritionist);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to update nutritionist" });
+    }
+  });
+
+  app.delete("/api/nutritionists/:id", async (req, res) => {
+    try {
+      const deleted = await storage.deleteNutritionist(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Nutritionist not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete nutritionist" });
+    }
+  });
+
+  // WhatsApp instances routes
+  app.get("/api/whatsapp-instances", async (req, res) => {
+    try {
+      const instances = await storage.listWhatsappInstances();
+      res.json(instances);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch WhatsApp instances" });
+    }
+  });
+
+  app.get("/api/whatsapp-instances/nutritionist/:nutritionistId", async (req, res) => {
+    try {
+      const instance = await storage.getWhatsappInstanceByNutritionist(req.params.nutritionistId);
+      if (!instance) {
+        return res.status(404).json({ error: "WhatsApp instance not found" });
+      }
+      res.json(instance);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch WhatsApp instance" });
+    }
+  });
+
+  app.post("/api/whatsapp-instances", async (req, res) => {
+    try {
+      const validatedData = insertWhatsappInstanceSchema.parse(req.body);
+      const instance = await storage.createWhatsappInstance(validatedData);
+      res.status(201).json(instance);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to create WhatsApp instance" });
+    }
+  });
+
+  app.put("/api/whatsapp-instances/:id", async (req, res) => {
+    try {
+      const validatedData = insertWhatsappInstanceSchema.partial().parse(req.body);
+      const instance = await storage.updateWhatsappInstance(req.params.id, validatedData);
+      
+      if (!instance) {
+        return res.status(404).json({ error: "WhatsApp instance not found" });
+      }
+      
+      res.json(instance);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to update WhatsApp instance" });
+    }
+  });
+
+  // Statistics endpoint
+  app.get("/api/stats", async (req, res) => {
+    try {
+      const nutritionists = await storage.listNutritionists();
+      const instances = await storage.listWhatsappInstances();
+      const messagesCount = await storage.getMessagesCount();
+      
+      const connectedInstances = instances.filter(i => i.status === "connected").length;
+      
+      res.json({
+        nutritionists: nutritionists.length,
+        connectedWhatsapp: connectedInstances,
+        messages: messagesCount,
+        responseRate: "97.2%" // This would be calculated from actual data
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch statistics" });
+    }
+  });
+
+  // Evolution API proxy endpoints
+  app.post("/api/evolution/generate-qr/:instanceId", async (req, res) => {
+    try {
+      const { instanceId } = req.params;
+      
+      // This would integrate with Evolution API
+      // For now, returning a mock response
+      const qrCode = `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAADICAYAAACtWK6eAAAACXBIWXMAAAsTAAALEwEAmpwYAAABM0lEQVR4nO3BMQEAAADCoPVPbQdvoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA+DEfEKYAAAH5BJQAAAAASUVORK5CYII=`;
+      
+      res.json({
+        qrCode,
+        instanceId,
+        status: "waiting_for_connection"
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to generate QR code" });
+    }
+  });
+
+  app.get("/api/evolution/status/:instanceId", async (req, res) => {
+    try {
+      const { instanceId } = req.params;
+      
+      // This would check Evolution API for instance status
+      res.json({
+        instanceId,
+        status: "disconnected",
+        phoneNumber: null
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to check instance status" });
+    }
+  });
+
+  const httpServer = createServer(app);
+  return httpServer;
+}
