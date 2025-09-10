@@ -208,6 +208,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const nutritionistId = req.session.user.nutritionistId;
       const userToken = req.session.user.accessToken;
+      
+      console.log("=== CREATE PATIENT DEBUG ===");
+      console.log("Request body:", JSON.stringify(req.body, null, 2));
+      console.log("nutritionistId:", nutritionistId);
+      
       const validatedData = insertPatientSchema.parse(req.body);
       
       // Ensure patient is associated with logged nutritionist
@@ -216,12 +221,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         nutritionistId
       };
       
+      console.log("Validated data:", JSON.stringify(patientData, null, 2));
+      
       const patient = await storage.createPatient(patientData, userToken);
       res.status(201).json(patient);
     } catch (error) {
+      console.log("=== CREATE PATIENT ERROR ===");
+      console.log("Error:", error);
       if (error instanceof z.ZodError) {
+        console.log("Validation errors:", JSON.stringify(error.errors, null, 2));
         return res.status(400).json({ error: "Invalid data", details: error.errors });
       }
+      console.log("Other error:", error.message);
       res.status(500).json({ error: "Failed to create patient" });
     }
   });
