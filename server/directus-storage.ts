@@ -143,8 +143,8 @@ function transformPatientFromDirectus(directusPatient: any): any {
     id: directusPatient.id,
     nutritionistId: directusPatient.Nutricionista_responsavel,
     fullName: directusPatient.Nome_Completo,
-    email: directusPatient.Email,
-    phone: directusPatient.Telefone,
+    email: null, // Not available in this collection
+    phone: null, // Not available in this collection  
     whatsappNumber: directusPatient.Whatsapp,
     dateOfBirth: directusPatient.Data_de_nascimento,
     gender: directusPatient.Sexo,
@@ -152,10 +152,10 @@ function transformPatientFromDirectus(directusPatient: any): any {
     height: directusPatient.Altura,
     medicalHistory: directusPatient.Anamise_inicial,
     dietaryRestrictions: directusPatient.Suplementos_e_medicamentos,
-    goals: directusPatient.Metas_e_objetivos,
+    goals: null, // Field not available in collection
     status: directusPatient.Etapas,
-    lastConsultation: directusPatient.Ultima_consulta,
-    notes: directusPatient.Observacoes,
+    lastConsultation: null, // Field not available in collection
+    notes: null, // Field not available in collection
     createdAt: directusPatient.date_created,
     updatedAt: directusPatient.date_updated,
   };
@@ -304,8 +304,8 @@ export class DirectusStorage implements IStorage {
       // Backend validates ownership through session, providing security without Directus field permissions
       const client = this.client; // Using admin client temporarily
       
-      // Explicit field list using correct Directus collection field names
-      const fields = 'id,Nutricionista_responsavel,Nome_Completo,Email,Telefone,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,Suplementos_e_medicamentos,Metas_e_objetivos,Etapas,Ultima_consulta,Observacoes,date_created,date_updated';
+      // Explicit field list using only available Directus collection fields
+      const fields = 'id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,Suplementos_e_medicamentos,Etapas,date_created,date_updated';
       
       console.log(`[Directus] Getting patient: ${id}`);
       const response = await client.request(`/items/${PATIENTS_COLLECTION}/${id}?fields=${fields}`);
@@ -324,8 +324,8 @@ export class DirectusStorage implements IStorage {
       const client = this.client; // Using admin client temporarily
       const encodedId = encodeURIComponent(nutritionistId);
       
-      // Explicit field list using correct Directus collection field names
-      const fields = 'id,Nutricionista_responsavel,Nome_Completo,Email,Telefone,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,Suplementos_e_medicamentos,Metas_e_objetivos,Etapas,Ultima_consulta,Observacoes,date_created,date_updated';
+      // Explicit field list using only available Directus collection fields
+      const fields = 'id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,Suplementos_e_medicamentos,Etapas,date_created,date_updated';
       
       console.log(`[Directus] Getting patients for nutritionist: ${nutritionistId}`);
       // Using correct Directus field name for nutritionist filter

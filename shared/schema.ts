@@ -83,7 +83,7 @@ export const patientSchema = z.object({
   email: z.string().email().optional().nullable(),
   phone: z.string().optional().nullable(),
   whatsappNumber: z.string().optional().nullable(),
-  dateOfBirth: z.date().optional().nullable(),
+  dateOfBirth: z.string().optional().nullable().transform(val => val ? new Date(val) : null),
   gender: z.string().optional().nullable(),
   weight: z.string().optional().nullable(),
   height: z.string().optional().nullable(),
