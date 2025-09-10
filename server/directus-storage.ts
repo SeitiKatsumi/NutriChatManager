@@ -1,8 +1,9 @@
 // @ts-ignore - directus.js doesn't have type declarations
-import { DirectusClient, directusClient } from "./lib/directus.js";
+import { DirectusClient, directusClient, getPatientsMode } from "./lib/directus.js";
 import bcrypt from "bcrypt";
 import { randomUUID } from "crypto";
 import type { IStorage } from "./storage";
+import { MemStorage } from "./storage";
 
 // Directus field mappings for collections
 const PATIENTS_COLLECTION = "Cadastro_de_Pacientes";
@@ -92,42 +93,42 @@ export interface DirectusConsultation {
 // Transform functions between local types and Directus types
 function transformPatientToDirectus(patient: any): DirectusPatient {
   return {
-    nutritionist_id: patient.nutritionistId,
-    full_name: patient.fullName,
-    email: patient.email,
-    phone: patient.phone,
-    whatsapp_number: patient.whatsappNumber,
-    date_of_birth: patient.dateOfBirth ? new Date(patient.dateOfBirth) : undefined,
-    gender: patient.gender,
-    weight: patient.weight,
-    height: patient.height,
-    medical_history: patient.medicalHistory,
-    dietary_restrictions: patient.dietaryRestrictions,
-    goals: patient.goals,
-    status: patient.status || 'active',
-    last_consultation: patient.lastConsultation ? new Date(patient.lastConsultation) : undefined,
-    notes: patient.notes,
+    Nutricionista_responsavel: patient.nutritionistId,
+    Nome_Completo: patient.fullName,
+    Email: patient.email,
+    Telefone: patient.phone,
+    Whatsapp: patient.whatsappNumber,
+    Data_de_nascimento: patient.dateOfBirth ? new Date(patient.dateOfBirth) : undefined,
+    Sexo: patient.gender,
+    Peso: patient.weight,
+    Altura: patient.height,
+    Anamise_inicial: patient.medicalHistory,
+    Suplementos_e_medicamentos: patient.dietaryRestrictions,
+    Metas_e_objetivos: patient.goals,
+    Etapas: patient.status || 'active',
+    Ultima_consulta: patient.lastConsultation ? new Date(patient.lastConsultation) : undefined,
+    Observacoes: patient.notes,
   };
 }
 
 function transformPatientFromDirectus(directusPatient: any): any {
   return {
     id: directusPatient.id,
-    nutritionistId: directusPatient.nutritionist_id,
-    fullName: directusPatient.full_name,
-    email: directusPatient.email,
-    phone: directusPatient.phone,
-    whatsappNumber: directusPatient.whatsapp_number,
-    dateOfBirth: directusPatient.date_of_birth,
-    gender: directusPatient.gender,
-    weight: directusPatient.weight,
-    height: directusPatient.height,
-    medicalHistory: directusPatient.medical_history,
-    dietaryRestrictions: directusPatient.dietary_restrictions,
-    goals: directusPatient.goals,
-    status: directusPatient.status,
-    lastConsultation: directusPatient.last_consultation,
-    notes: directusPatient.notes,
+    nutritionistId: directusPatient.Nutricionista_responsavel,
+    fullName: directusPatient.Nome_Completo,
+    email: directusPatient.Email,
+    phone: directusPatient.Telefone,
+    whatsappNumber: directusPatient.Whatsapp,
+    dateOfBirth: directusPatient.Data_de_nascimento,
+    gender: directusPatient.Sexo,
+    weight: directusPatient.Peso,
+    height: directusPatient.Altura,
+    medicalHistory: directusPatient.Anamise_inicial,
+    dietaryRestrictions: directusPatient.Suplementos_e_medicamentos,
+    goals: directusPatient.Metas_e_objetivos,
+    status: directusPatient.Etapas,
+    lastConsultation: directusPatient.Ultima_consulta,
+    notes: directusPatient.Observacoes,
     createdAt: directusPatient.date_created,
     updatedAt: directusPatient.date_updated,
   };
@@ -175,6 +176,7 @@ function transformUserFromDirectus(directusUser: any): any {
 
 export class DirectusStorage implements IStorage {
   private client = directusClient;
+  private memStorage = new MemStorage(); // Fallback for patients when Directus lacks permissions
   
   // Create a client instance with user token
   private getUserClient(userToken?: string) {
@@ -275,8 +277,8 @@ export class DirectusStorage implements IStorage {
       // Backend validates ownership through session, providing security without Directus field permissions
       const client = this.client; // Using admin client temporarily
       
-      // Explicit field list instead of fields=* to avoid permission issues
-      const fields = 'id,nutritionist_id,full_name,email,phone,whatsapp_number,date_of_birth,gender,weight,height,medical_history,dietary_restrictions,goals,status,last_consultation,notes,date_created,date_updated';
+      // Explicit field list using correct Directus collection field names
+      const fields = 'id,Nutricionista_responsavel,Nome_Completo,Email,Telefone,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,Suplementos_e_medicamentos,Metas_e_objetivos,Etapas,Ultima_consulta,Observacoes,date_created,date_updated';
       
       console.log(`[Directus] Getting patient: ${id}`);
       const response = await client.request(`/items/${PATIENTS_COLLECTION}/${id}?fields=${fields}`);
@@ -295,21 +297,15 @@ export class DirectusStorage implements IStorage {
       const client = this.client; // Using admin client temporarily
       const encodedId = encodeURIComponent(nutritionistId);
       
-      // Explicit field list instead of fields=* to avoid permission issues
-      const fields = 'id,nutritionist_id,full_name,email,phone,whatsapp_number,date_of_birth,gender,weight,height,medical_history,dietary_restrictions,goals,status,last_consultation,notes,date_created,date_updated';
+      // Explicit field list using correct Directus collection field names
+      const fields = 'id,Nutricionista_responsavel,Nome_Completo,Email,Telefone,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,Suplementos_e_medicamentos,Metas_e_objetivos,Etapas,Ultima_consulta,Observacoes,date_created,date_updated';
       
-      console.log(`[Directus] Getting ALL patients (will filter by nutritionist on backend)`);
-      // TEMPORARY: Remove Directus filter due to token lacking admin access to nutritionist_id field
-      // This fetches all patients and we filter by nutritionistId in backend for security
-      const response = await client.request(`/items/${PATIENTS_COLLECTION}?fields=${fields}`);
-      const allPatients = response.data || [];
-      console.log(`[Directus] Found ${allPatients.length} total patients`);
-      
-      // Filter by nutritionist on backend side
-      const transformedPatients = allPatients.map(transformPatientFromDirectus);
-      const nutritionistPatients = transformedPatients.filter(patient => patient.nutritionistId === nutritionistId);
-      console.log(`[Backend] Filtered to ${nutritionistPatients.length} patients for nutritionist ${nutritionistId}`);
-      return nutritionistPatients;
+      console.log(`[Directus] Getting patients for nutritionist: ${nutritionistId}`);
+      // Using correct Directus field name for nutritionist filter
+      const response = await client.request(`/items/${PATIENTS_COLLECTION}?filter[Nutricionista_responsavel][_eq]=${encodedId}&fields=${fields}`);
+      const patients = response.data || [];
+      console.log(`[Directus] Found ${patients.length} patients for nutritionist`);
+      return patients.map(transformPatientFromDirectus);
     } catch (error: any) {
       console.error('Error getting patients by nutritionist:', error);
       console.error('Error details:', {

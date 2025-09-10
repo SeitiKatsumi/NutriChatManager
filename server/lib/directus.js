@@ -201,7 +201,34 @@ async function checkDirectusAdminPermissions() {
   }
 }
 
-// Run health check on startup
-checkDirectusAdminPermissions();
+// Global flag for Directus capabilities
+let PATIENTS_MODE = 'checking'; // 'directus' | 'local' | 'checking'
 
-export { DirectusClient, directusClient };
+// Probe Directus capability for patient collection access
+async function probeDirectusPatientsAccess() {
+  try {
+    console.log('[Directus] Probing patient collection access...');
+    // Test if we can read from the patients collection
+    const response = await directusClient.request('/items/Cadastro_de_Pacientes?limit=1');
+    console.log('[Directus] ✓ Patient collection access confirmed - using Directus mode');
+    PATIENTS_MODE = 'directus';
+    return true;
+  } catch (error) {
+    console.log('[Directus] ✗ Patient collection access failed:', error.message);
+    console.log('[Directus] Falling back to local memory storage for patients');
+    console.log('[Directus] To use Directus storage: ensure DIRECTUS_TOKEN has admin access or proper collection permissions');
+    PATIENTS_MODE = 'local';
+    return false;
+  }
+}
+
+// Run health checks on startup
+checkDirectusAdminPermissions();
+probeDirectusPatientsAccess();
+
+// Getter function for patients mode (since let variables can't be exported directly)
+function getPatientsMode() {
+  return PATIENTS_MODE;
+}
+
+export { DirectusClient, directusClient, getPatientsMode };

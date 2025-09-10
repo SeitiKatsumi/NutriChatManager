@@ -43,11 +43,15 @@ export class MemStorage implements IStorage {
   private nutritionists: Map<string, Nutritionist>;
   private whatsappInstances: Map<string, WhatsappInstance>;
   private messages: Map<string, Message>;
+  private patients: Map<string, Patient>;
+  private consultations: Map<string, Consultation>;
 
   constructor() {
     this.nutritionists = new Map();
     this.whatsappInstances = new Map();
     this.messages = new Map();
+    this.patients = new Map();
+    this.consultations = new Map();
   }
 
   // Nutritionists
@@ -74,13 +78,13 @@ export class MemStorage implements IStorage {
       id,
       createdAt: now,
       updatedAt: now,
-      address: insertNutritionist.address ?? null,
-      phone: insertNutritionist.phone ?? null,
-      specialization: insertNutritionist.specialization ?? null,
-      whatsappNumber: insertNutritionist.whatsappNumber ?? null,
-      welcomeMessage: insertNutritionist.welcomeMessage ?? null,
-      workingHours: insertNutritionist.workingHours ?? null,
-      status: insertNutritionist.status ?? null,
+      address: insertNutritionist.address ?? undefined,
+      phone: insertNutritionist.phone ?? undefined,
+      specialization: insertNutritionist.specialization ?? undefined,
+      whatsappNumber: insertNutritionist.whatsappNumber ?? undefined,
+      welcomeMessage: insertNutritionist.welcomeMessage ?? undefined,
+      workingHours: insertNutritionist.workingHours ?? undefined,
+      status: insertNutritionist.status ?? undefined,
     };
     this.nutritionists.set(id, nutritionist);
     return nutritionist;
@@ -132,14 +136,14 @@ export class MemStorage implements IStorage {
       id,
       createdAt: now,
       updatedAt: now,
-      nutritionistId: insertInstance.nutritionistId ?? null,
-      instanceName: insertInstance.instanceName ?? null,
-      qrCode: insertInstance.qrCode ?? null,
-      status: insertInstance.status ?? null,
-      phoneNumber: insertInstance.phoneNumber ?? null,
-      agentName: insertInstance.agentName ?? null,
-      autoResponse: insertInstance.autoResponse ?? null,
-      config: insertInstance.config ?? null,
+      nutritionistId: insertInstance.nutritionistId ?? undefined,
+      instanceName: insertInstance.instanceName ?? undefined,
+      qrCode: insertInstance.qrCode ?? undefined,
+      status: insertInstance.status ?? undefined,
+      phoneNumber: insertInstance.phoneNumber ?? undefined,
+      agentName: insertInstance.agentName ?? undefined,
+      autoResponse: insertInstance.autoResponse ?? undefined,
+      config: insertInstance.config ?? undefined,
     };
     this.whatsappInstances.set(id, instance);
     return instance;
@@ -189,6 +193,106 @@ export class MemStorage implements IStorage {
 
   async getMessagesCount(): Promise<number> {
     return this.messages.size;
+  }
+
+  // Patients
+  async getPatient(id: string): Promise<Patient | undefined> {
+    return this.patients.get(id);
+  }
+
+  async getPatientsByNutritionist(nutritionistId: string): Promise<Patient[]> {
+    return Array.from(this.patients.values()).filter(
+      (patient) => patient.nutritionistId === nutritionistId,
+    );
+  }
+
+  async createPatient(insertPatient: InsertPatient): Promise<Patient> {
+    const id = randomUUID();
+    const now = new Date();
+    const patient: Patient = {
+      ...insertPatient,
+      id,
+      createdAt: now,
+      updatedAt: now,
+      email: insertPatient.email ?? null,
+      phone: insertPatient.phone ?? null,
+      whatsappNumber: insertPatient.whatsappNumber ?? null,
+      dateOfBirth: insertPatient.dateOfBirth ?? null,
+      gender: insertPatient.gender ?? null,
+      weight: insertPatient.weight ?? null,
+      height: insertPatient.height ?? null,
+      medicalHistory: insertPatient.medicalHistory ?? null,
+      dietaryRestrictions: insertPatient.dietaryRestrictions ?? null,
+      goals: insertPatient.goals ?? null,
+      status: insertPatient.status ?? 'active',
+      lastConsultation: insertPatient.lastConsultation ?? null,
+      notes: insertPatient.notes ?? null,
+    };
+    this.patients.set(id, patient);
+    return patient;
+  }
+
+  async updatePatient(id: string, updateData: Partial<InsertPatient>): Promise<Patient | undefined> {
+    const existing = this.patients.get(id);
+    if (!existing) return undefined;
+
+    const updated: Patient = {
+      ...existing,
+      ...updateData,
+      updatedAt: new Date(),
+    };
+    this.patients.set(id, updated);
+    return updated;
+  }
+
+  async deletePatient(id: string): Promise<boolean> {
+    return this.patients.delete(id);
+  }
+
+  // Consultations
+  async getConsultation(id: string): Promise<Consultation | undefined> {
+    return this.consultations.get(id);
+  }
+
+  async getConsultationsByPatient(patientId: string): Promise<Consultation[]> {
+    return Array.from(this.consultations.values()).filter(
+      (consultation) => consultation.patientId === patientId,
+    );
+  }
+
+  async getConsultationsByNutritionist(nutritionistId: string): Promise<Consultation[]> {
+    return Array.from(this.consultations.values()).filter(
+      (consultation) => consultation.nutritionistId === nutritionistId,
+    );
+  }
+
+  async createConsultation(insertConsultation: InsertConsultation): Promise<Consultation> {
+    const id = randomUUID();
+    const now = new Date();
+    const consultation: Consultation = {
+      ...insertConsultation,
+      id,
+      createdAt: now,
+      updatedAt: now,
+      notes: insertConsultation.notes ?? null,
+      diagnosis: insertConsultation.diagnosis ?? null,
+      treatment: insertConsultation.treatment ?? null,
+    };
+    this.consultations.set(id, consultation);
+    return consultation;
+  }
+
+  async updateConsultation(id: string, updateData: Partial<InsertConsultation>): Promise<Consultation | undefined> {
+    const existing = this.consultations.get(id);
+    if (!existing) return undefined;
+
+    const updated: Consultation = {
+      ...existing,
+      ...updateData,
+      updatedAt: new Date(),
+    };
+    this.consultations.set(id, updated);
+    return updated;
   }
 }
 
