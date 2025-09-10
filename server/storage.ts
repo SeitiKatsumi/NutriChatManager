@@ -360,4 +360,6 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
-export const storage = new DatabaseStorage();
+// Use DirectusStorage instead of local database
+import { DirectusStorage } from './directus-storage';
+export const storage = new DirectusStorage();
