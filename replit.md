@@ -1,0 +1,71 @@
+# Overview
+
+NutriChatBot is a comprehensive management platform for nutritionists that integrates WhatsApp communication through an AI-powered chatbot system. The application provides a full-stack solution for nutritionist registration, user management, and WhatsApp instance management with real-time messaging capabilities. Built as a modern web application, it features a React-based frontend with shadcn/ui components and an Express.js backend with PostgreSQL database integration via Drizzle ORM.
+
+# User Preferences
+
+Preferred communication style: Simple, everyday language.
+
+# System Architecture
+
+## Frontend Architecture
+The client-side is built with React 18 and TypeScript, utilizing a component-based architecture with shadcn/ui for consistent design patterns. The application uses Wouter for lightweight client-side routing and TanStack Query for efficient server state management. The UI follows a dark theme design system with comprehensive component library including forms, tables, dialogs, and navigation elements. Vite serves as the build tool providing fast development experience with hot module replacement.
+
+## Backend Architecture
+The server runs on Express.js with TypeScript, implementing a RESTful API architecture. The application follows a layered approach with separate route handlers, storage abstraction layer, and middleware for logging and error handling. The storage layer uses an interface-based design allowing for flexible implementation switching between in-memory storage for development and database persistence for production.
+
+## Database Design
+The system uses PostgreSQL with Drizzle ORM for type-safe database operations. The schema includes three main entities: nutritionists (user profiles with professional credentials), whatsapp_instances (WhatsApp connection configurations), and messages (communication logs). The database implements proper foreign key relationships and uses UUID primary keys with automatic timestamp tracking.
+
+## Authentication & Session Management
+The application is configured with connect-pg-simple for PostgreSQL-based session storage, though the current implementation appears to use in-memory storage during development. The system is prepared for proper session-based authentication with secure cookie handling.
+
+## WhatsApp Integration
+The platform integrates with Evolution API for WhatsApp communication management. This enables creating WhatsApp instances, generating QR codes for device connection, and handling message routing. Each nutritionist can have their own WhatsApp instance with customizable bot configurations including agent names, auto-response settings, and welcome messages.
+
+## State Management
+Client-side state is managed through TanStack Query for server state and React hooks for local component state. The query client is configured with custom fetch functions that handle authentication and error responses uniformly across the application.
+
+## Development Tools
+The project uses modern development tooling including TypeScript for type safety, ESLint for code quality, Tailwind CSS for styling, and PostCSS for CSS processing. The build process supports both development and production environments with proper asset optimization.
+
+# External Dependencies
+
+## Core Framework Dependencies
+- **React 18** - Frontend framework with hooks and modern patterns
+- **Express.js** - Backend web framework for Node.js
+- **TypeScript** - Type safety across frontend and backend
+- **Vite** - Build tool and development server
+
+## Database & ORM
+- **PostgreSQL** - Primary database (configured via Neon serverless)
+- **Drizzle ORM** - Type-safe database toolkit with schema migrations
+- **connect-pg-simple** - PostgreSQL session store for Express
+
+## UI Component Library
+- **shadcn/ui** - Comprehensive React component library built on Radix UI
+- **Radix UI** - Unstyled, accessible UI primitives
+- **Tailwind CSS** - Utility-first CSS framework
+- **Lucide React** - Icon library for consistent iconography
+
+## State Management & Data Fetching
+- **TanStack Query** - Server state management and caching
+- **React Hook Form** - Form state management with validation
+- **Zod** - Schema validation for type-safe data handling
+
+## External Service Integrations
+- **Evolution API** - WhatsApp Business API integration for bot management
+- **Directus CMS** - Content management system integration (configured but not actively used)
+- **Neon Database** - Serverless PostgreSQL hosting
+
+## Development & Build Tools
+- **ESBuild** - Fast JavaScript bundler for production builds
+- **PostCSS** - CSS processing with autoprefixer
+- **tsx** - TypeScript execution engine for development
+- **Wouter** - Lightweight client-side routing
+
+## Utility Libraries
+- **date-fns** - Date manipulation and formatting
+- **clsx** - Conditional CSS class composition
+- **nanoid** - Unique ID generation
+- **class-variance-authority** - Component variant management
