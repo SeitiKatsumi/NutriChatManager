@@ -164,12 +164,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let filteredPatients = patients;
       
       if (status && typeof status === 'string') {
-        filteredPatients = filteredPatients.filter(p => p.status === status);
+        filteredPatients = filteredPatients.filter((p: any) => p.status === status);
       }
       
       if (search && typeof search === 'string') {
         const searchLower = search.toLowerCase();
-        filteredPatients = filteredPatients.filter(p => 
+        filteredPatients = filteredPatients.filter((p: any) => 
           p.fullName.toLowerCase().includes(searchLower) ||
           (p.email && p.email.toLowerCase().includes(searchLower)) ||
           (p.phone && p.phone.includes(search))
@@ -290,7 +290,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const instances = await storage.listWhatsappInstances();
       const messagesCount = await storage.getMessagesCount();
       
-      const connectedInstances = instances.filter(i => i.status === "connected").length;
+      const connectedInstances = instances.filter((i: any) => i.status === "connected").length;
       
       res.json({
         nutritionists: nutritionists.length,
@@ -325,8 +325,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const stats = {
         totalPatients: patients.length,
-        activePatients: patients.filter(p => p.status === 'active').length,
-        totalConsultations: patients.reduce((total, patient) => total + (patient.consultationCount || 0), 0),
+        activePatients: patients.filter((p: any) => p.status === 'active').length,
+        totalConsultations: patients.reduce((total: any, patient: any) => total + (patient.consultationCount || 0), 0),
         totalMessages: messages.length,
         whatsappConnected: whatsappInstance?.status === 'connected',
         responseRate: "95%"
@@ -359,8 +359,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const stats = {
         totalPatients: patients.length,
-        activePatients: patients.filter(p => p.status === 'active').length,
-        totalConsultations: patients.reduce((total, patient) => total + (patient.consultationCount || 0), 0),
+        activePatients: patients.filter((p: any) => p.status === 'active').length,
+        totalConsultations: patients.reduce((total: any, patient: any) => total + (patient.consultationCount || 0), 0),
         totalMessages: messages.length,
         whatsappConnected: whatsappInstance?.status === 'connected',
         responseRate: "95%"
