@@ -215,11 +215,7 @@ export class DirectusStorage implements IStorage {
 
   async updateNutritionist(id: string, updateData: any) {
     try {
-      // Handle password hashing if password is being updated
-      if (updateData.password) {
-        updateData.password = await bcrypt.hash(updateData.password, 10);
-      }
-
+      // Don't hash password - Directus handles password hashing internally
       const directusUpdate = transformUserToDirectus({
         ...updateData,
         fullName: updateData.fullName, // Ensure fullName is preserved

@@ -58,33 +58,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(409).json({ error: "Email already registered" });
       }
 
-      // Create nutritionist in local database
+      // Create nutritionist using DirectusStorage (which handles Directus user creation)
       const nutritionist = await storage.createNutritionist(validatedData);
-      
-      // Try to create user in Directus
-      try {
-        const directusUserData = {
-          email: validatedData.email,
-          password: validatedData.password,
-          first_name: validatedData.fullName.split(' ')[0],
-          last_name: validatedData.fullName.split(' ').slice(1).join(' ') || '',
-          role: '90ce89ef-abe3-4359-9fc0-3e882127775a', // Role específica do nutricionista
-          status: 'active',
-        };
-        
-        console.log('Creating Directus user with data:', { ...directusUserData, password: '[REDACTED]' });
-        const directusUser = await directusClient.createUser(directusUserData);
-        console.log('Usuario criado no Directus:', directusUser.data?.id || directusUser.id);
-        
-        // Atualizar nutricionista com ID do Directus
-        await storage.updateNutritionist(nutritionist.id, { 
-          status: 'active' // Marca como ativo quando criado no Directus
-        });
-      } catch (directusError) {
-        console.error('Erro ao criar usuário no Directus:', directusError);
-        console.error('Directus error details:', directusError.message || directusError);
-        // Não falha a criação local, mas loga o erro
-      }
 
       res.status(201).json(nutritionist);
     } catch (error) {
@@ -412,35 +387,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Email and password are required" });
       }
 
-      // First check if nutritionist exists in local database
-      const nutritionist = await storage.getNutritionistByEmail(email);
-      if (!nutritionist) {
-        console.log(`No nutritionist found in local database for email: ${email}`);
-        return res.status(404).json({ error: "Nutritionist profile not found" });
-      }
-      console.log(`Found nutritionist in local database: ${nutritionist.id}`);
-
-      // Verify password using bcrypt
-      const passwordMatch = await bcrypt.compare(password, nutritionist.password);
-      if (!passwordMatch) {
-        console.log('Password mismatch for user:', email);
-        return res.status(401).json({ error: "Invalid credentials" });
+      // Use Directus authentication
+      const loginResponse = await directusClient.login(email, password);
+      
+      // Get user details from Directus
+      const directusUser = await directusClient.getMe(loginResponse.data.access_token);
+      
+      // Check if user has nutritionist role
+      if (directusUser.data.role !== '90ce89ef-abe3-4359-9fc0-3e882127775a') {
+        return res.status(403).json({ error: "Access denied. Nutritionist role required" });
       }
 
-      // Create local session
+      // Create local session with Directus tokens
       req.session.user = {
-        id: nutritionist.id,
-        email: nutritionist.email,
-        nutritionistId: nutritionist.id,
-        role: '90ce89ef-abe3-4359-9fc0-3e882127775a', // Nutritionist role
-        accessToken: 'local-token-' + nutritionist.id,
-        refreshToken: 'local-refresh-' + nutritionist.id,
+        id: directusUser.data.id,
+        email: directusUser.data.email,
+        nutritionistId: directusUser.data.id,
+        role: directusUser.data.role,
+        accessToken: loginResponse.data.access_token,
+        refreshToken: loginResponse.data.refresh_token,
       };
 
       console.log(`=== Login successful ===`);
       console.log(`Session ID: ${req.sessionID}`);
-      console.log(`Nutritionist ID: ${nutritionist.id}`);
+      console.log(`Nutritionist ID: ${directusUser.data.id}`);
       console.log(`Session user created:`, req.session.user);
+      
+      // Transform Directus user to our nutritionist format
+      const nutritionist = {
+        id: directusUser.data.id,
+        fullName: directusUser.data.full_name || `${directusUser.data.first_name} ${directusUser.data.last_name}`.trim(),
+        email: directusUser.data.email,
+        crn: directusUser.data.crn || '',
+        phone: directusUser.data.phone || '',
+        address: directusUser.data.address || '',
+        specialization: directusUser.data.specialization || '',
+        whatsappNumber: directusUser.data.whatsapp_number || '',
+        welcomeMessage: directusUser.data.welcome_message || '',
+        workingHours: directusUser.data.working_hours || 'commercial',
+        status: directusUser.data.status || 'active',
+        createdAt: directusUser.data.date_created,
+        updatedAt: directusUser.data.date_updated,
+      };
       
       res.json({
         user: {
@@ -451,9 +439,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
         nutritionist,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Login error:', error);
-      res.status(401).json({ error: "Invalid credentials" });
+      if (error.message && error.message.includes('Login failed')) {
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+      res.status(500).json({ error: "Authentication service error" });
     }
   });
 
