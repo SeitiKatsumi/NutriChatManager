@@ -40,7 +40,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(409).json({ error: "Email already registered" });
       }
 
+      // Create nutritionist in local database
       const nutritionist = await storage.createNutritionist(validatedData);
+      
+      // Try to create user in Directus
+      try {
+        const directusUserData = {
+          email: validatedData.email,
+          password: validatedData.password,
+          first_name: validatedData.fullName.split(' ')[0],
+          last_name: validatedData.fullName.split(' ').slice(1).join(' '),
+          role: '90ce89ef-abe3-4359-9fc0-3e882127775a', // Role específica do nutricionista
+          status: 'active',
+          // Campos customizados para o nutricionista
+          crn: validatedData.crn,
+          phone: validatedData.phone,
+          specialization: validatedData.specialization,
+          whatsapp_number: validatedData.whatsappNumber,
+        };
+        
+        const directusUser = await directusClient.createUser(directusUserData);
+        console.log('Usuario criado no Directus:', directusUser.id);
+        
+        // Atualizar nutricionista com ID do Directus
+        await storage.updateNutritionist(nutritionist.id, { 
+          status: 'active' // Marca como ativo quando criado no Directus
+        });
+      } catch (directusError) {
+        console.error('Erro ao criar usuário no Directus:', directusError);
+        // Não falha a criação local, mas loga o erro
+      }
+
       res.status(201).json(nutritionist);
     } catch (error) {
       if (error instanceof z.ZodError) {
