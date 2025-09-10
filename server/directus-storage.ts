@@ -129,7 +129,7 @@ function transformPatientToDirectus(patient: any): DirectusPatient {
     Anamise_inicial: patient.medicalHistory,
     Suplementos_e_medicamentos: patient.dietaryRestrictions,
     Metas_e_objetivos: patient.goals,
-    Etapas: patient.status || 'Ativo',
+    Etapas: patient.status || 'Aguardando agendamento',
     Ultima_consulta: patient.lastConsultation,
     Observacoes: patient.notes,
   };

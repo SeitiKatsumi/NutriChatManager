@@ -90,7 +90,7 @@ export const patientSchema = z.object({
   medicalHistory: z.string().optional().nullable(),
   dietaryRestrictions: z.string().optional().nullable(),
   goals: z.string().optional().nullable(),
-  status: z.string().default("active"), // active, inactive, completed
+  status: z.string().default("Aguardando agendamento"), // Status de atendimento
   lastConsultation: z.date().optional().nullable(),
   notes: z.string().optional().nullable(),
   createdAt: z.date(),

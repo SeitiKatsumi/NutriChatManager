@@ -334,9 +334,11 @@ export default function PatientFormDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="active">Ativo</SelectItem>
-                  <SelectItem value="inactive">Inativo</SelectItem>
-                  <SelectItem value="completed">Concluído</SelectItem>
+                  <SelectItem value="Em atendimento IA">Em atendimento IA</SelectItem>
+                  <SelectItem value="Aguardando agendamento">Aguardando agendamento</SelectItem>
+                  <SelectItem value="Agendado">Agendado</SelectItem>
+                  <SelectItem value="Aguardando retorno">Aguardando retorno</SelectItem>
+                  <SelectItem value="Pausado">Pausado</SelectItem>
                 </SelectContent>
               </Select>
             </div>
