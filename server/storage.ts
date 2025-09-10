@@ -1,8 +1,6 @@
-import { type Nutritionist, type InsertNutritionist, type WhatsappInstance, type InsertWhatsappInstance, type Message, type InsertMessage, type Patient, type InsertPatient, type Consultation, type InsertConsultation, nutritionists, whatsappInstances, messages, patients, consultations } from "@shared/schema";
+import { type Nutritionist, type InsertNutritionist, type WhatsappInstance, type InsertWhatsappInstance, type Message, type InsertMessage, type Patient, type InsertPatient, type Consultation, type InsertConsultation } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
-import { db } from "./db";
-import { eq } from "drizzle-orm";
 
 export interface IStorage {
   // Nutritionists

@@ -5,8 +5,17 @@ import { storage } from "./storage";
 import { insertNutritionistSchema, insertWhatsappInstanceSchema, insertPatientSchema } from "@shared/schema";
 import { z } from "zod";
 // Import real API clients (server-side versions)
+// @ts-ignore - directus.js doesn't have type declarations
 import { directusClient } from "./lib/directus.js";
+// @ts-ignore - evolution-api.js doesn't have type declarations  
 import { evolutionApiClient } from "./lib/evolution-api.js";
+
+// Extend session type to include user
+declare module 'express-session' {
+  export interface SessionData {
+    user?: any;
+  }
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Middleware to check authentication
