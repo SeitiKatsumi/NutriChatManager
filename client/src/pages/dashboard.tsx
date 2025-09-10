@@ -4,13 +4,6 @@ import { BarChart3, Activity, Users, MessageCircle, Phone, UserCheck, Calendar, 
 import { Badge } from "@/components/ui/badge";
 
 export default function Dashboard() {
-  // Get first nutritionist (temporary - will be replaced with auth)
-  const { data: nutritionists } = useQuery<any[]>({
-    queryKey: ["/api/nutritionists"],
-  });
-
-  const firstNutritionistId = nutritionists?.[0]?.id;
-
   const { data: dashboardData, isLoading } = useQuery<{
     nutritionist: any;
     stats: {
@@ -24,8 +17,7 @@ export default function Dashboard() {
     recentPatients: any[];
     recentMessages: any[];
   }>({
-    queryKey: ["/api/nutritionists", firstNutritionistId, "dashboard"],
-    enabled: !!firstNutritionistId,
+    queryKey: ["/api/dashboard"],
   });
 
   return (

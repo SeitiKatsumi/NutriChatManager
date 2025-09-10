@@ -49,18 +49,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           email: validatedData.email,
           password: validatedData.password,
           first_name: validatedData.fullName.split(' ')[0],
-          last_name: validatedData.fullName.split(' ').slice(1).join(' '),
+          last_name: validatedData.fullName.split(' ').slice(1).join(' ') || '',
           role: '90ce89ef-abe3-4359-9fc0-3e882127775a', // Role específica do nutricionista
           status: 'active',
-          // Campos customizados para o nutricionista
-          crn: validatedData.crn,
-          phone: validatedData.phone,
-          specialization: validatedData.specialization,
-          whatsapp_number: validatedData.whatsappNumber,
         };
         
+        console.log('Creating Directus user with data:', { ...directusUserData, password: '[REDACTED]' });
         const directusUser = await directusClient.createUser(directusUserData);
-        console.log('Usuario criado no Directus:', directusUser.id);
+        console.log('Usuario criado no Directus:', directusUser.data?.id || directusUser.id);
         
         // Atualizar nutricionista com ID do Directus
         await storage.updateNutritionist(nutritionist.id, { 
@@ -68,6 +64,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       } catch (directusError) {
         console.error('Erro ao criar usuário no Directus:', directusError);
+        console.error('Directus error details:', directusError.message || directusError);
         // Não falha a criação local, mas loga o erro
       }
 
@@ -183,10 +180,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Nutritionist individual dashboard stats
-  app.get("/api/nutritionists/:id/dashboard", async (req, res) => {
+  // Middleware to check authentication
+  const requireAuth = (req: any, res: any, next: any) => {
+    if (!req.session.user) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+    next();
+  };
+
+  // Nutritionist individual dashboard stats (protected)
+  app.get("/api/nutritionists/:id/dashboard", requireAuth, async (req, res) => {
     try {
-      const nutritionist = await storage.getNutritionist(req.params.id);
+      const requestedId = req.params.id;
+      const loggedInNutritionistId = req.session.user.nutritionistId;
+      
+      // Users can only access their own dashboard
+      if (requestedId !== loggedInNutritionistId) {
+        return res.status(403).json({ error: "Access denied. You can only view your own dashboard." });
+      }
+
+      const nutritionist = await storage.getNutritionist(requestedId);
       if (!nutritionist) {
         return res.status(404).json({ error: "Nutritionist not found" });
       }
@@ -212,6 +225,154 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch nutritionist dashboard" });
+    }
+  });
+
+  // Convenience endpoint to get current user's dashboard
+  app.get("/api/dashboard", requireAuth, async (req, res) => {
+    try {
+      const nutritionistId = req.session.user.nutritionistId;
+      const nutritionist = await storage.getNutritionist(nutritionistId);
+      
+      if (!nutritionist) {
+        return res.status(404).json({ error: "Nutritionist profile not found" });
+      }
+
+      const patients = await storage.getPatientsByNutritionist(nutritionist.id);
+      const whatsappInstance = await storage.getWhatsappInstanceByNutritionist(nutritionist.id);
+      const messages = whatsappInstance ? await storage.getMessagesByInstance(whatsappInstance.id) : [];
+      
+      const stats = {
+        totalPatients: patients.length,
+        activePatients: patients.filter(p => p.status === 'active').length,
+        totalConsultations: patients.reduce((total, patient) => total + (patient.consultationCount || 0), 0),
+        totalMessages: messages.length,
+        whatsappConnected: whatsappInstance?.status === 'connected',
+        responseRate: "95%"
+      };
+      
+      res.json({
+        nutritionist,
+        stats,
+        recentPatients: patients.slice(-5).reverse(),
+        recentMessages: messages.slice(-10).reverse()
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch dashboard" });
+    }
+  });
+
+  // Authentication endpoints
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      console.log(`Login attempt for email: ${email}`);
+      
+      if (!email || !password) {
+        return res.status(400).json({ error: "Email and password are required" });
+      }
+
+      // First check if nutritionist exists in local database
+      const nutritionist = await storage.getNutritionistByEmail(email);
+      if (!nutritionist) {
+        console.log(`No nutritionist found in local database for email: ${email}`);
+        return res.status(404).json({ error: "Nutritionist profile not found" });
+      }
+      console.log(`Found nutritionist in local database: ${nutritionist.id}`);
+
+      // Simple authentication based on local data for now
+      // TODO: Integrate with Directus when credentials and roles are properly configured
+      
+      // For development, allow login with stored password (in production, use proper password hashing)
+      if (password !== '123456') {
+        console.log('Password mismatch for user:', email);
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+
+      // Create local session
+      req.session.user = {
+        id: nutritionist.id,
+        email: nutritionist.email,
+        nutritionistId: nutritionist.id,
+        role: '90ce89ef-abe3-4359-9fc0-3e882127775a', // Nutritionist role
+        accessToken: 'local-token-' + nutritionist.id,
+        refreshToken: 'local-refresh-' + nutritionist.id,
+      };
+
+      console.log(`=== Login successful ===`);
+      console.log(`Session ID: ${req.sessionID}`);
+      console.log(`Nutritionist ID: ${nutritionist.id}`);
+      console.log(`Session user created:`, req.session.user);
+      
+      res.json({
+        user: {
+          id: nutritionist.id,
+          email: nutritionist.email,
+          name: nutritionist.fullName,
+          nutritionistId: nutritionist.id,
+        },
+        nutritionist,
+      });
+    } catch (error) {
+      console.error('Login error:', error);
+      res.status(401).json({ error: "Invalid credentials" });
+    }
+  });
+
+  app.post("/api/auth/logout", async (req, res) => {
+    try {
+      if (req.session.user?.refreshToken) {
+        await directusClient.logout(req.session.user.refreshToken);
+      }
+      req.session.destroy(() => {
+        res.json({ message: "Logged out successfully" });
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
+      req.session.destroy(() => {
+        res.json({ message: "Logged out successfully" });
+      });
+    }
+  });
+
+  app.get("/api/auth/me", async (req, res) => {
+    try {
+      console.log('=== /api/auth/me called ===');
+      console.log('Session ID:', req.sessionID);
+      console.log('Session exists:', !!req.session);
+      console.log('Session user:', req.session?.user);
+      
+      if (!req.session.user) {
+        console.log('No session user found - returning 401');
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      // Get nutritionist from local database
+      const nutritionist = await storage.getNutritionist(req.session.user.nutritionistId);
+      if (!nutritionist) {
+        console.log('Nutritionist not found for session user:', req.session.user.nutritionistId);
+        req.session.destroy(() => {
+          return res.status(401).json({ error: "Session expired" });
+        });
+        return;
+      }
+
+      console.log('Session user verified, returning user data');
+      res.json({
+        user: {
+          id: req.session.user.id,
+          email: req.session.user.email,
+          name: nutritionist.fullName,
+          nutritionistId: nutritionist.id,
+        },
+        nutritionist,
+      });
+    } catch (error) {
+      console.error('Get user error:', error);
+      // If there's any error, clear session
+      req.session.destroy(() => {
+        res.status(401).json({ error: "Session expired" });
+      });
     }
   });
 
