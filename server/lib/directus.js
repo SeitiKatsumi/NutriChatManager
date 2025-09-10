@@ -170,4 +170,38 @@ class DirectusClient {
 
 const directusClient = new DirectusClient(DIRECTUS_URL, DIRECTUS_TOKEN);
 
+// Health check for admin token permissions
+async function checkDirectusAdminPermissions() {
+  try {
+    console.log('[Directus] Checking admin token permissions...');
+    const response = await directusClient.request('/users/me');
+    const user = response.data;
+    
+    console.log('[Directus] Token user info:', {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      admin_access: user.admin_access,
+      status: user.status
+    });
+    
+    if (!user.admin_access) {
+      console.error('[Directus] WARNING: Token does not have admin access! This will cause permission errors.');
+      console.error('[Directus] Current role:', user.role);
+      console.error('[Directus] Please ensure DIRECTUS_TOKEN belongs to an Admin user.');
+    } else {
+      console.log('[Directus] ✓ Admin token verified successfully');
+    }
+    
+    return user.admin_access;
+  } catch (error) {
+    console.error('[Directus] Failed to check admin permissions:', error.message);
+    console.error('[Directus] This suggests the token is invalid or expired');
+    return false;
+  }
+}
+
+// Run health check on startup
+checkDirectusAdminPermissions();
+
 export { DirectusClient, directusClient };

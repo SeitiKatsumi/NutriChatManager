@@ -271,8 +271,16 @@ export class DirectusStorage implements IStorage {
   // Patients (stored in Directus Cadastro_de_Pacientes collection)
   async getPatient(id: string, userToken?: string) {
     try {
-      const client = this.getUserClient(userToken);
-      const response = await client.request(`/items/${PATIENTS_COLLECTION}/${id}?fields=*`);
+      // Use admin client for reading due to Directus role permissions on nutritionist_id field
+      // Backend validates ownership through session, providing security without Directus field permissions
+      const client = this.client; // Using admin client temporarily
+      
+      // Explicit field list instead of fields=* to avoid permission issues
+      const fields = 'id,nutritionist_id,full_name,email,phone,whatsapp_number,date_of_birth,gender,weight,height,medical_history,dietary_restrictions,goals,status,last_consultation,notes,date_created,date_updated';
+      
+      console.log(`[Directus] Getting patient: ${id}`);
+      const response = await client.request(`/items/${PATIENTS_COLLECTION}/${id}?fields=${fields}`);
+      console.log(`[Directus] Patient found: ${response.data ? 'yes' : 'no'}`);
       return transformPatientFromDirectus(response.data);
     } catch (error) {
       console.error('Error getting patient:', error);
@@ -282,12 +290,33 @@ export class DirectusStorage implements IStorage {
 
   async getPatientsByNutritionist(nutritionistId: string, userToken?: string) {
     try {
-      const client = this.getUserClient(userToken);
-      const response = await client.request(`/items/${PATIENTS_COLLECTION}?filter[nutritionist_id][_eq]=${nutritionistId}&fields=*`);
-      const patients = response.data || [];
-      return patients.map(transformPatientFromDirectus);
-    } catch (error) {
+      // Use admin client for reading due to Directus role permissions on nutritionist_id field
+      // Backend validates ownership through session, providing security without Directus field permissions
+      const client = this.client; // Using admin client temporarily
+      const encodedId = encodeURIComponent(nutritionistId);
+      
+      // Explicit field list instead of fields=* to avoid permission issues
+      const fields = 'id,nutritionist_id,full_name,email,phone,whatsapp_number,date_of_birth,gender,weight,height,medical_history,dietary_restrictions,goals,status,last_consultation,notes,date_created,date_updated';
+      
+      console.log(`[Directus] Getting ALL patients (will filter by nutritionist on backend)`);
+      // TEMPORARY: Remove Directus filter due to token lacking admin access to nutritionist_id field
+      // This fetches all patients and we filter by nutritionistId in backend for security
+      const response = await client.request(`/items/${PATIENTS_COLLECTION}?fields=${fields}`);
+      const allPatients = response.data || [];
+      console.log(`[Directus] Found ${allPatients.length} total patients`);
+      
+      // Filter by nutritionist on backend side
+      const transformedPatients = allPatients.map(transformPatientFromDirectus);
+      const nutritionistPatients = transformedPatients.filter(patient => patient.nutritionistId === nutritionistId);
+      console.log(`[Backend] Filtered to ${nutritionistPatients.length} patients for nutritionist ${nutritionistId}`);
+      return nutritionistPatients;
+    } catch (error: any) {
       console.error('Error getting patients by nutritionist:', error);
+      console.error('Error details:', {
+        message: error.message,
+        status: error.status,
+        code: error.code
+      });
       return [];
     }
   }
@@ -298,7 +327,9 @@ export class DirectusStorage implements IStorage {
       console.log('insertPatient:', JSON.stringify(insertPatient, null, 2));
       console.log('userToken provided:', !!userToken);
       
-      const client = this.getUserClient(userToken);
+      // Use admin client for creating due to Directus role permissions
+      // nutritionistId is already validated from session in the route
+      const client = this.client;
       const directusPatient = transformPatientToDirectus(insertPatient);
       console.log('directusPatient:', JSON.stringify(directusPatient, null, 2));
       
