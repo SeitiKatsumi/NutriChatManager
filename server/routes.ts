@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import bcrypt from "bcrypt";
 import { storage } from "./storage";
 import { insertNutritionistSchema, insertWhatsappInstanceSchema } from "@shared/schema";
 import { z } from "zod";
@@ -280,11 +281,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       console.log(`Found nutritionist in local database: ${nutritionist.id}`);
 
-      // Simple authentication based on local data for now
-      // TODO: Integrate with Directus when credentials and roles are properly configured
-      
-      // For development, allow login with stored password (in production, use proper password hashing)
-      if (password !== '123456') {
+      // Verify password using bcrypt
+      const passwordMatch = await bcrypt.compare(password, nutritionist.password);
+      if (!passwordMatch) {
         console.log('Password mismatch for user:', email);
         return res.status(401).json({ error: "Invalid credentials" });
       }

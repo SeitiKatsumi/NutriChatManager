@@ -1,5 +1,6 @@
 import { type Nutritionist, type InsertNutritionist, type WhatsappInstance, type InsertWhatsappInstance, type Message, type InsertMessage, type Patient, type InsertPatient, type Consultation, type InsertConsultation, nutritionists, whatsappInstances, messages, patients, consultations } from "@shared/schema";
 import { randomUUID } from "crypto";
+import bcrypt from "bcrypt";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
 
@@ -65,8 +66,13 @@ export class MemStorage implements IStorage {
   async createNutritionist(insertNutritionist: InsertNutritionist): Promise<Nutritionist> {
     const id = randomUUID();
     const now = new Date();
+    
+    // Hash the password before storing
+    const hashedPassword = await bcrypt.hash(insertNutritionist.password, 10);
+    
     const nutritionist: Nutritionist = {
       ...insertNutritionist,
+      password: hashedPassword,
       id,
       createdAt: now,
       updatedAt: now,
@@ -86,9 +92,15 @@ export class MemStorage implements IStorage {
     const existing = this.nutritionists.get(id);
     if (!existing) return undefined;
 
+    // Hash password if it's being updated
+    let processedUpdateData = { ...updateData };
+    if (updateData.password) {
+      processedUpdateData.password = await bcrypt.hash(updateData.password, 10);
+    }
+
     const updated: Nutritionist = {
       ...existing,
-      ...updateData,
+      ...processedUpdateData,
       updatedAt: new Date(),
     };
     this.nutritionists.set(id, updated);
@@ -195,17 +207,26 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createNutritionist(insertNutritionist: InsertNutritionist): Promise<Nutritionist> {
+    // Hash the password before storing
+    const hashedPassword = await bcrypt.hash(insertNutritionist.password, 10);
+    
     const [nutritionist] = await db
       .insert(nutritionists)
-      .values(insertNutritionist)
+      .values({ ...insertNutritionist, password: hashedPassword })
       .returning();
     return nutritionist;
   }
 
   async updateNutritionist(id: string, updateData: Partial<InsertNutritionist>): Promise<Nutritionist | undefined> {
+    // Hash password if it's being updated
+    let processedUpdateData = { ...updateData };
+    if (updateData.password) {
+      processedUpdateData.password = await bcrypt.hash(updateData.password, 10);
+    }
+
     const [updated] = await db
       .update(nutritionists)
-      .set({ ...updateData, updatedAt: new Date() })
+      .set({ ...processedUpdateData, updatedAt: new Date() })
       .where(eq(nutritionists.id, id))
       .returning();
     return updated || undefined;
