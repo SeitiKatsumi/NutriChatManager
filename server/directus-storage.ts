@@ -1,5 +1,37 @@
 // @ts-ignore - directus.js doesn't have type declarations
 import { directusClient } from "./lib/directus.js";
+
+import fetch from "node-fetch";
+
+// Create DirectusClient class locally
+class DirectusClient {
+  constructor(baseUrl: string, token: string) {
+    this.baseUrl = baseUrl;
+    this.token = token;
+  }
+
+  baseUrl: string;
+  token: string;
+
+  async request(endpoint: string, options: any = {}) {
+    const url = `${this.baseUrl}${endpoint}`;
+    
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.token}`,
+        ...options.headers,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Directus API error: ${response.status} ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+}
 import bcrypt from "bcrypt";
 import { randomUUID } from "crypto";
 import type { IStorage } from "./storage";
@@ -175,6 +207,17 @@ function transformUserFromDirectus(directusUser: any): any {
 
 export class DirectusStorage implements IStorage {
   private client = directusClient;
+  
+  // Create a client instance with user token
+  private getUserClient(userToken?: string) {
+    if (userToken) {
+      return new DirectusClient(
+        process.env.DIRECTUS_URL || "https://nutrichatbot.app.11mind.com.br", 
+        userToken
+      );
+    }
+    return this.client; // Fallback to admin token for user management operations
+  }
 
   // Nutritionists (stored in Directus Users collection)
   async getNutritionist(id: string) {
@@ -257,9 +300,10 @@ export class DirectusStorage implements IStorage {
   }
 
   // Patients (stored in Directus Cadastro_de_Pacientes collection)
-  async getPatient(id: string) {
+  async getPatient(id: string, userToken?: string) {
     try {
-      const response = await this.client.request(`/items/${PATIENTS_COLLECTION}/${id}?fields=*`);
+      const client = this.getUserClient(userToken);
+      const response = await client.request(`/items/${PATIENTS_COLLECTION}/${id}?fields=*`);
       return transformPatientFromDirectus(response.data);
     } catch (error) {
       console.error('Error getting patient:', error);
@@ -267,9 +311,10 @@ export class DirectusStorage implements IStorage {
     }
   }
 
-  async getPatientsByNutritionist(nutritionistId: string) {
+  async getPatientsByNutritionist(nutritionistId: string, userToken?: string) {
     try {
-      const response = await this.client.request(`/items/${PATIENTS_COLLECTION}?filter[nutritionist_id][_eq]=${nutritionistId}&fields=*`);
+      const client = this.getUserClient(userToken);
+      const response = await client.request(`/items/${PATIENTS_COLLECTION}?filter[nutritionist_id][_eq]=${nutritionistId}&fields=*`);
       const patients = response.data || [];
       return patients.map(transformPatientFromDirectus);
     } catch (error) {
@@ -278,10 +323,11 @@ export class DirectusStorage implements IStorage {
     }
   }
 
-  async createPatient(insertPatient: any) {
+  async createPatient(insertPatient: any, userToken?: string) {
     try {
+      const client = this.getUserClient(userToken);
       const directusPatient = transformPatientToDirectus(insertPatient);
-      const response = await this.client.request(`/items/${PATIENTS_COLLECTION}`, {
+      const response = await client.request(`/items/${PATIENTS_COLLECTION}`, {
         method: 'POST',
         body: JSON.stringify(directusPatient),
       });
@@ -292,10 +338,11 @@ export class DirectusStorage implements IStorage {
     }
   }
 
-  async updatePatient(id: string, updateData: any) {
+  async updatePatient(id: string, updateData: any, userToken?: string) {
     try {
+      const client = this.getUserClient(userToken);
       const directusUpdate = transformPatientToDirectus(updateData);
-      const response = await this.client.request(`/items/${PATIENTS_COLLECTION}/${id}`, {
+      const response = await client.request(`/items/${PATIENTS_COLLECTION}/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(directusUpdate),
       });
@@ -306,9 +353,10 @@ export class DirectusStorage implements IStorage {
     }
   }
 
-  async deletePatient(id: string) {
+  async deletePatient(id: string, userToken?: string) {
     try {
-      await this.client.request(`/items/${PATIENTS_COLLECTION}/${id}`, {
+      const client = this.getUserClient(userToken);
+      await client.request(`/items/${PATIENTS_COLLECTION}/${id}`, {
         method: 'DELETE',
       });
       return true;
@@ -319,9 +367,10 @@ export class DirectusStorage implements IStorage {
   }
 
   // WhatsApp Instances (placeholder - you can implement Directus collection later)
-  async getWhatsappInstance(id: string) {
+  async getWhatsappInstance(id: string, userToken?: string) {
     try {
-      const response = await this.client.request(`/items/${WHATSAPP_INSTANCES_COLLECTION}/${id}?fields=*`);
+      const client = this.getUserClient(userToken);
+      const response = await client.request(`/items/${WHATSAPP_INSTANCES_COLLECTION}/${id}?fields=*`);
       return response.data;
     } catch (error) {
       console.error('Error getting WhatsApp instance:', error);
@@ -329,9 +378,10 @@ export class DirectusStorage implements IStorage {
     }
   }
 
-  async getWhatsappInstanceByNutritionist(nutritionistId: string) {
+  async getWhatsappInstanceByNutritionist(nutritionistId: string, userToken?: string) {
     try {
-      const response = await this.client.request(`/items/${WHATSAPP_INSTANCES_COLLECTION}?filter[nutritionist_id][_eq]=${nutritionistId}&fields=*`);
+      const client = this.getUserClient(userToken);
+      const response = await client.request(`/items/${WHATSAPP_INSTANCES_COLLECTION}?filter[nutritionist_id][_eq]=${nutritionistId}&fields=*`);
       const instances = response.data || [];
       return instances[0] || undefined;
     } catch (error) {
@@ -340,9 +390,10 @@ export class DirectusStorage implements IStorage {
     }
   }
 
-  async createWhatsappInstance(insertInstance: any) {
+  async createWhatsappInstance(insertInstance: any, userToken?: string) {
     try {
-      const response = await this.client.request(`/items/${WHATSAPP_INSTANCES_COLLECTION}`, {
+      const client = this.getUserClient(userToken);
+      const response = await client.request(`/items/${WHATSAPP_INSTANCES_COLLECTION}`, {
         method: 'POST',
         body: JSON.stringify(insertInstance),
       });
@@ -353,9 +404,10 @@ export class DirectusStorage implements IStorage {
     }
   }
 
-  async updateWhatsappInstance(id: string, updateData: any) {
+  async updateWhatsappInstance(id: string, updateData: any, userToken?: string) {
     try {
-      const response = await this.client.request(`/items/${WHATSAPP_INSTANCES_COLLECTION}/${id}`, {
+      const client = this.getUserClient(userToken);
+      const response = await client.request(`/items/${WHATSAPP_INSTANCES_COLLECTION}/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(updateData),
       });
@@ -366,9 +418,10 @@ export class DirectusStorage implements IStorage {
     }
   }
 
-  async listWhatsappInstances() {
+  async listWhatsappInstances(userToken?: string) {
     try {
-      const response = await this.client.request(`/items/${WHATSAPP_INSTANCES_COLLECTION}?fields=*`);
+      const client = this.getUserClient(userToken);
+      const response = await client.request(`/items/${WHATSAPP_INSTANCES_COLLECTION}?fields=*`);
       return response.data || [];
     } catch (error) {
       console.error('Error listing WhatsApp instances:', error);
@@ -376,9 +429,10 @@ export class DirectusStorage implements IStorage {
     }
   }
 
-  async deleteWhatsappInstance(id: string) {
+  async deleteWhatsappInstance(id: string, userToken?: string) {
     try {
-      await this.client.request(`/items/${WHATSAPP_INSTANCES_COLLECTION}/${id}`, {
+      const client = this.getUserClient(userToken);
+      await client.request(`/items/${WHATSAPP_INSTANCES_COLLECTION}/${id}`, {
         method: 'DELETE',
       });
       return true;

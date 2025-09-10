@@ -157,7 +157,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/patients", requireAuth, async (req, res) => {
     try {
       const nutritionistId = req.session.user.nutritionistId;
-      const patients = await storage.getPatientsByNutritionist(nutritionistId);
+      const userToken = req.session.user.accessToken;
+      const patients = await storage.getPatientsByNutritionist(nutritionistId, userToken);
       
       // Optional filtering by status, name, etc.
       const { status, search } = req.query;
@@ -185,7 +186,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/patients/:id", requireAuth, async (req, res) => {
     try {
       const nutritionistId = req.session.user.nutritionistId;
-      const patient = await storage.getPatient(req.params.id);
+      const userToken = req.session.user.accessToken;
+      const patient = await storage.getPatient(req.params.id, userToken);
       
       if (!patient) {
         return res.status(404).json({ error: "Patient not found" });
@@ -205,6 +207,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/patients", requireAuth, async (req, res) => {
     try {
       const nutritionistId = req.session.user.nutritionistId;
+      const userToken = req.session.user.accessToken;
       const validatedData = insertPatientSchema.parse(req.body);
       
       // Ensure patient is associated with logged nutritionist
@@ -213,7 +216,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         nutritionistId
       };
       
-      const patient = await storage.createPatient(patientData);
+      const patient = await storage.createPatient(patientData, userToken);
       res.status(201).json(patient);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -226,10 +229,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/patients/:id", requireAuth, async (req, res) => {
     try {
       const nutritionistId = req.session.user.nutritionistId;
+      const userToken = req.session.user.accessToken;
       const patientId = req.params.id;
       
       // First verify patient exists and belongs to nutritionist
-      const existingPatient = await storage.getPatient(patientId);
+      const existingPatient = await storage.getPatient(patientId, userToken);
       if (!existingPatient) {
         return res.status(404).json({ error: "Patient not found" });
       }
@@ -243,7 +247,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Prevent changing nutritionistId
       const { nutritionistId: _, ...updateData } = validatedData;
       
-      const patient = await storage.updatePatient(patientId, updateData);
+      const patient = await storage.updatePatient(patientId, updateData, userToken);
       if (!patient) {
         return res.status(404).json({ error: "Patient not found" });
       }
@@ -260,10 +264,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/patients/:id", requireAuth, async (req, res) => {
     try {
       const nutritionistId = req.session.user.nutritionistId;
+      const userToken = req.session.user.accessToken;
       const patientId = req.params.id;
       
       // First verify patient exists and belongs to nutritionist
-      const existingPatient = await storage.getPatient(patientId);
+      const existingPatient = await storage.getPatient(patientId, userToken);
       if (!existingPatient) {
         return res.status(404).json({ error: "Patient not found" });
       }
@@ -272,7 +277,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Access denied. You can only delete your own patients." });
       }
       
-      const deleted = await storage.deletePatient(patientId);
+      const deleted = await storage.deletePatient(patientId, userToken);
       if (!deleted) {
         return res.status(404).json({ error: "Patient not found" });
       }
@@ -319,8 +324,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Nutritionist not found" });
       }
 
-      const patients = await storage.getPatientsByNutritionist(nutritionist.id);
-      const whatsappInstance = await storage.getWhatsappInstanceByNutritionist(nutritionist.id);
+      const userToken = req.session.user.accessToken;
+      const patients = await storage.getPatientsByNutritionist(nutritionist.id, userToken);
+      const whatsappInstance = await storage.getWhatsappInstanceByNutritionist(nutritionist.id, userToken);
       const messages = whatsappInstance ? await storage.getMessagesByInstance(whatsappInstance.id) : [];
       
       const stats = {
@@ -353,8 +359,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Nutritionist profile not found" });
       }
 
-      const patients = await storage.getPatientsByNutritionist(nutritionist.id);
-      const whatsappInstance = await storage.getWhatsappInstanceByNutritionist(nutritionist.id);
+      const userToken = req.session.user.accessToken;
+      const patients = await storage.getPatientsByNutritionist(nutritionist.id, userToken);
+      const whatsappInstance = await storage.getWhatsappInstanceByNutritionist(nutritionist.id, userToken);
       const messages = whatsappInstance ? await storage.getMessagesByInstance(whatsappInstance.id) : [];
       
       const stats = {
