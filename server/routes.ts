@@ -649,7 +649,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
                      adminRoleIds.includes(directusUser.data.role) ||
                      adminEmails.includes(directusUser.data.email);
       
+      console.log(`Admin check result for ${email}: isAdmin=${isAdmin}`);
+      console.log(`- admin_access: ${directusUser.data.admin_access}`);
+      console.log(`- role in adminRoleIds: ${adminRoleIds.includes(directusUser.data.role)}`);
+      console.log(`- email in adminEmails: ${adminEmails.includes(directusUser.data.email)}`);
+      
       if (!isAdmin) {
+        console.log(`Access denied for ${email} - not recognized as admin`);
         return res.status(403).json({ error: "Access denied. Administrator role required" });
       }
 
