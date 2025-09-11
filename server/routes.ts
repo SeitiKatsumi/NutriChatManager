@@ -8,6 +8,9 @@ import { z } from "zod";
 // @ts-ignore - directus.js doesn't have type declarations
 import { directusClient } from "./lib/directus.js";
 // Evolution API service will be imported dynamically where needed
+import { evolutionApi } from "./evolution-api";
+import { evolutionRedis } from "./evolution-redis";
+import { openaiService } from "./openai-service";
 
 // Extend session type to include user
 declare module 'express-session' {
@@ -650,17 +653,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Create instance first if it doesn't exist
       try {
-        await evolutionApiClient.createInstance(instanceId);
+        await evolutionApi.createInstance('', instanceId);
       } catch (createError) {
         // Instance might already exist, continue
         console.log('Instance might already exist:', instanceId);
       }
       
       // Get QR code from Evolution API
-      const qrResponse = await evolutionApiClient.getInstanceQrCode(instanceId);
+      const qrResponse = await evolutionApi.getQRCode(instanceId);
       
       res.json({
-        qrCode: qrResponse.base64 || qrResponse.qrcode,
+        qrCode: qrResponse.base64 || qrResponse.code,
         instanceId,
         status: "waiting_for_connection"
       });
@@ -683,12 +686,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { instanceId } = req.params;
       
       // Get status from Evolution API
-      const statusResponse = await evolutionApiClient.getInstanceStatus(instanceId);
+      const statusResponse = await evolutionApi.getInstanceStatus(instanceId);
       
       res.json({
         instanceId,
         status: statusResponse.state || "disconnected",
-        phoneNumber: statusResponse.instance?.phone || null
+        phoneNumber: statusResponse.instance?.instanceName || null
       });
     } catch (error) {
       const { instanceId } = req.params;
@@ -698,6 +701,151 @@ export async function registerRoutes(app: Express): Promise<Server> {
         instanceId,
         status: "disconnected",
         phoneNumber: null
+      });
+    }
+  });
+
+  // AI Consultation endpoints
+  const askRequestSchema = z.object({
+    patientId: z.number(),
+    question: z.string().min(5, "Pergunta deve ter pelo menos 5 caracteres"),
+    dateRange: z.object({
+      start: z.string().optional(),
+      end: z.string().optional()
+    }).optional()
+  });
+
+  app.post("/api/ai/ask", requireAuth, async (req, res) => {
+    try {
+      const { patientId, question, dateRange } = askRequestSchema.parse(req.body);
+      
+      // Security: Verify patient belongs to this nutritionist
+      const userToken = req.session.user.accessToken;
+      const patient = await storage.getPatient(patientId.toString(), userToken);
+      
+      if (!patient || patient.nutritionistId !== req.session.user.nutritionistId) {
+        return res.status(403).json({ error: "Access denied - patient not found or not your patient" });
+      }
+      
+      // Get messages from Evolution Redis
+      const phoneNumber = patient.phone;
+      const nutritionistId = req.session.user.nutritionistId;
+      
+      console.log(`[AI Ask] Getting messages for patient ${patient.fullName} (${phoneNumber})`);
+      
+      const messages = await evolutionRedis.getPatientMessages(nutritionistId, phoneNumber, 500);
+      
+      if (messages.length === 0) {
+        return res.json({
+          answer: "Não encontrei mensagens para este paciente no histórico de conversas.",
+          sources: [],
+          confidence: 0.1
+        });
+      }
+      
+      // Filter by date range if provided
+      let filteredMessages = messages;
+      if (dateRange?.start || dateRange?.end) {
+        const startTime = dateRange.start ? new Date(dateRange.start).getTime() : 0;
+        const endTime = dateRange.end ? new Date(dateRange.end).getTime() : Date.now();
+        
+        filteredMessages = messages.filter(msg => 
+          msg.timestamp >= startTime && msg.timestamp <= endTime
+        );
+      }
+      
+      console.log(`[AI Ask] Processing ${filteredMessages.length} messages for question: ${question}`);
+      
+      // Process with OpenAI
+      const response = await openaiService.askAboutPatient(
+        filteredMessages, 
+        question, 
+        patient.fullName
+      );
+      
+      res.json(response);
+      
+    } catch (error) {
+      console.error('[AI Ask] Error processing request:', error);
+      
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          error: "Invalid request format",
+          details: error.errors 
+        });
+      }
+      
+      res.status(500).json({ 
+        error: "Erro interno do servidor",
+        message: error instanceof Error ? error.message : "Erro desconhecido"
+      });
+    }
+  });
+
+  app.get("/api/ai/insights/:patientId", requireAuth, async (req, res) => {
+    try {
+      const patientId = req.params.patientId;
+      
+      // Security: Verify patient belongs to this nutritionist
+      const userToken = req.session.user.accessToken;
+      const patient = await storage.getPatient(patientId, userToken);
+      
+      if (!patient || patient.nutritionistId !== req.session.user.nutritionistId) {
+        return res.status(403).json({ error: "Access denied - patient not found or not your patient" });
+      }
+      
+      // Get messages from Evolution Redis
+      const phoneNumber = patient.phone;
+      const nutritionistId = req.session.user.nutritionistId;
+      
+      const messages = await evolutionRedis.getPatientMessages(nutritionistId, phoneNumber, 200);
+      
+      if (messages.length === 0) {
+        return res.json({
+          summary: "Sem mensagens disponíveis",
+          keyTopics: [],
+          patientMood: "neutral",
+          recommendations: []
+        });
+      }
+      
+      // Generate insights with OpenAI
+      const insights = await openaiService.generateQuickInsights(messages);
+      
+      res.json(insights);
+      
+    } catch (error) {
+      console.error('[AI Insights] Error generating insights:', error);
+      res.status(500).json({ 
+        error: "Erro ao gerar insights",
+        message: error instanceof Error ? error.message : "Erro desconhecido"
+      });
+    }
+  });
+
+  // Test endpoint to check Evolution Redis connection
+  app.get("/api/ai/test-connection/:nutritionistId", requireAuth, async (req, res) => {
+    try {
+      const { nutritionistId } = req.params;
+      
+      // Security: Users can only test their own connection
+      if (nutritionistId !== req.session.user.nutritionistId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      
+      const patients = await evolutionRedis.getNutritionistPatients(nutritionistId);
+      
+      res.json({
+        connected: true,
+        patientsFound: patients.length,
+        patients: patients.slice(0, 5) // Show first 5 for testing
+      });
+      
+    } catch (error) {
+      console.error('[AI Test] Redis connection error:', error);
+      res.status(500).json({ 
+        connected: false,
+        error: error instanceof Error ? error.message : "Connection failed"
       });
     }
   });
