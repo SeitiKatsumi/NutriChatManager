@@ -7,8 +7,7 @@ import { z } from "zod";
 // Import real API clients (server-side versions)
 // @ts-ignore - directus.js doesn't have type declarations
 import { directusClient } from "./lib/directus.js";
-// @ts-ignore - evolution-api.js doesn't have type declarations  
-import { evolutionApiClient } from "./lib/evolution-api.js";
+// Evolution API service will be imported dynamically where needed
 
 // Extend session type to include user
 declare module 'express-session' {
@@ -126,18 +125,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // WhatsApp instances routes
-  app.get("/api/whatsapp-instances", async (req, res) => {
+  // WhatsApp instances routes (PROTECTED)
+  app.get("/api/whatsapp-instances", requireAuth, async (req, res) => {
     try {
-      const instances = await storage.listWhatsappInstances();
-      res.json(instances);
+      // Security: Users can only see their own instance
+      const nutritionistId = req.session.user.nutritionistId;
+      const userToken = req.session.user.accessToken;
+      
+      // Get nutritionist data to check for Evolution instance
+      const nutritionist = await storage.getNutritionist(nutritionistId, userToken);
+      if (!nutritionist || !nutritionist.evolutionInstanceName) {
+        return res.json([]); // Return empty if no instance configured
+      }
+      
+      // Return formatted instance data for backward compatibility
+      const instance = {
+        id: nutritionist.evolutionInstanceName,
+        instanceName: nutritionist.evolutionInstanceName,
+        phoneNumber: nutritionist.whatsappIA,
+        status: "connected", // This would need real status check
+        nutritionistId: nutritionistId
+      };
+      
+      res.json([instance]);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch WhatsApp instances" });
     }
   });
 
-  app.get("/api/whatsapp-instances/nutritionist/:nutritionistId", async (req, res) => {
+  app.get("/api/whatsapp-instances/nutritionist/:nutritionistId", requireAuth, async (req, res) => {
     try {
+      // Security: Users can only access their own instance
+      if (req.params.nutritionistId !== req.session.user.nutritionistId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      
       const instance = await storage.getWhatsappInstanceByNutritionist(req.params.nutritionistId);
       if (!instance) {
         return res.status(404).json({ error: "WhatsApp instance not found" });
@@ -148,9 +170,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/whatsapp-instances", async (req, res) => {
+  app.post("/api/whatsapp-instances", requireAuth, async (req, res) => {
     try {
-      const validatedData = insertWhatsappInstanceSchema.parse(req.body);
+      // Security: Add nutritionistId from session
+      const instanceData = {
+        ...req.body,
+        nutritionistId: req.session.user.nutritionistId
+      };
+      
+      const validatedData = insertWhatsappInstanceSchema.parse(instanceData);
       const instance = await storage.createWhatsappInstance(validatedData);
       res.status(201).json(instance);
     } catch (error) {
@@ -161,8 +189,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/whatsapp-instances/:id", async (req, res) => {
+  app.put("/api/whatsapp-instances/:id", requireAuth, async (req, res) => {
     try {
+      // Security: Verify ownership before update
+      const existingInstance = await storage.getWhatsappInstance(req.params.id);
+      if (!existingInstance || existingInstance.nutritionistId !== req.session.user.nutritionistId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      
       const validatedData = insertWhatsappInstanceSchema.partial().parse(req.body);
       const instance = await storage.updateWhatsappInstance(req.params.id, validatedData);
       
@@ -330,7 +364,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "WhatsApp instance not found" });
       }
 
-      const { evolutionApi } = await import('./evolution-api.js');
+      const { evolutionApi } = await import('./evolution-api.ts');
       const qrResponse = await evolutionApi.getQRCode(nutritionist.evolutionInstanceName);
       
       res.json(qrResponse);
@@ -354,7 +388,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "WhatsApp instance not found" });
       }
 
-      const { evolutionApi } = await import('./evolution-api.js');
+      const { evolutionApi } = await import('./evolution-api.ts');
       const statusResponse = await evolutionApi.getInstanceStatus(nutritionist.evolutionInstanceName);
       
       res.json(statusResponse);
