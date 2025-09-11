@@ -218,9 +218,10 @@ export class DirectusStorage implements IStorage {
   }
 
   // Nutritionists (stored in Directus Users collection)
-  async getNutritionist(id: string) {
+  async getNutritionist(id: string, userToken?: string) {
     try {
-      const response = await this.client.request(`/users/${id}?fields=*`);
+      const client = this.getUserClient(userToken);
+      const response = await client.request(`/users/${id}?fields=*`);
       return transformUserFromDirectus(response.data);
     } catch (error) {
       console.error('Error getting nutritionist:', error);
@@ -254,7 +255,7 @@ export class DirectusStorage implements IStorage {
     }
   }
 
-  async updateNutritionist(id: string, updateData: any) {
+  async updateNutritionist(id: string, updateData: any, userToken?: string) {
     try {
       // Don't hash password - Directus handles password hashing internally
       const directusUpdate = transformUserToDirectus({
@@ -262,7 +263,8 @@ export class DirectusStorage implements IStorage {
         fullName: updateData.fullName, // Ensure fullName is preserved
       });
       
-      const response = await this.client.request(`/users/${id}`, {
+      const client = this.getUserClient(userToken);
+      const response = await client.request(`/users/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(directusUpdate),
       });
@@ -274,9 +276,10 @@ export class DirectusStorage implements IStorage {
     }
   }
 
-  async listNutritionists() {
+  async listNutritionists(userToken?: string) {
     try {
-      const response = await this.client.request(`/users?filter[role][_eq]=90ce89ef-abe3-4359-9fc0-3e882127775a&fields=*`);
+      const client = this.getUserClient(userToken);
+      const response = await client.request(`/users?filter[role][_eq]=90ce89ef-abe3-4359-9fc0-3e882127775a&fields=*`);
       const users = response.data || [];
       return users.map(transformUserFromDirectus);
     } catch (error) {
@@ -285,9 +288,10 @@ export class DirectusStorage implements IStorage {
     }
   }
 
-  async deleteNutritionist(id: string) {
+  async deleteNutritionist(id: string, userToken?: string) {
     try {
-      await this.client.request(`/users/${id}`, {
+      const client = this.getUserClient(userToken);
+      await client.request(`/users/${id}`, {
         method: 'DELETE',
       });
       return true;

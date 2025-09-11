@@ -7,7 +7,6 @@ export default function Header() {
   const navItems = [
     { key: "dashboard", path: "/dashboard", label: "Dashboard" },
     { key: "patients", path: "/patients", label: "Pacientes" },
-    { key: "users", path: "/users", label: "Usuários" },
     { key: "whatsapp", path: "/whatsapp", label: "WhatsApp" },
   ];
 

@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { User, Mail, Lock, ChevronRight, ChevronLeft, Check, Phone, MapPin } from "lucide-react";
 
 const step1Schema = z.object({
@@ -78,6 +78,9 @@ export default function StepForm({ currentStep, onStepChange, onComplete }: Step
       return response.json();
     },
     onSuccess: () => {
+      // Invalidate nutritionists cache so the users page shows the new user immediately
+      queryClient.invalidateQueries({ queryKey: ["/api/nutritionists"] });
+      
       toast({
         title: "Conta criada com sucesso!",
         description: "Bem-vindo ao NutriChatBot.",

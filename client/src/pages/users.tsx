@@ -8,8 +8,10 @@ export default function Users() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSpecialization, setSelectedSpecialization] = useState("");
 
-  const { data: nutritionists, isLoading } = useQuery<any[]>({
+  const { data: nutritionists, isLoading, refetch } = useQuery<any[]>({
     queryKey: ["/api/nutritionists"],
+    staleTime: 30000, // 30 seconds - refresh more frequently
+    refetchOnWindowFocus: true, // Refresh when user comes back to tab
   });
 
   const filteredNutritionists = nutritionists?.filter((nutritionist: any) => {

@@ -27,18 +27,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
   };
 
   // Nutritionists routes
-  app.get("/api/nutritionists", async (req, res) => {
+  app.get("/api/nutritionists", requireAuth, async (req, res) => {
     try {
-      const nutritionists = await storage.listNutritionists();
-      res.json(nutritionists);
+      // Security: Users can only see their own data - return only logged-in user
+      const userToken = req.session.user.accessToken;
+      const currentUser = await storage.getNutritionist(req.session.user.id, userToken);
+      
+      if (!currentUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      // Return as array to maintain compatibility with frontend
+      res.json([currentUser]);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch nutritionists" });
     }
   });
 
-  app.get("/api/nutritionists/:id", async (req, res) => {
+  app.get("/api/nutritionists/:id", requireAuth, async (req, res) => {
     try {
-      const nutritionist = await storage.getNutritionist(req.params.id);
+      // Security: Users can only access their own data
+      if (req.params.id !== req.session.user.id) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      
+      const userToken = req.session.user.accessToken;
+      const nutritionist = await storage.getNutritionist(req.params.id, userToken);
       if (!nutritionist) {
         return res.status(404).json({ error: "Nutritionist not found" });
       }
@@ -70,10 +84,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/nutritionists/:id", async (req, res) => {
+  app.put("/api/nutritionists/:id", requireAuth, async (req, res) => {
     try {
+      // Security: Users can only update their own data
+      if (req.params.id !== req.session.user.id) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      
       const validatedData = insertNutritionistSchema.partial().parse(req.body);
-      const nutritionist = await storage.updateNutritionist(req.params.id, validatedData);
+      const userToken = req.session.user.accessToken;
+      const nutritionist = await storage.updateNutritionist(req.params.id, validatedData, userToken);
       
       if (!nutritionist) {
         return res.status(404).json({ error: "Nutritionist not found" });
@@ -88,9 +108,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/nutritionists/:id", async (req, res) => {
+  app.delete("/api/nutritionists/:id", requireAuth, async (req, res) => {
     try {
-      const deleted = await storage.deleteNutritionist(req.params.id);
+      // Security: Users can only delete their own account
+      if (req.params.id !== req.session.user.id) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      
+      const userToken = req.session.user.accessToken;
+      const deleted = await storage.deleteNutritionist(req.params.id, userToken);
       if (!deleted) {
         return res.status(404).json({ error: "Nutritionist not found" });
       }
