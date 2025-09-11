@@ -23,6 +23,15 @@ The application is configured with connect-pg-simple for PostgreSQL-based sessio
 ## WhatsApp Integration
 The platform integrates with Evolution API for WhatsApp communication management. This enables creating WhatsApp instances, generating QR codes for device connection, and handling message routing. Each nutritionist can have their own WhatsApp instance with customizable bot configurations including agent names, auto-response settings, and welcome messages.
 
+### Automatic Webhook Configuration
+All new WhatsApp instances are automatically configured with N8N webhook integration:
+- **Webhook URL**: https://n8n.apps.dna11.com.br/webhook/NutriChatbot02
+- **Events**: MESSAGES_UPSERT (for real-time message processing)
+- **Base64 Enabled**: Automatic conversion of media files to Base64 format
+- **Event Filtering**: Enabled for efficient webhook processing
+
+This automatic configuration ensures seamless integration between WhatsApp conversations and the N8N automation workflows, enabling real-time message processing and AI-powered responses without manual webhook setup.
+
 ## State Management
 Client-side state is managed through TanStack Query for server state and React hooks for local component state. The query client is configured with custom fetch functions that handle authentication and error responses uniformly across the application.
 
