@@ -394,7 +394,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { evolutionApi } = await import('./evolution-api.ts');
       const statusResponse = await evolutionApi.getInstanceStatus(nutritionist.evolutionInstanceName);
       
-      res.json(statusResponse);
+      // Force fresh response with unique identifiers
+      const timestamp = Date.now();
+      const uniqueETag = `"${timestamp}-${Math.random()}"`;
+      
+      res.set({
+        'Cache-Control': 'no-cache, no-store, must-revalidate, private',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+        'ETag': uniqueETag,
+        'Last-Modified': new Date().toUTCString(),
+        'Vary': '*'
+      });
+      
+      // Add timestamp to response to ensure uniqueness
+      res.json({
+        ...statusResponse,
+        _timestamp: timestamp,
+        _cache_buster: Math.random()
+      });
     } catch (error: any) {
       console.error("Error getting WhatsApp status:", error);
       res.status(500).json({ error: error.message || "Failed to get status" });

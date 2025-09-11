@@ -101,6 +101,10 @@ export class EvolutionApiService {
     console.log(`[Evolution API] Getting status for instance: ${instanceName}`);
     
     const response = await this.request(`/instance/connectionState/${instanceName}`);
+    
+    // Log the status for debugging
+    console.log(`[Evolution API] Instance ${instanceName} status: ${response.instance?.state || 'unknown'}`);
+    
     return response;
   }
 
