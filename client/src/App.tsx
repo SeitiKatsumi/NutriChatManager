@@ -11,6 +11,8 @@ import Dashboard from "@/pages/dashboard";
 import Users from "@/pages/users";
 import Patients from "@/pages/patients";
 import WhatsApp from "@/pages/whatsapp";
+import AdminLogin from "@/pages/admin-login";
+import Admin from "@/pages/admin";
 import Header from "@/components/layout/header";
 import { useEffect } from "react";
 
@@ -76,6 +78,14 @@ function Router() {
   return (
     <div className="min-h-screen bg-background">
       <Switch>
+        {/* Hidden Admin routes - no navigation, no header */}
+        <Route path="/admin/login">
+          <AdminLogin />
+        </Route>
+        <Route path="/admin">
+          <Admin />
+        </Route>
+        
         {/* Public routes */}
         <Route path="/login">
           <PublicRoute>

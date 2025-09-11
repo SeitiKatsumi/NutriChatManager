@@ -28,6 +28,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   };
 
+  const requireAdmin = (req: any, res: any, next: any) => {
+    if (!req.session.user || !req.session.user.isAdmin) {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+    next();
+  };
+
   // Nutritionists routes
   app.get("/api/nutritionists", requireAuth, async (req, res) => {
     try {
@@ -605,6 +612,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin login route - for Directus administrators
+  app.post("/api/auth/admin/login", async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      console.log(`Admin login attempt for email: ${email}`);
+      
+      if (!email || !password) {
+        return res.status(400).json({ error: "Email and password are required" });
+      }
+
+      // Use Directus authentication
+      const loginResponse = await directusClient.login(email, password);
+      
+      // Get user details from Directus
+      const directusUser = await directusClient.getMe(loginResponse.data.access_token);
+      
+      // Check if user has admin access (using admin_access flag for robustness)
+      const isAdmin = directusUser.data.admin_access === true;
+      
+      if (!isAdmin) {
+        return res.status(403).json({ error: "Access denied. Administrator role required" });
+      }
+
+      // Create local session with admin flag
+      req.session.user = {
+        id: directusUser.data.id,
+        email: directusUser.data.email,
+        nutritionistId: null,
+        role: directusUser.data.role,
+        accessToken: loginResponse.data.access_token,
+        refreshToken: loginResponse.data.refresh_token,
+        isAdmin: true
+      };
+
+      console.log(`=== Admin login successful ===`);
+      console.log(`Session ID: ${req.sessionID}`);
+      console.log(`Admin ID: ${directusUser.data.id}`);
+      
+      res.json({
+        user: {
+          id: directusUser.data.id,
+          email: directusUser.data.email,
+          name: `${directusUser.data.first_name || ''} ${directusUser.data.last_name || ''}`.trim() || directusUser.data.email,
+          isAdmin: true,
+        },
+      });
+    } catch (error: any) {
+      console.error('Admin login error:', error);
+      if (error.message && error.message.includes('Login failed')) {
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+      res.status(500).json({ error: "Authentication service error" });
+    }
+  });
+
   app.get("/api/auth/me", async (req, res) => {
     try {
       console.log('=== /api/auth/me called ===');
@@ -847,6 +909,150 @@ export async function registerRoutes(app: Express): Promise<Server> {
         connected: false,
         error: error instanceof Error ? error.message : "Connection failed"
       });
+    }
+  });
+
+  // Admin routes - protected by requireAdmin middleware
+  app.get("/api/admin/nutritionists", requireAdmin, async (req, res) => {
+    try {
+      console.log('[Admin] Getting all nutritionists');
+      
+      // Use Directus to get all users with nutritionist role
+      const userToken = req.session.user.accessToken;
+      const response = await fetch(`${process.env.DIRECTUS_URL}/users?filter[role][_eq]=90ce89ef-abe3-4359-9fc0-3e882127775a&fields=*`, {
+        headers: {
+          'Authorization': `Bearer ${userToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Directus API error: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      // Transform Directus users to nutritionist format
+      const nutritionists = data.data.map((user: any) => ({
+        id: user.id,
+        fullName: user.full_name || `${user.first_name || ''} ${user.last_name || ''}`.trim(),
+        email: user.email,
+        crn: user.crn || '',
+        phone: user.phone || '',
+        address: user.address || '',
+        specialization: user.specialization || '',
+        whatsappNumber: user.whatsapp_number || '',
+        welcomeMessage: user.welcome_message || '',
+        workingHours: user.working_hours || 'commercial',
+        status: user.status || 'active',
+        createdAt: user.date_created,
+        updatedAt: user.date_updated,
+        lastAccess: user.last_access,
+        evolutionInstance: user.Instancia_Evolution,
+        whatsappIA: user.Whatsapp_IA
+      }));
+
+      console.log(`[Admin] Found ${nutritionists.length} nutritionists`);
+      res.json(nutritionists);
+    } catch (error) {
+      console.error('[Admin] Error getting nutritionists:', error);
+      res.status(500).json({ error: "Failed to fetch nutritionists" });
+    }
+  });
+
+  app.get("/api/admin/nutritionists/:id", requireAdmin, async (req, res) => {
+    try {
+      const nutritionistId = req.params.id;
+      console.log(`[Admin] Getting nutritionist details for ID: ${nutritionistId}`);
+      
+      const userToken = req.session.user.accessToken;
+      const response = await fetch(`${process.env.DIRECTUS_URL}/users/${nutritionistId}?fields=*`, {
+        headers: {
+          'Authorization': `Bearer ${userToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          return res.status(404).json({ error: "Nutritionist not found" });
+        }
+        throw new Error(`Directus API error: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      const user = data.data;
+      
+      // Transform Directus user to nutritionist format
+      const nutritionist = {
+        id: user.id,
+        fullName: user.full_name || `${user.first_name || ''} ${user.last_name || ''}`.trim(),
+        email: user.email,
+        crn: user.crn || '',
+        phone: user.phone || '',
+        address: user.address || '',
+        specialization: user.specialization || '',
+        whatsappNumber: user.whatsapp_number || '',
+        welcomeMessage: user.welcome_message || '',
+        workingHours: user.working_hours || 'commercial',
+        status: user.status || 'active',
+        createdAt: user.date_created,
+        updatedAt: user.date_updated,
+        lastAccess: user.last_access,
+        evolutionInstance: user.Instancia_Evolution,
+        whatsappIA: user.Whatsapp_IA
+      };
+
+      res.json(nutritionist);
+    } catch (error) {
+      console.error('[Admin] Error getting nutritionist:', error);
+      res.status(500).json({ error: "Failed to fetch nutritionist" });
+    }
+  });
+
+  app.get("/api/admin/patients", requireAdmin, async (req, res) => {
+    try {
+      console.log('[Admin] Getting all patients');
+      
+      const userToken = req.session.user.accessToken;
+      
+      // Get all patients directly from Directus
+      const response = await fetch(`${process.env.DIRECTUS_URL}/items/Cadastro_de_Pacientes?fields=id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,Suplementos_e_medicamentos,Etapas,date_created,date_updated`, {
+        headers: {
+          'Authorization': `Bearer ${userToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Directus API error: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      // Transform patients to match our format
+      const patients = data.data.map((patient: any) => ({
+        id: patient.id,
+        nutritionistId: patient.Nutricionista_responsavel,
+        fullName: patient.Nome_Completo || '',
+        whatsapp: patient.Whatsapp || '',
+        phone: patient.Whatsapp || '', // Using whatsapp as primary phone
+        birthDate: patient.Data_de_nascimento,
+        gender: patient.Sexo,
+        weight: patient.Peso,
+        height: patient.Altura,
+        initialAnalysis: patient.Anamise_inicial,
+        supplements: patient.Suplementos_e_medicamentos,
+        status: patient.Etapas || 'active',
+        createdAt: patient.date_created,
+        updatedAt: patient.date_updated
+      }));
+      
+      console.log(`[Admin] Found ${patients.length} patients`);
+      res.json(patients);
+    } catch (error) {
+      console.error('[Admin] Error getting patients:', error);
+      res.status(500).json({ error: "Failed to fetch patients" });
     }
   });
 
