@@ -622,8 +622,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Email and password are required" });
       }
 
+      console.log(`Attempting Directus authentication for: ${email}`);
       // Use Directus authentication
       const loginResponse = await directusClient.login(email, password);
+      console.log(`Directus login successful for: ${email}`);
       
       // Get user details from Directus
       const directusUser = await directusClient.getMe(loginResponse.data.access_token);
@@ -672,7 +674,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       console.error('Admin login error:', error);
+      console.log(`Error message: ${error.message}`);
+      console.log(`Error status: ${error.response?.status}`);
+      console.log(`Error response:`, error.response?.data);
+      
       if (error.message && error.message.includes('Login failed')) {
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+      if (error.response?.status === 401) {
         return res.status(401).json({ error: "Invalid credentials" });
       }
       res.status(500).json({ error: "Authentication service error" });
