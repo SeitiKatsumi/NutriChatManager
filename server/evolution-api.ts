@@ -94,6 +94,10 @@ export class EvolutionApiService {
     console.log(`[Evolution API] Getting QR code for instance: ${instanceName}`);
     
     const response = await this.request(`/instance/connect/${instanceName}`);
+    
+    // Log the full response to understand the structure
+    console.log(`[Evolution API] QR Code response:`, JSON.stringify(response, null, 2));
+    
     return response;
   }
 
