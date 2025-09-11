@@ -31,7 +31,7 @@ export default function WhatsApp() {
   const { data: whatsappStatus, isLoading: statusLoading, refetch: refetchStatus } = useQuery<any>({
     queryKey: ["/api/whatsapp/status", currentNutritionist?.id],
     enabled: !!currentNutritionist?.id && !!currentNutritionist?.evolutionInstanceName,
-    refetchInterval: whatsappStatus?.state === "open" ? 30000 : 5000, // Poll every 30s if connected, 5s if not
+    refetchInterval: 5000, // Poll every 5 seconds
   });
 
   // Generate QR Code mutation
