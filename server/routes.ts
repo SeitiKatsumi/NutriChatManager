@@ -367,7 +367,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { evolutionApi } = await import('./evolution-api.ts');
       const qrResponse = await evolutionApi.getQRCode(nutritionist.evolutionInstanceName);
       
-      res.json(qrResponse);
+      // Extract only the base64 field that the frontend expects
+      res.json({ 
+        base64: qrResponse.base64
+      });
     } catch (error: any) {
       console.error("Error getting QR code:", error);
       res.status(500).json({ error: error.message || "Failed to generate QR code" });
