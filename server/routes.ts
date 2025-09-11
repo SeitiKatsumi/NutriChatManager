@@ -315,6 +315,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Evolution API WhatsApp routes
+  app.get("/api/whatsapp/qrcode/:nutritionistId", requireAuth, async (req, res) => {
+    try {
+      // Security: Users can only get QR code for their own instance  
+      if (req.params.nutritionistId !== req.session.user.id) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const userToken = req.session.user.accessToken;
+      const nutritionist = await storage.getNutritionist(req.params.nutritionistId, userToken);
+      
+      if (!nutritionist || !nutritionist.evolutionInstanceName) {
+        return res.status(404).json({ error: "WhatsApp instance not found" });
+      }
+
+      const { evolutionApi } = await import('./evolution-api.js');
+      const qrResponse = await evolutionApi.getQRCode(nutritionist.evolutionInstanceName);
+      
+      res.json(qrResponse);
+    } catch (error: any) {
+      console.error("Error getting QR code:", error);
+      res.status(500).json({ error: error.message || "Failed to generate QR code" });
+    }
+  });
+
+  app.get("/api/whatsapp/status/:nutritionistId", requireAuth, async (req, res) => {
+    try {
+      // Security: Users can only check status of their own instance
+      if (req.params.nutritionistId !== req.session.user.id) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const userToken = req.session.user.accessToken;
+      const nutritionist = await storage.getNutritionist(req.params.nutritionistId, userToken);
+      
+      if (!nutritionist || !nutritionist.evolutionInstanceName) {
+        return res.status(404).json({ error: "WhatsApp instance not found" });
+      }
+
+      const { evolutionApi } = await import('./evolution-api.js');
+      const statusResponse = await evolutionApi.getInstanceStatus(nutritionist.evolutionInstanceName);
+      
+      res.json(statusResponse);
+    } catch (error: any) {
+      console.error("Error getting WhatsApp status:", error);
+      res.status(500).json({ error: error.message || "Failed to get status" });
+    }
+  });
+
   // Statistics endpoint
   app.get("/api/stats", async (req, res) => {
     try {

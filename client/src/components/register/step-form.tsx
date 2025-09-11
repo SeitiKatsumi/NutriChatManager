@@ -107,7 +107,13 @@ export default function StepForm({ currentStep, onStepChange, onComplete }: Step
   };
 
   const handleStep3Submit = (data: z.infer<typeof step3Schema>) => {
-    const finalData = { ...formData, ...data };
+    // Clean WhatsApp number format (remove non-digits) for backend
+    const cleanWhatsApp = data.whatsappNumber.replace(/\D/g, '');
+    const finalData = { 
+      ...formData, 
+      ...data,
+      whatsappNumber: cleanWhatsApp  // Store clean format
+    };
     delete finalData.termsAccepted;
     createNutritionistMutation.mutate(finalData);
   };

@@ -17,6 +17,10 @@ export const nutritionistSchema = z.object({
   welcomeMessage: z.string().optional(),
   workingHours: z.string().default("commercial"),
   status: z.string().default("active"), // active, inactive, pending
+  // Evolution API integration fields
+  evolutionInstanceName: z.string().optional(), // Instancia_Evolution in Directus
+  evolutionToken: z.string().optional(),        // Token_Evolution in Directus  
+  whatsappIA: z.string().optional(),            // Whatsapp_IA in Directus (clean format: 5511983283363)
   createdAt: z.date(),
   updatedAt: z.date(),
 });

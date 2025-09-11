@@ -1,19 +1,74 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import QRCodeSection from "@/components/whatsapp/qr-code-section";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { X } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { MessageCircle, QrCode, Settings, CheckCircle, RefreshCw, Loader2, Smartphone, AlertCircle } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 
 export default function WhatsApp() {
-  const [selectedInstance, setSelectedInstance] = useState<string | null>(null);
+  const { toast } = useToast();
+  const [qrCode, setQrCode] = useState("");
+  const [showQRCode, setShowQRCode] = useState(false);
 
-  const { data: instances, isLoading } = useQuery<any[]>({
-    queryKey: ["/api/whatsapp-instances"],
+  // Get current user info
+  const { data: userInfo } = useQuery<any>({
+    queryKey: ["/api/auth/me"],
   });
 
-  const connectedInstances = instances?.filter((instance: any) => instance.status === "connected") || [];
+  // Get current nutritionist data (self-only after security fix)
+  const { data: nutritionists, isLoading: loadingNutritionist } = useQuery<any[]>({
+    queryKey: ["/api/nutritionists"],
+    enabled: !!userInfo,
+  });
+
+  const currentNutritionist = nutritionists?.[0];
+
+  // Get WhatsApp status
+  const { data: whatsappStatus, isLoading: statusLoading, refetch: refetchStatus } = useQuery<any>({
+    queryKey: ["/api/whatsapp/status", currentNutritionist?.id],
+    enabled: !!currentNutritionist?.id && !!currentNutritionist?.evolutionInstanceName,
+    refetchInterval: whatsappStatus?.state === "open" ? 30000 : 5000, // Poll every 30s if connected, 5s if not
+  });
+
+  // Generate QR Code mutation
+  const qrCodeMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("GET", `/api/whatsapp/qrcode/${currentNutritionist?.id}`);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setQrCode(data.base64);
+      setShowQRCode(true);
+      toast({
+        title: "QR Code gerado!",
+        description: "Escaneie o código com seu WhatsApp para conectar.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao gerar QR Code",
+        description: error.message || "Tente novamente mais tarde.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleGenerateQRCode = () => {
+    setShowQRCode(false); // Hide old QR code
+    setQrCode(""); // Clear old QR code
+    qrCodeMutation.mutate();
+  };
+
+  const handleRefreshStatus = () => {
+    refetchStatus();
+  };
+
+  const isConnected = whatsappStatus?.state === "open";
+  const hasEvolutionInstance = !!currentNutritionist?.evolutionInstanceName;
 
   return (
     <main className="p-6">
@@ -24,145 +79,206 @@ export default function WhatsApp() {
             Integração WhatsApp
           </h1>
           <p className="text-muted-foreground">
-            Configure e gerencie suas conexões WhatsApp com a Evolution API
+            Configure e gerencie sua conexão WhatsApp com a Evolution API
           </p>
         </div>
 
-        {/* QR Code Section */}
-        <QRCodeSection selectedInstance={selectedInstance} />
-
-        {/* Connection Status and Settings */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        {/* Main QR Code and Status Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          {/* QR Code Section */}
           <Card>
             <CardHeader>
-              <CardTitle>Status da Conexão</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <QrCode className="w-5 h-5" />
+                Conexão WhatsApp
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {loadingNutritionist ? (
+                <div className="flex items-center justify-center p-8">
+                  <Loader2 className="w-6 h-6 animate-spin" />
+                  <span className="ml-2">Carregando dados...</span>
+                </div>
+              ) : !hasEvolutionInstance ? (
+                <div className="text-center p-6 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                  <AlertCircle className="w-16 h-16 mx-auto mb-4 text-yellow-600" />
+                  <p className="font-medium text-yellow-800 dark:text-yellow-200">Instância não configurada</p>
+                  <p className="text-sm text-yellow-600 mt-2">
+                    Sua conta precisa ser reconfigurada para usar o WhatsApp.
+                    Entre em contato com o suporte.
+                  </p>
+                </div>
+              ) : isConnected ? (
+                <div className="text-center p-6 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                  <CheckCircle className="w-16 h-16 mx-auto mb-4 text-green-600" />
+                  <p className="font-medium text-green-800 dark:text-green-200">WhatsApp Conectado!</p>
+                  <p className="text-sm text-green-600 mt-2">
+                    Seu bot está ativo e pronto para atender pacientes.
+                  </p>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleRefreshStatus}
+                    disabled={statusLoading}
+                    className="mt-4"
+                    data-testid="button-refresh-status"
+                  >
+                    <RefreshCw className={`w-4 h-4 mr-2 ${statusLoading ? 'animate-spin' : ''}`} />
+                    Atualizar Status
+                  </Button>
+                </div>
+              ) : showQRCode && qrCode ? (
+                <div className="text-center">
+                  <img 
+                    src={`data:image/png;base64,${qrCode}`} 
+                    alt="QR Code WhatsApp" 
+                    className="mx-auto mb-4 border rounded-lg max-w-64 w-full" 
+                    data-testid="qr-code-image"
+                  />
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Escaneie este código com seu WhatsApp
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    O código expira em alguns minutos. Atualize a página se necessário.
+                  </p>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleRefreshStatus}
+                    disabled={statusLoading}
+                    className="mt-4"
+                  >
+                    <RefreshCw className={`w-4 h-4 mr-2 ${statusLoading ? 'animate-spin' : ''}`} />
+                    Verificar Conexão
+                  </Button>
+                </div>
+              ) : (
+                <div className="text-center text-muted-foreground p-6">
+                  <Smartphone className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                  <p className="font-medium">Conecte seu WhatsApp</p>
+                  <p className="text-sm mt-2 mb-4">
+                    Gere um QR Code para conectar seu número ao sistema
+                  </p>
+                  <Button 
+                    onClick={handleGenerateQRCode} 
+                    disabled={qrCodeMutation.isPending}
+                    className="min-w-48"
+                    data-testid="button-generate-qr"
+                  >
+                    {qrCodeMutation.isPending ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Gerando QR Code...
+                      </>
+                    ) : (
+                      <>
+                        <QrCode className="w-4 h-4 mr-2" />
+                        Gerar QR Code
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Status and Info Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Settings className="w-5 h-5" />
+                Status da Conexão
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Estado:</span>
                 <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-yellow-500 rounded-full" />
-                  <span className="text-sm text-foreground">Aguardando conexão</span>
+                  <div className={`w-2 h-2 rounded-full ${
+                    statusLoading ? 'bg-yellow-500' :
+                    isConnected ? 'bg-green-500' : 'bg-red-500'
+                  }`} />
+                  <Badge variant={isConnected ? "default" : "secondary"}>
+                    {statusLoading ? "Verificando..." : 
+                     isConnected ? "Conectado" : "Desconectado"}
+                  </Badge>
                 </div>
               </div>
+              
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Instância:</span>
                 <span className="text-foreground font-mono text-sm">
-                  {selectedInstance || "nutri_001"}
+                  {currentNutritionist?.evolutionInstanceName || "Não configurado"}
                 </span>
               </div>
+              
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Última atualização:</span>
-                <span className="text-sm text-muted-foreground">Há 2 minutos</span>
+                <span className="text-muted-foreground">WhatsApp:</span>
+                <span className="text-sm text-foreground">
+                  {currentNutritionist?.whatsappIA ? 
+                    `+${currentNutritionist.whatsappIA.replace(/(\d{2})(\d{2})(\d{5})(\d{4})/, '$1 $2 $3-$4')}` : 
+                    "Não configurado"
+                  }
+                </span>
               </div>
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Configurações do Agente</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Nome do Agente
-                </label>
-                <input
-                  type="text"
-                  value="Assistente NutriBot"
-                  className="w-full bg-input border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                  data-testid="input-agent-name"
-                />
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">API Status:</span>
+                <span className="text-sm text-muted-foreground">
+                  {whatsappStatus ? "Conectada" : "Aguardando"}
+                </span>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Resposta Automática
-                </label>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="auto-response"
-                    defaultChecked
-                    className="w-4 h-4 text-primary bg-input border-border rounded focus:ring-primary focus:ring-2"
-                    data-testid="checkbox-auto-response"
-                  />
-                  <label htmlFor="auto-response" className="text-sm text-foreground">
-                    Ativado
-                  </label>
-                </div>
-              </div>
-              <Button className="w-full" data-testid="button-save-settings">
-                Salvar Configurações
-              </Button>
             </CardContent>
           </Card>
         </div>
 
-        {/* Active Connections */}
+        {/* Configuration Section */}
         <Card>
           <CardHeader>
-            <CardTitle>Conexões Ativas</CardTitle>
+            <CardTitle>Configuração do Agente de IA</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {isLoading ? (
-                <div className="space-y-3">
-                  {[...Array(2)].map((_, i) => (
-                    <div key={i} className="flex items-center justify-between p-4 bg-muted/20 rounded-lg animate-pulse">
-                      <div className="flex items-center space-x-4">
-                        <div className="w-10 h-10 bg-muted rounded-full" />
-                        <div>
-                          <div className="h-4 bg-muted rounded w-32 mb-1" />
-                          <div className="h-3 bg-muted rounded w-48" />
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <div className="h-6 bg-muted rounded w-16" />
-                        <div className="w-8 h-8 bg-muted rounded" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : connectedInstances.length > 0 ? (
-                connectedInstances.map((instance: any) => (
-                  <div
-                    key={instance.id}
-                    className="flex items-center justify-between p-4 bg-muted/20 rounded-lg"
-                    data-testid={`connection-${instance.id}`}
-                  >
-                    <div className="flex items-center space-x-4">
-                      <div className="w-10 h-10 bg-green-500/10 rounded-full flex items-center justify-center">
-                        <div className="w-5 h-5 bg-green-500 rounded-full" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-foreground">
-                          {instance.instanceName || "Conexão Principal"}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          {instance.phoneNumber || "+55 11 99999-0001"} • Conectado há{" "}
-                          {Math.floor(Math.random() * 10) + 1} dias
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Badge className="bg-green-100 text-green-800">Online</Badge>
-                      <Button variant="ghost" size="sm" data-testid={`button-disconnect-${instance.id}`}>
-                        <X className="w-4 h-4 text-red-500" />
-                      </Button>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="text-center py-8">
-                  <div className="w-16 h-16 bg-muted rounded-full mx-auto mb-4 flex items-center justify-center">
-                    <div className="w-8 h-8 bg-muted-foreground rounded-full opacity-50" />
-                  </div>
-                  <p className="text-muted-foreground">Nenhuma conexão ativa</p>
-                  <p className="text-sm text-muted-foreground">
-                    Gere um QR Code para conectar seu WhatsApp
-                  </p>
-                </div>
-              )}
+              <div>
+                <Label>Mensagem de Boas-vindas</Label>
+                <Input
+                  value={currentNutritionist?.welcomeMessage || "Não configurado"}
+                  readOnly
+                  className="bg-muted"
+                  data-testid="text-welcome-message"
+                />
+              </div>
+              
+              <div>
+                <Label>Horário de Funcionamento</Label>
+                <Input
+                  value={
+                    currentNutritionist?.workingHours === "commercial" 
+                      ? "Comercial (9h-18h)" 
+                      : currentNutritionist?.workingHours || "Não configurado"
+                  }
+                  readOnly
+                  className="bg-muted"
+                  data-testid="text-working-hours"
+                />
+              </div>
+              
+              <div>
+                <Label>Token da Instância</Label>
+                <Input
+                  value={currentNutritionist?.evolutionToken ? "••••••••••••••••••••" : "Não configurado"}
+                  readOnly
+                  className="bg-muted font-mono"
+                  data-testid="text-instance-token"
+                />
+              </div>
+
+              <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                <p className="text-sm text-blue-800 dark:text-blue-200">
+                  <strong>Informação:</strong> As configurações do agente são definidas durante o registro.
+                  Para alterar essas configurações, entre em contato com o suporte.
+                </p>
+              </div>
             </div>
           </CardContent>
         </Card>

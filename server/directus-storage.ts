@@ -51,6 +51,10 @@ export interface DirectusUser {
   whatsapp_number?: string;
   welcome_message?: string;
   working_hours?: string;
+  // Evolution API fields
+  Token_Evolution?: string;
+  Instancia_Evolution?: string;
+  Whatsapp_IA?: string;
   date_created?: Date;
   date_updated?: Date;
 }
@@ -178,6 +182,10 @@ function transformUserToDirectus(nutritionist: any): DirectusUser {
     whatsapp_number: nutritionist.whatsappNumber,
     welcome_message: nutritionist.welcomeMessage,
     working_hours: nutritionist.workingHours,
+    // Evolution API fields
+    Token_Evolution: nutritionist.evolutionToken,
+    Instancia_Evolution: nutritionist.evolutionInstanceName,
+    Whatsapp_IA: nutritionist.whatsappIA,
   };
 }
 
@@ -196,6 +204,10 @@ function transformUserFromDirectus(directusUser: any): any {
     welcomeMessage: directusUser.welcome_message,
     workingHours: directusUser.working_hours,
     status: directusUser.status,
+    // Evolution API fields
+    evolutionToken: directusUser.Token_Evolution,
+    evolutionInstanceName: directusUser.Instancia_Evolution,
+    whatsappIA: directusUser.Whatsapp_IA,
     createdAt: directusUser.date_created,
     updatedAt: directusUser.date_updated,
   };
@@ -242,15 +254,71 @@ export class DirectusStorage implements IStorage {
   }
 
   async createNutritionist(insertNutritionist: any) {
+    let createdUserId: string | null = null;
+    
     try {
+      console.log('[Nutritionist Creation] Starting user creation process...');
+      
+      // Step 1: Create user in Directus (without Evolution fields first)
       const directusUser = transformUserToDirectus(insertNutritionist);
-      const response = await this.client.request('/users', {
+      const userResponse = await this.client.request('/users', {
         method: 'POST',
         body: JSON.stringify(directusUser),
       });
-      return transformUserFromDirectus(response.data);
-    } catch (error) {
-      console.error('Error creating nutritionist:', error);
+      
+      createdUserId = userResponse.data.id;
+      console.log(`[Nutritionist Creation] User created in Directus with ID: ${createdUserId}`);
+      
+      // Step 2: Create Evolution API WhatsApp instance
+      const { evolutionApi, EvolutionApiService } = await import('./evolution-api.js');
+      const cleanWhatsApp = EvolutionApiService.cleanWhatsAppNumber(insertNutritionist.whatsappNumber);
+      
+      console.log(`[Evolution API] Creating instance for user ${createdUserId} with WhatsApp: ${cleanWhatsApp}`);
+      const evolutionInstance = await evolutionApi.createInstance(createdUserId!, cleanWhatsApp);
+      
+      console.log('[Evolution API] Instance created successfully:', evolutionInstance);
+      
+      // Step 3: Update user with Evolution API data
+      const evolutionUpdate = {
+        Token_Evolution: evolutionInstance.hash.apikey,
+        Instancia_Evolution: evolutionInstance.instance.instanceName,
+        Whatsapp_IA: cleanWhatsApp
+      };
+      
+      console.log('[Nutritionist Creation] Updating user with Evolution data:', evolutionUpdate);
+      
+      await this.client.request(`/users/${createdUserId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(evolutionUpdate),
+      });
+      
+      console.log('[Nutritionist Creation] User updated successfully with Evolution data');
+      
+      // Step 4: Return the complete user data
+      const finalUserResponse = await this.client.request(`/users/${createdUserId}?fields=*`);
+      return transformUserFromDirectus(finalUserResponse.data);
+      
+    } catch (error: any) {
+      console.error('Error in createNutritionist:', error);
+      
+      // CRITICAL: If Evolution API fails, cleanup created user to maintain data consistency
+      if (createdUserId) {
+        try {
+          console.log(`[Cleanup] Deleting user ${createdUserId} due to Evolution API failure`);
+          await this.client.request(`/users/${createdUserId}`, {
+            method: 'DELETE',
+          });
+          console.log('[Cleanup] User deleted successfully');
+        } catch (cleanupError) {
+          console.error('[Cleanup] Failed to delete user:', cleanupError);
+        }
+      }
+      
+      // Provide user-friendly error message
+      if (error?.message?.includes('Evolution API')) {
+        throw new Error('Erro ao configurar integração WhatsApp. Tente novamente.');
+      }
+      
       throw error;
     }
   }
