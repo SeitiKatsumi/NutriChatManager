@@ -628,6 +628,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get user details from Directus
       const directusUser = await directusClient.getMe(loginResponse.data.access_token);
       
+      // Debug: Log user details to understand admin access
+      console.log(`User details for ${email}:`, {
+        id: directusUser.data.id,
+        email: directusUser.data.email,
+        role: directusUser.data.role,
+        admin_access: directusUser.data.admin_access,
+        status: directusUser.data.status
+      });
+      
       // Check if user has admin access (using admin_access flag for robustness)
       const isAdmin = directusUser.data.admin_access === true;
       
