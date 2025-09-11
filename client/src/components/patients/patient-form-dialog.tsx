@@ -38,7 +38,7 @@ const patientFormSchema = z.object({
   medicalHistory: z.string().optional(),
   dietaryRestrictions: z.string().optional(),
   goals: z.string().optional(),
-  status: z.string().default("active"),
+  status: z.string().default("Aguardando agendamento"),
   notes: z.string().optional(),
 });
 
