@@ -77,7 +77,7 @@ export default function WhatsApp() {
     refetchStatus();
   };
 
-  const isConnected = whatsappStatus?.state === "open";
+  const isConnected = whatsappStatus?.instance?.state === "open";
   const hasEvolutionInstance = !!currentNutritionist?.evolutionInstanceName;
 
   return (
