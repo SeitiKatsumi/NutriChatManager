@@ -637,8 +637,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: directusUser.data.status
       });
       
-      // Check if user has admin access (using admin_access flag for robustness)
-      const isAdmin = directusUser.data.admin_access === true;
+      // Check if user has admin access - be more flexible
+      // Check admin_access flag first, then fallback to specific admin role IDs
+      const adminRoleIds = ['70df1b96-2eec-455e-809e-5517390892fb']; // Known admin role ID from system
+      const isAdmin = directusUser.data.admin_access === true || 
+                     adminRoleIds.includes(directusUser.data.role);
       
       if (!isAdmin) {
         return res.status(403).json({ error: "Access denied. Administrator role required" });
