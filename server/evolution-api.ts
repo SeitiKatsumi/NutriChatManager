@@ -38,7 +38,12 @@ export class EvolutionApiService {
   }
 
   private async request(endpoint: string, options: any = {}): Promise<any> {
-    const url = `${this.baseUrl}${endpoint}`;
+    // Properly construct URL - remove trailing slash from baseUrl and leading slash from endpoint
+    const baseUrl = this.baseUrl.replace(/\/$/, '');
+    const cleanEndpoint = endpoint.replace(/^\//, '');
+    const url = `${baseUrl}/${cleanEndpoint}`;
+    
+    console.log(`[Evolution API] Making request to: ${url}`);
     
     const response = await fetch(url, {
       headers: {
