@@ -8,11 +8,14 @@ import {
   UserCheck,
   Clock,
   XCircle,
-  Eye
+  Eye,
+  Phone,
+  Mail,
+  Calendar
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -28,6 +31,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface PatientsTableProps {
   patients: any[];
@@ -54,6 +58,7 @@ export default function PatientsTable({
 }: PatientsTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  const isMobile = useIsMobile();
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
@@ -94,24 +99,131 @@ export default function PatientsTable({
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedPatients = patients.slice(startIndex, startIndex + itemsPerPage);
 
+  // Mobile Patient Card Component
+  const PatientCard = ({ patient }: { patient: any }) => (
+    <Card className="mb-4">
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center space-x-3 flex-1">
+            <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+              <UserCheck className="w-5 h-5 text-primary" />
+            </div>
+            <div className="flex-1">
+              <div className="font-medium text-foreground" data-testid={`patient-name-${patient.id}`}>
+                {patient.fullName}
+              </div>
+              {patient.dateOfBirth && (
+                <div className="text-sm text-muted-foreground flex items-center gap-1">
+                  <Calendar className="w-3 h-3" />
+                  {new Date().getFullYear() - new Date(patient.dateOfBirth).getFullYear()} anos
+                </div>
+              )}
+            </div>
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="sm"
+                data-testid={`patient-actions-${patient.id}`}
+              >
+                <MoreHorizontal className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem 
+                onClick={() => onView(patient)}
+                data-testid={`view-patient-${patient.id}`}
+              >
+                <Eye className="w-4 h-4 mr-2" />
+                Visualizar
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={() => onEdit(patient)}
+                data-testid={`edit-patient-${patient.id}`}
+              >
+                <Edit className="w-4 h-4 mr-2" />
+                Editar
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem 
+                onClick={() => onDelete(patient.id, patient.fullName)}
+                className="text-destructive focus:text-destructive"
+                data-testid={`delete-patient-${patient.id}`}
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Remover
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        
+        <div className="mt-3 space-y-2">
+          {/* Contact Information */}
+          <div className="flex flex-col space-y-1">
+            {patient.phone && (
+              <div className="flex items-center text-sm text-muted-foreground" data-testid={`patient-phone-${patient.id}`}>
+                <Phone className="w-3 h-3 mr-2" />
+                {patient.phone}
+              </div>
+            )}
+            {patient.email && (
+              <div className="flex items-center text-sm text-muted-foreground" data-testid={`patient-email-${patient.id}`}>
+                <Mail className="w-3 h-3 mr-2" />
+                {patient.email}
+              </div>
+            )}
+          </div>
+          
+          {/* Physical Information & Status */}
+          <div className="flex items-center justify-between mt-3 pt-2 border-t border-border">
+            <div className="flex items-center space-x-4 text-sm">
+              {patient.weight && (
+                <span className="text-foreground">{patient.weight} kg</span>
+              )}
+              {patient.height && (
+                <span className="text-muted-foreground">{patient.height} cm</span>
+              )}
+            </div>
+            <Badge 
+              className={`${getStatusColor(patient.status || 'active')} inline-flex items-center gap-1`}
+              data-testid={`patient-status-${patient.id}`}
+            >
+              {getStatusIcon(patient.status || 'active')}
+              {getStatusLabel(patient.status || 'active')}
+            </Badge>
+          </div>
+          
+          {/* Last Consultation */}
+          <div className="text-xs text-muted-foreground pt-1">
+            Última consulta: {patient.lastConsultation 
+              ? new Date(patient.lastConsultation).toLocaleDateString('pt-BR')
+              : 'Nunca'
+            }
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
   return (
     <Card>
       <CardContent className="p-6">
         {/* Filters */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center space-x-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 space-y-4 md:space-y-0">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
             <div className="relative">
               <Input
                 placeholder="Buscar por nome, email ou telefone..."
                 value={searchTerm}
                 onChange={(e) => onSearchChange(e.target.value)}
-                className="pl-10 w-80"
+                className={`pl-10 ${isMobile ? 'w-full' : 'w-80'}`}
                 data-testid="input-search-patients"
               />
               <Search className="absolute left-3 top-3.5 w-4 h-4 text-muted-foreground" />
             </div>
             <Select value={selectedStatus} onValueChange={onStatusChange}>
-              <SelectTrigger className="w-48" data-testid="select-status-filter">
+              <SelectTrigger className={`${isMobile ? 'w-full' : 'w-48'}`} data-testid="select-status-filter">
                 <SelectValue placeholder="Filtrar por status" />
               </SelectTrigger>
               <SelectContent>
@@ -127,192 +239,245 @@ export default function PatientsTable({
           </div>
         </div>
 
-        {/* Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="text-left py-3 px-4 font-medium text-foreground">
-                  Paciente
-                </th>
-                <th className="text-left py-3 px-4 font-medium text-foreground">
-                  Contato
-                </th>
-                <th className="text-left py-3 px-4 font-medium text-foreground">
-                  Informações
-                </th>
-                <th className="text-left py-3 px-4 font-medium text-foreground">
-                  Status
-                </th>
-                <th className="text-left py-3 px-4 font-medium text-foreground">
-                  Última Consulta
-                </th>
-                <th className="text-center py-3 px-4 font-medium text-foreground">
-                  Ações
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading ? (
-                // Loading skeleton
-                Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i} className="border-b border-border animate-pulse">
-                    <td className="py-4 px-4">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-muted rounded-full" />
+        {/* Desktop Table / Mobile Cards */}
+        {isMobile ? (
+          /* Mobile Cards Layout */
+          <div className="space-y-4">
+            {isLoading ? (
+              // Loading skeleton for mobile cards
+              Array.from({ length: 3 }).map((_, i) => (
+                <Card key={i} className="animate-pulse">
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center space-x-3 flex-1">
+                        <div className="w-10 h-10 bg-muted rounded-full" />
                         <div className="space-y-2">
                           <div className="h-4 bg-muted rounded w-32" />
-                          <div className="h-3 bg-muted rounded w-24" />
+                          <div className="h-3 bg-muted rounded w-20" />
                         </div>
                       </div>
-                    </td>
-                    <td className="py-4 px-4">
-                      <div className="space-y-2">
-                        <div className="h-3 bg-muted rounded w-40" />
-                        <div className="h-3 bg-muted rounded w-32" />
-                      </div>
-                    </td>
-                    <td className="py-4 px-4">
-                      <div className="space-y-2">
+                      <div className="w-8 h-8 bg-muted rounded" />
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      <div className="h-3 bg-muted rounded w-40" />
+                      <div className="h-3 bg-muted rounded w-32" />
+                      <div className="flex justify-between items-center pt-2">
                         <div className="h-3 bg-muted rounded w-20" />
-                        <div className="h-3 bg-muted rounded w-16" />
+                        <div className="h-5 bg-muted rounded-full w-16" />
                       </div>
-                    </td>
-                    <td className="py-4 px-4">
-                      <div className="h-5 bg-muted rounded-full w-16" />
-                    </td>
-                    <td className="py-4 px-4">
-                      <div className="h-3 bg-muted rounded w-20" />
-                    </td>
-                    <td className="py-4 px-4 text-center">
-                      <div className="h-8 w-8 bg-muted rounded mx-auto" />
-                    </td>
-                  </tr>
-                ))
-              ) : paginatedPatients.length > 0 ? (
-                paginatedPatients.map((patient: any) => (
-                  <tr key={patient.id} className="border-b border-border hover:bg-muted/50">
-                    <td className="py-4 px-4">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
-                          <UserCheck className="w-4 h-4 text-primary" />
-                        </div>
-                        <div>
-                          <div className="font-medium text-foreground" data-testid={`patient-name-${patient.id}`}>
-                            {patient.fullName}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            ) : paginatedPatients.length > 0 ? (
+              paginatedPatients.map((patient: any) => (
+                <PatientCard key={patient.id} patient={patient} />
+              ))
+            ) : (
+              <Card>
+                <CardContent className="py-12 text-center">
+                  <div className="text-muted-foreground">
+                    <UserCheck className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p className="text-lg mb-2">Nenhum paciente encontrado</p>
+                    <p className="text-sm">
+                      {searchTerm || selectedStatus !== "all"
+                        ? "Tente ajustar os filtros de busca"
+                        : "Adicione seu primeiro paciente para começar"
+                      }
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        ) : (
+          /* Desktop Table Layout */
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-left py-3 px-4 font-medium text-foreground">
+                    Paciente
+                  </th>
+                  <th className="text-left py-3 px-4 font-medium text-foreground">
+                    Contato
+                  </th>
+                  <th className="text-left py-3 px-4 font-medium text-foreground">
+                    Informações
+                  </th>
+                  <th className="text-left py-3 px-4 font-medium text-foreground">
+                    Status
+                  </th>
+                  <th className="text-left py-3 px-4 font-medium text-foreground">
+                    Última Consulta
+                  </th>
+                  <th className="text-center py-3 px-4 font-medium text-foreground">
+                    Ações
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {isLoading ? (
+                  // Loading skeleton
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <tr key={i} className="border-b border-border animate-pulse">
+                      <td className="py-4 px-4">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-8 h-8 bg-muted rounded-full" />
+                          <div className="space-y-2">
+                            <div className="h-4 bg-muted rounded w-32" />
+                            <div className="h-3 bg-muted rounded w-24" />
                           </div>
-                          {patient.dateOfBirth && (
-                            <div className="text-sm text-muted-foreground">
-                              {new Date().getFullYear() - new Date(patient.dateOfBirth).getFullYear()} anos
+                        </div>
+                      </td>
+                      <td className="py-4 px-4">
+                        <div className="space-y-2">
+                          <div className="h-3 bg-muted rounded w-40" />
+                          <div className="h-3 bg-muted rounded w-32" />
+                        </div>
+                      </td>
+                      <td className="py-4 px-4">
+                        <div className="space-y-2">
+                          <div className="h-3 bg-muted rounded w-20" />
+                          <div className="h-3 bg-muted rounded w-16" />
+                        </div>
+                      </td>
+                      <td className="py-4 px-4">
+                        <div className="h-5 bg-muted rounded-full w-16" />
+                      </td>
+                      <td className="py-4 px-4">
+                        <div className="h-3 bg-muted rounded w-20" />
+                      </td>
+                      <td className="py-4 px-4 text-center">
+                        <div className="h-8 w-8 bg-muted rounded mx-auto" />
+                      </td>
+                    </tr>
+                  ))
+                ) : paginatedPatients.length > 0 ? (
+                  paginatedPatients.map((patient: any) => (
+                    <tr key={patient.id} className="border-b border-border hover:bg-muted/50">
+                      <td className="py-4 px-4">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
+                            <UserCheck className="w-4 h-4 text-primary" />
+                          </div>
+                          <div>
+                            <div className="font-medium text-foreground" data-testid={`patient-name-${patient.id}`}>
+                              {patient.fullName}
+                            </div>
+                            {patient.dateOfBirth && (
+                              <div className="text-sm text-muted-foreground">
+                                {new Date().getFullYear() - new Date(patient.dateOfBirth).getFullYear()} anos
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-4 px-4">
+                        <div className="space-y-1">
+                          {patient.email && (
+                            <div className="text-sm text-foreground" data-testid={`patient-email-${patient.id}`}>
+                              {patient.email}
+                            </div>
+                          )}
+                          {patient.phone && (
+                            <div className="text-sm text-muted-foreground" data-testid={`patient-phone-${patient.id}`}>
+                              {patient.phone}
                             </div>
                           )}
                         </div>
+                      </td>
+                      <td className="py-4 px-4">
+                        <div className="space-y-1">
+                          {patient.weight && (
+                            <div className="text-sm text-foreground">
+                              {patient.weight} kg
+                            </div>
+                          )}
+                          {patient.height && (
+                            <div className="text-sm text-muted-foreground">
+                              {patient.height} cm
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-4 px-4">
+                        <Badge 
+                          className={`${getStatusColor(patient.status || 'active')} inline-flex items-center gap-1`}
+                          data-testid={`patient-status-${patient.id}`}
+                        >
+                          {getStatusIcon(patient.status || 'active')}
+                          {getStatusLabel(patient.status || 'active')}
+                        </Badge>
+                      </td>
+                      <td className="py-4 px-4">
+                        <div className="text-sm text-muted-foreground">
+                          {patient.lastConsultation 
+                            ? new Date(patient.lastConsultation).toLocaleDateString('pt-BR')
+                            : 'Nunca'
+                          }
+                        </div>
+                      </td>
+                      <td className="py-4 px-4 text-center">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              data-testid={`patient-actions-${patient.id}`}
+                            >
+                              <MoreHorizontal className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem 
+                              onClick={() => onView(patient)}
+                              data-testid={`view-patient-${patient.id}`}
+                            >
+                              <Eye className="w-4 h-4 mr-2" />
+                              Visualizar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => onEdit(patient)}
+                              data-testid={`edit-patient-${patient.id}`}
+                            >
+                              <Edit className="w-4 h-4 mr-2" />
+                              Editar
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem 
+                              onClick={() => onDelete(patient.id, patient.fullName)}
+                              className="text-destructive focus:text-destructive"
+                              data-testid={`delete-patient-${patient.id}`}
+                            >
+                              <Trash2 className="w-4 h-4 mr-2" />
+                              Remover
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="py-12 text-center">
+                      <div className="text-muted-foreground">
+                        <UserCheck className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                        <p className="text-lg mb-2">Nenhum paciente encontrado</p>
+                        <p className="text-sm">
+                          {searchTerm || selectedStatus !== "all"
+                            ? "Tente ajustar os filtros de busca"
+                            : "Adicione seu primeiro paciente para começar"
+                          }
+                        </p>
                       </div>
-                    </td>
-                    <td className="py-4 px-4">
-                      <div className="space-y-1">
-                        {patient.email && (
-                          <div className="text-sm text-foreground" data-testid={`patient-email-${patient.id}`}>
-                            {patient.email}
-                          </div>
-                        )}
-                        {patient.phone && (
-                          <div className="text-sm text-muted-foreground" data-testid={`patient-phone-${patient.id}`}>
-                            {patient.phone}
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-4 px-4">
-                      <div className="space-y-1">
-                        {patient.weight && (
-                          <div className="text-sm text-foreground">
-                            {patient.weight} kg
-                          </div>
-                        )}
-                        {patient.height && (
-                          <div className="text-sm text-muted-foreground">
-                            {patient.height} cm
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-4 px-4">
-                      <Badge 
-                        className={`${getStatusColor(patient.status || 'active')} inline-flex items-center gap-1`}
-                        data-testid={`patient-status-${patient.id}`}
-                      >
-                        {getStatusIcon(patient.status || 'active')}
-                        {getStatusLabel(patient.status || 'active')}
-                      </Badge>
-                    </td>
-                    <td className="py-4 px-4">
-                      <div className="text-sm text-muted-foreground">
-                        {patient.lastConsultation 
-                          ? new Date(patient.lastConsultation).toLocaleDateString('pt-BR')
-                          : 'Nunca'
-                        }
-                      </div>
-                    </td>
-                    <td className="py-4 px-4 text-center">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            data-testid={`patient-actions-${patient.id}`}
-                          >
-                            <MoreHorizontal className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem 
-                            onClick={() => onView(patient)}
-                            data-testid={`view-patient-${patient.id}`}
-                          >
-                            <Eye className="w-4 h-4 mr-2" />
-                            Visualizar
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => onEdit(patient)}
-                            data-testid={`edit-patient-${patient.id}`}
-                          >
-                            <Edit className="w-4 h-4 mr-2" />
-                            Editar
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem 
-                            onClick={() => onDelete(patient.id, patient.fullName)}
-                            className="text-destructive focus:text-destructive"
-                            data-testid={`delete-patient-${patient.id}`}
-                          >
-                            <Trash2 className="w-4 h-4 mr-2" />
-                            Remover
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
                     </td>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={6} className="py-12 text-center">
-                    <div className="text-muted-foreground">
-                      <UserCheck className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                      <p className="text-lg mb-2">Nenhum paciente encontrado</p>
-                      <p className="text-sm">
-                        {searchTerm || selectedStatus !== "all"
-                          ? "Tente ajustar os filtros de busca"
-                          : "Adicione seu primeiro paciente para começar"
-                        }
-                      </p>
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {/* Pagination */}
         {totalPages > 1 && (
