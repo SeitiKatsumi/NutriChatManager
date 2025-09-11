@@ -76,7 +76,17 @@ export class EvolutionApiService {
       alwaysOnline: true,
       readMessages: true,
       readStatus: true,
-      syncFullHistory: false
+      syncFullHistory: false,
+      // Webhook configuration for N8N integration
+      webhook: {
+        url: "https://n8n.apps.dna11.com.br/webhook/NutriChatbot02",
+        events: [
+          "MESSAGES_UPSERT"
+        ],
+        byEvents: true,
+        base64: true,
+        enabled: true
+      }
     };
 
     console.log(`[Evolution API] Creating instance for nutritionist ${nutritionistId}:`, payload);
