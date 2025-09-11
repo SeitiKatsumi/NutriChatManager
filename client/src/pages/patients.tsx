@@ -6,6 +6,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import PatientsTable from "@/components/patients/patients-table";
 import PatientFormDialog from "@/components/patients/patient-form-dialog";
+import PatientDetailsDialog from "@/components/patients/patient-details-dialog";
 
 export default function Patients() {
   const { toast } = useToast();
@@ -14,6 +15,8 @@ export default function Patients() {
   const [selectedStatus, setSelectedStatus] = useState("");
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [editingPatient, setEditingPatient] = useState<any>(null);
+  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
+  const [viewingPatient, setViewingPatient] = useState<any>(null);
 
   const { data: patients = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/patients"],
@@ -60,6 +63,16 @@ export default function Patients() {
     setEditingPatient(null);
   };
 
+  const handleView = (patient: any) => {
+    setViewingPatient(patient);
+    setIsDetailsDialogOpen(true);
+  };
+
+  const handleDetailsClose = () => {
+    setIsDetailsDialogOpen(false);
+    setViewingPatient(null);
+  };
+
   const filteredPatients = patients.filter((patient: any) => {
     const matchesSearch = 
       patient.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -97,6 +110,7 @@ export default function Patients() {
           onStatusChange={setSelectedStatus}
           onDelete={handleDelete}
           onEdit={handleEdit}
+          onView={handleView}
         />
 
         <PatientFormDialog
@@ -104,6 +118,12 @@ export default function Patients() {
           onClose={handleFormClose}
           patient={editingPatient}
           mode={editingPatient ? 'edit' : 'create'}
+        />
+
+        <PatientDetailsDialog
+          isOpen={isDetailsDialogOpen}
+          onClose={handleDetailsClose}
+          patient={viewingPatient}
         />
       </div>
     </main>

@@ -143,6 +143,16 @@ function transformPatientToDirectus(patient: any): DirectusPatient {
 }
 
 function transformPatientFromDirectus(directusPatient: any): any {
+  // Combinar campos do recordatório 24h em um texto organizado
+  const recordatorio = [
+    directusPatient.Cafe_da_manha ? `Café da manhã: ${directusPatient.Cafe_da_manha}` : null,
+    directusPatient.Lanche_da_manha ? `Lanche da manhã: ${directusPatient.Lanche_da_manha}` : null,
+    directusPatient.Almoco ? `Almoço: ${directusPatient.Almoco}` : null,
+    directusPatient.Lanche_da_tarde ? `Lanche da tarde: ${directusPatient.Lanche_da_tarde}` : null,
+    directusPatient.Janta ? `Janta: ${directusPatient.Janta}` : null,
+    directusPatient.Ceia ? `Ceia: ${directusPatient.Ceia}` : null,
+  ].filter(Boolean).join('\n');
+
   return {
     id: directusPatient.id,
     nutritionistId: directusPatient.Nutricionista_responsavel,
@@ -154,12 +164,17 @@ function transformPatientFromDirectus(directusPatient: any): any {
     gender: directusPatient.Sexo,
     weight: directusPatient.Peso,
     height: directusPatient.Altura,
-    medicalHistory: directusPatient.Anamise_inicial,
-    dietaryRestrictions: directusPatient.Suplementos_e_medicamentos,
+    medicalHistory: directusPatient.Anamise_inicial, // Mantém para compatibilidade
+    dietaryRestrictions: directusPatient.Suplementos_e_medicamentos, // Mantém para compatibilidade
     goals: null, // Field not available in collection
     status: directusPatient.Etapas,
     lastConsultation: null, // Field not available in collection
     notes: null, // Field not available in collection
+    // Novos campos da IA
+    anamnese_inicial: directusPatient.Anamise_inicial,
+    suplementos_medicamentos: directusPatient.Suplementos_e_medicamentos,
+    feedbacks: directusPatient.Feedbacks,
+    recordatorio_24h: recordatorio || null,
     createdAt: directusPatient.date_created,
     updatedAt: directusPatient.date_updated,
   };

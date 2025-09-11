@@ -7,7 +7,8 @@ import {
   ChevronDown,
   UserCheck,
   Clock,
-  XCircle
+  XCircle,
+  Eye
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +38,7 @@ interface PatientsTableProps {
   onStatusChange: (status: string) => void;
   onDelete: (id: string, name: string) => void;
   onEdit: (patient: any) => void;
+  onView: (patient: any) => void;
 }
 
 export default function PatientsTable({
@@ -48,6 +50,7 @@ export default function PatientsTable({
   onStatusChange,
   onDelete,
   onEdit,
+  onView,
 }: PatientsTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -263,6 +266,13 @@ export default function PatientsTable({
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem 
+                            onClick={() => onView(patient)}
+                            data-testid={`view-patient-${patient.id}`}
+                          >
+                            <Eye className="w-4 h-4 mr-2" />
+                            Visualizar
+                          </DropdownMenuItem>
                           <DropdownMenuItem 
                             onClick={() => onEdit(patient)}
                             data-testid={`edit-patient-${patient.id}`}

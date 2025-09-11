@@ -97,6 +97,11 @@ export const patientSchema = z.object({
   status: z.string().default("Aguardando agendamento"), // Status de atendimento
   lastConsultation: z.date().optional().nullable(),
   notes: z.string().optional().nullable(),
+  // Campos coletados pela IA
+  anamnese_inicial: z.string().optional().nullable(), // Anamnese feita pelo agente de IA
+  suplementos_medicamentos: z.string().optional().nullable(), // Informações sobre suplementos e medicamentos
+  feedbacks: z.string().optional().nullable(), // Resumo completo dos últimos dias e histórico
+  recordatorio_24h: z.string().optional().nullable(), // Recordatório 24 horas com campos de cada hora
   createdAt: z.date(),
   updatedAt: z.date(),
 });
