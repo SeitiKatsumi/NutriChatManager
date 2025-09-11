@@ -191,6 +191,7 @@ export class EvolutionRedisService {
   private getMockPatientMessages(phoneNumber: string): ProcessedMessage[] {
     const now = Date.now();
     const oneHour = 60 * 60 * 1000;
+    const cleanPhone = phoneNumber ? phoneNumber.replace(/\D/g, '') : '5511999999999';
     
     return [
       {
@@ -199,7 +200,7 @@ export class EvolutionRedisService {
         timestamp: now - (6 * oneHour),
         fromMe: false,
         type: 'text',
-        phoneNumber: phoneNumber.replace(/\D/g, '')
+        phoneNumber: cleanPhone
       },
       {
         id: 'mock_2',
@@ -207,7 +208,7 @@ export class EvolutionRedisService {
         timestamp: now - (5 * oneHour + 30 * 60000),
         fromMe: true,
         type: 'text',
-        phoneNumber: phoneNumber.replace(/\D/g, '')
+        phoneNumber: cleanPhone
       },
       {
         id: 'mock_3',
@@ -215,7 +216,7 @@ export class EvolutionRedisService {
         timestamp: now - (5 * oneHour),
         fromMe: false,
         type: 'text',
-        phoneNumber: phoneNumber.replace(/\D/g, '')
+        phoneNumber: cleanPhone
       },
       {
         id: 'mock_4',
@@ -223,7 +224,7 @@ export class EvolutionRedisService {
         timestamp: now - (4 * oneHour + 45 * 60000),
         fromMe: true,
         type: 'text',
-        phoneNumber: phoneNumber.replace(/\D/g, '')
+        phoneNumber: cleanPhone
       },
       {
         id: 'mock_5',
@@ -231,7 +232,7 @@ export class EvolutionRedisService {
         timestamp: now - (2 * oneHour),
         fromMe: false,
         type: 'text',
-        phoneNumber: phoneNumber.replace(/\D/g, '')
+        phoneNumber: cleanPhone
       },
       {
         id: 'mock_6',
@@ -239,7 +240,7 @@ export class EvolutionRedisService {
         timestamp: now - (1 * oneHour + 30 * 60000),
         fromMe: true,
         type: 'text',
-        phoneNumber: phoneNumber.replace(/\D/g, '')
+        phoneNumber: cleanPhone
       },
       {
         id: 'mock_7',
@@ -247,7 +248,7 @@ export class EvolutionRedisService {
         timestamp: now - (1 * oneHour),
         fromMe: false,
         type: 'text',
-        phoneNumber: phoneNumber.replace(/\D/g, '')
+        phoneNumber: cleanPhone
       }
     ];
   }

@@ -795,7 +795,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Get messages from Evolution Redis
-      const phoneNumber = patient.phone;
+      const phoneNumber = patient.whatsapp || patient.phone;
       const nutritionistId = req.session.user.nutritionistId;
       
       const messages = await evolutionRedis.getPatientMessages(nutritionistId, phoneNumber, 200);
