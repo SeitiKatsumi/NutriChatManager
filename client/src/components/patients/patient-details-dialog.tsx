@@ -16,6 +16,7 @@ import {
   Activity
 } from "lucide-react";
 import { Patient } from "@shared/schema";
+import AIInsights from "./ai-insights";
 
 interface PatientDetailsDialogProps {
   isOpen: boolean;
@@ -281,6 +282,9 @@ export default function PatientDetailsDialog({
               </CardContent>
             </Card>
           )}
+
+          {/* Insights de IA */}
+          <AIInsights patient={patient} />
 
           {/* Última Consulta */}
           {patient.lastConsultation && (
