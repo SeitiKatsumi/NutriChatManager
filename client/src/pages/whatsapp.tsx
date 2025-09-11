@@ -37,17 +37,12 @@ export default function WhatsApp() {
   // Generate QR Code mutation
   const qrCodeMutation = useMutation({
     mutationFn: async () => {
-      console.log("🔍 DEBUG: Generating QR Code for nutritionist:", currentNutritionist?.id);
-      console.log("🔍 DEBUG: User info:", userInfo);
-      
       if (!currentNutritionist?.id) {
         throw new Error("Nutricionista não encontrado. Faça login novamente.");
       }
       
       const response = await apiRequest("GET", `/api/whatsapp/qrcode/${currentNutritionist?.id}`);
       const data = await response.json();
-      
-      console.log("🔍 DEBUG: QR Code response:", data);
       
       if (!data.base64) {
         throw new Error("QR Code não foi gerado corretamente.");
@@ -56,7 +51,6 @@ export default function WhatsApp() {
       return data;
     },
     onSuccess: (data) => {
-      console.log("✅ DEBUG: QR Code successful, base64 length:", data.base64?.length);
       setQrCode(data.base64);
       setShowQRCode(true);
       toast({
@@ -65,7 +59,6 @@ export default function WhatsApp() {
       });
     },
     onError: (error: any) => {
-      console.error("❌ DEBUG: QR Code error:", error);
       toast({
         title: "Erro ao gerar QR Code",
         description: error.message || "Tente novamente mais tarde.",
@@ -147,7 +140,7 @@ export default function WhatsApp() {
               ) : showQRCode && qrCode ? (
                 <div className="text-center">
                   <img 
-                    src={`data:image/png;base64,${qrCode}`} 
+                    src={qrCode} 
                     alt="QR Code WhatsApp" 
                     className="mx-auto mb-4 border rounded-lg max-w-64 w-full" 
                     data-testid="qr-code-image"
