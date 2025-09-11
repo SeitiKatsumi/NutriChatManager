@@ -69,8 +69,14 @@ export class EvolutionRedisService {
     if (this.connected) return;
     
     try {
-      await this.redis.connect();
+      // Add timeout to prevent hanging
+      const connectTimeout = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Connection timeout')), 3000)
+      );
+      
+      await Promise.race([this.redis.connect(), connectTimeout]);
       console.log('[Evolution Redis] Connection established');
+      this.connected = true;
     } catch (error) {
       console.error('[Evolution Redis] Failed to connect:', error);
       console.log('[Evolution Redis] Running in mock mode for development');
