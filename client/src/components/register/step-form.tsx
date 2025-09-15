@@ -128,7 +128,7 @@ export default function StepForm({ currentStep, onStepChange, onComplete }: Step
           <div className="relative">
             <Input
               id="fullName"
-              placeholder="Ex: Dr. João Silva Santos"
+              placeholder="Ex: João Silva Santos"
               {...step1Form.register("fullName")}
               className="pl-10"
               data-testid="input-fullname"
@@ -350,7 +350,7 @@ export default function StepForm({ currentStep, onStepChange, onComplete }: Step
               </Label>
               <Textarea
                 id="welcomeMessage"
-                placeholder="Olá! Sou o assistente virtual da Dra. [NOME]. Como posso ajudá-lo hoje?"
+                placeholder="Olá! Sou o assistente virtual da nutricionista [NOME]. Como posso ajudá-lo hoje?"
                 rows={2}
                 {...step3Form.register("welcomeMessage")}
                 className="text-sm resize-none"
