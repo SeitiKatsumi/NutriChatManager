@@ -37,6 +37,20 @@ export interface IStorage {
   getConsultationsByNutritionist(nutritionistId: string): Promise<Consultation[]>;
   createConsultation(consultation: InsertConsultation): Promise<Consultation>;
   updateConsultation(id: string, consultation: Partial<InsertConsultation>): Promise<Consultation | undefined>;
+
+  // Subscription Management
+  hasActiveSubscription(userId: string): Promise<boolean>;
+  getSubscriptionStatus(userId: string): Promise<string | null>;
+  updateUserSubscription(userId: string, subscriptionData: {
+    stripeCustomerId?: string;
+    subscriptionStatus?: string;
+    subscriptionId?: string;
+    planId?: string;
+    subscriptionStartDate?: string;
+    subscriptionEndDate?: string;
+    trialEndDate?: string;
+  }): Promise<any>;
+  getUserByStripeCustomerId(stripeCustomerId: string): Promise<any>;
 }
 
 export class MemStorage implements IStorage {
@@ -293,6 +307,47 @@ export class MemStorage implements IStorage {
     };
     this.consultations.set(id, updated);
     return updated;
+  }
+
+  // Subscription Management (MemStorage implementation)
+  async hasActiveSubscription(userId: string): Promise<boolean> {
+    const user = await this.getNutritionist(userId);
+    if (!user) return false;
+    const status = (user as any).subscriptionStatus;
+    return ['active', 'trial'].includes(status || '');
+  }
+
+  async getSubscriptionStatus(userId: string): Promise<string | null> {
+    const user = await this.getNutritionist(userId);
+    return user ? (user as any).subscriptionStatus || null : null;
+  }
+
+  async updateUserSubscription(userId: string, subscriptionData: {
+    stripeCustomerId?: string;
+    subscriptionStatus?: string;
+    subscriptionId?: string;
+    planId?: string;
+    subscriptionStartDate?: string;
+    subscriptionEndDate?: string;
+    trialEndDate?: string;
+  }): Promise<any> {
+    const user = await this.getNutritionist(userId);
+    if (!user) return null;
+
+    // Update user with subscription data
+    const updatedUser = {
+      ...user,
+      ...subscriptionData,
+      updatedAt: new Date(),
+    };
+    
+    this.nutritionists.set(userId, updatedUser as any);
+    return updatedUser;
+  }
+
+  async getUserByStripeCustomerId(stripeCustomerId: string): Promise<any> {
+    const users = Array.from(this.nutritionists.values());
+    return users.find((user: any) => user.stripeCustomerId === stripeCustomerId) || null;
   }
 }
 

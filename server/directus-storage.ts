@@ -809,4 +809,39 @@ export class DirectusStorage implements IStorage {
       throw error;
     }
   }
+
+  // Add methods to IStorage interface
+  async hasActiveSubscription(userId: string): Promise<boolean> {
+    try {
+      const user = await this.getNutritionist(userId);
+      if (!user) return false;
+      
+      const status = user.subscriptionStatus;
+      return ['active', 'trial'].includes(status || '');
+    } catch (error) {
+      console.error('[Stripe] Error checking subscription status:', error);
+      return false;
+    }
+  }
+
+  async getSubscriptionStatus(userId: string): Promise<string | null> {
+    try {
+      const user = await this.getNutritionist(userId);
+      return user?.subscriptionStatus || null;
+    } catch (error) {
+      console.error('[Stripe] Error getting subscription status:', error);
+      return null;
+    }
+  }
+
+  async getUserByStripeCustomerId(stripeCustomerId: string): Promise<any> {
+    try {
+      const response = await this.client.request(`/users?filter[stripe_customer_id][_eq]=${encodeURIComponent(stripeCustomerId)}&fields=*`);
+      const users = response.data || [];
+      return users.length > 0 ? transformUserFromDirectus(users[0]) : undefined;
+    } catch (error) {
+      console.error('[Stripe] Error getting user by Stripe customer ID:', error);
+      return undefined;
+    }
+  }
 }

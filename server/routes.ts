@@ -11,6 +11,8 @@ import { directusClient } from "./lib/directus.js";
 import { evolutionApi } from "./evolution-api";
 import { evolutionRedis } from "./evolution-redis";
 import { openaiService } from "./openai-service";
+// Stripe integration
+import Stripe from "stripe";
 
 // Extend session type to include user
 declare module 'express-session' {
@@ -18,6 +20,28 @@ declare module 'express-session' {
     user?: any;
   }
 }
+
+// Initialize Stripe
+if (!process.env.STRIPE_SECRET_KEY) {
+  throw new Error('Missing required Stripe secret: STRIPE_SECRET_KEY');
+}
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+  apiVersion: "2024-06-20",
+});
+
+// Subscription validation schemas
+const createSubscriptionSchema = z.object({
+  planId: z.string().min(1, "Plan ID is required"),
+  successUrl: z.string().url().optional(),
+  cancelUrl: z.string().url().optional(),
+});
+
+const webhookSchema = z.object({
+  type: z.string(),
+  data: z.object({
+    object: z.any(),
+  }),
+});
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Middleware to check authentication
@@ -1165,6 +1189,255 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('[Admin] Error getting patients:', error);
       res.status(500).json({ error: "Failed to fetch patients" });
+    }
+  });
+
+  // ========== STRIPE SUBSCRIPTION ROUTES ==========
+
+  // Create subscription checkout session
+  app.post("/api/subscription/create-checkout", requireAuth, async (req, res) => {
+    try {
+      const validatedData = createSubscriptionSchema.parse(req.body);
+      const userId = req.session.user.id;
+      const user = await storage.getNutritionist(userId);
+      
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Create or get Stripe customer
+      let stripeCustomerId = user.stripeCustomerId;
+      
+      if (!stripeCustomerId) {
+        console.log(`[Stripe] Creating customer for user ${userId}`);
+        const customer = await stripe.customers.create({
+          email: user.email,
+          name: user.fullName,
+          metadata: {
+            userId: userId,
+            nutritionistId: userId
+          }
+        });
+        
+        stripeCustomerId = customer.id;
+        await storage.updateUserSubscription(userId, {
+          stripeCustomerId: stripeCustomerId
+        });
+      }
+
+      // Create checkout session
+      const baseUrl = req.get('origin') || 'http://localhost:5000';
+      const session = await stripe.checkout.sessions.create({
+        customer: stripeCustomerId,
+        payment_method_types: ['card'],
+        line_items: [{
+          price: validatedData.planId,
+          quantity: 1,
+        }],
+        mode: 'subscription',
+        success_url: validatedData.successUrl || `${baseUrl}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: validatedData.cancelUrl || `${baseUrl}/subscription/cancel`,
+        metadata: {
+          userId: userId,
+          nutritionistId: userId
+        },
+        allow_promotion_codes: true,
+        billing_address_collection: 'required',
+      });
+
+      console.log(`[Stripe] Checkout session created: ${session.id} for user ${userId}`);
+      res.json({ 
+        sessionId: session.id,
+        url: session.url 
+      });
+      
+    } catch (error: any) {
+      console.error('[Stripe] Error creating checkout session:', error);
+      
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          error: "Invalid request data",
+          details: error.errors 
+        });
+      }
+      
+      res.status(500).json({ 
+        error: "Failed to create checkout session",
+        message: error.message 
+      });
+    }
+  });
+
+  // Get subscription status
+  app.get("/api/subscription/status", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.user.id;
+      const user = await storage.getNutritionist(userId);
+      
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const subscriptionData = {
+        status: user.subscriptionStatus || null,
+        subscriptionId: user.subscriptionId || null,
+        planId: user.planId || null,
+        startDate: user.subscriptionStartDate || null,
+        endDate: user.subscriptionEndDate || null,
+        trialEndDate: user.trialEndDate || null,
+        hasActiveSubscription: ['active', 'trial'].includes(user.subscriptionStatus || '')
+      };
+
+      // If user has a Stripe subscription, get fresh data
+      if (user.subscriptionId) {
+        try {
+          const subscription = await stripe.subscriptions.retrieve(user.subscriptionId);
+          subscriptionData.status = subscription.status;
+          subscriptionData.startDate = new Date(subscription.start_date * 1000).toISOString();
+          subscriptionData.endDate = new Date(subscription.current_period_end * 1000).toISOString();
+          
+          // Update local cache if status changed
+          if (subscription.status !== user.subscriptionStatus) {
+            await storage.updateUserSubscription(userId, {
+              subscriptionStatus: subscription.status
+            });
+          }
+        } catch (stripeError) {
+          console.error('[Stripe] Error fetching subscription:', stripeError);
+          // Continue with cached data
+        }
+      }
+
+      res.json(subscriptionData);
+    } catch (error) {
+      console.error('[Stripe] Error getting subscription status:', error);
+      res.status(500).json({ error: "Failed to get subscription status" });
+    }
+  });
+
+  // Cancel subscription
+  app.post("/api/subscription/cancel", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.user.id;
+      const user = await storage.getNutritionist(userId);
+      
+      if (!user || !user.subscriptionId) {
+        return res.status(404).json({ error: "No active subscription found" });
+      }
+
+      // Cancel subscription at period end
+      const subscription = await stripe.subscriptions.update(user.subscriptionId, {
+        cancel_at_period_end: true
+      });
+
+      // Update local status
+      await storage.updateUserSubscription(userId, {
+        subscriptionStatus: subscription.status,
+        subscriptionEndDate: new Date(subscription.current_period_end * 1000).toISOString()
+      });
+
+      console.log(`[Stripe] Subscription ${subscription.id} marked for cancellation at period end`);
+      res.json({ 
+        message: "Subscription will be canceled at the end of the current billing period",
+        subscription: {
+          status: subscription.status,
+          cancelAtPeriodEnd: subscription.cancel_at_period_end,
+          currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString()
+        }
+      });
+      
+    } catch (error: any) {
+      console.error('[Stripe] Error canceling subscription:', error);
+      res.status(500).json({ 
+        error: "Failed to cancel subscription",
+        message: error.message 
+      });
+    }
+  });
+
+  // Customer portal (for users to manage their subscription)
+  app.post("/api/subscription/portal", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.user.id;
+      const user = await storage.getNutritionist(userId);
+      
+      if (!user || !user.stripeCustomerId) {
+        return res.status(404).json({ error: "No Stripe customer found" });
+      }
+
+      const baseUrl = req.get('origin') || 'http://localhost:5000';
+      const session = await stripe.billingPortal.sessions.create({
+        customer: user.stripeCustomerId,
+        return_url: `${baseUrl}/dashboard`,
+      });
+
+      console.log(`[Stripe] Customer portal session created for user ${userId}`);
+      res.json({ url: session.url });
+      
+    } catch (error: any) {
+      console.error('[Stripe] Error creating customer portal session:', error);
+      res.status(500).json({ 
+        error: "Failed to create customer portal session",
+        message: error.message 
+      });
+    }
+  });
+
+  // Verify successful checkout and activate subscription
+  app.get("/api/subscription/checkout-success", requireAuth, async (req, res) => {
+    try {
+      const { session_id } = req.query;
+      const userId = req.session.user.id;
+      
+      if (!session_id || typeof session_id !== 'string') {
+        return res.status(400).json({ error: "Missing session_id parameter" });
+      }
+
+      // Retrieve the checkout session from Stripe
+      const session = await stripe.checkout.sessions.retrieve(session_id);
+      
+      // Verify the session belongs to the current user
+      const user = await storage.getNutritionist(userId);
+      if (!user || session.customer !== user.stripeCustomerId) {
+        return res.status(403).json({ error: "Unauthorized - session does not belong to current user" });
+      }
+
+      // Check if payment was successful
+      if (session.payment_status === 'paid') {
+        // Get subscription details
+        const subscriptionId = session.subscription as string;
+        const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+        
+        // Activate the user's subscription in Directus
+        await storage.updateUserSubscription(userId, {
+          subscriptionId: subscription.id,
+          subscriptionStatus: 'active',
+          planId: subscription.items.data[0]?.price?.id || undefined,
+          subscriptionStartDate: new Date(subscription.start_date * 1000).toISOString(),
+          subscriptionEndDate: new Date(subscription.current_period_end * 1000).toISOString(),
+          trialEndDate: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : undefined
+        });
+
+        console.log(`[Stripe Success] Activated subscription for user ${userId}`);
+        
+        res.json({ 
+          success: true, 
+          message: "Subscription activated successfully!",
+          redirectTo: "/dashboard"
+        });
+      } else {
+        res.status(400).json({ 
+          error: "Payment not completed", 
+          paymentStatus: session.payment_status 
+        });
+      }
+      
+    } catch (error: any) {
+      console.error('[Stripe Success] Error verifying checkout:', error);
+      res.status(500).json({ 
+        error: "Failed to verify checkout session",
+        message: error.message 
+      });
     }
   });
 
