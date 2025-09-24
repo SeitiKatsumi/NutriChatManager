@@ -628,7 +628,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`=== Login successful ===`);
       console.log(`Session ID: ${req.sessionID}`);
       console.log(`Nutritionist ID: ${directusUser.data.id}`);
-      console.log(`Session user created:`, req.session.user);
+      console.log(`Session user created for: ${req.session.user?.email}`);
       
       // Transform Directus user to our nutritionist format
       const nutritionist = {
@@ -1300,8 +1300,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Create checkout session
-      const baseUrl = req.get('origin') || 'http://localhost:5000';
+      // Create checkout session with secure BASE_URL
+      const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
       // Creating checkout session
       const session = await stripe.checkout.sessions.create({
         customer: stripeCustomerId,
