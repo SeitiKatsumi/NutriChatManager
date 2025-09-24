@@ -219,7 +219,7 @@ export default function StepForm({ currentStep, onStepChange, onComplete }: Step
     return (
       <form onSubmit={step2Form.handleSubmit(handleStep2Submit)} className="space-y-6">
         <div>
-          <Label htmlFor="phone" className="block text-sm font-medium text-foreground mb-2">Telefone Pessoal</Label>
+          <Label htmlFor="phone" className="block text-sm font-medium text-foreground mb-2">Telefone Pessoal / Clínica</Label>
           <div className="relative">
             <Input
               id="phone"
