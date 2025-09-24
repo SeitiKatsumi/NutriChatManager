@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/auth-context";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { User, Mail, Lock, ChevronRight, ChevronLeft, Check, Phone, MapPin } from "lucide-react";
 
@@ -41,6 +42,7 @@ interface StepFormProps {
 
 export default function StepForm({ currentStep, onStepChange, onComplete }: StepFormProps) {
   const { toast } = useToast();
+  const { login } = useAuth();
   const [formData, setFormData] = useState<any>({});
 
   const step1Form = useForm({
@@ -77,15 +79,28 @@ export default function StepForm({ currentStep, onStepChange, onComplete }: Step
       const response = await apiRequest("POST", "/api/nutritionists", data);
       return response.json();
     },
-    onSuccess: () => {
-      // Invalidate nutritionists cache so the users page shows the new user immediately
-      queryClient.invalidateQueries({ queryKey: ["/api/nutritionists"] });
-      
-      toast({
-        title: "Conta criada com sucesso!",
-        description: "Bem-vindo ao NutriChatBot.",
-      });
-      onComplete();
+    onSuccess: async () => {
+      try {
+        // Auto-login after successful registration using stored credentials
+        await login(formData.email, formData.password);
+        
+        // Invalidate nutritionists cache so the users page shows the new user immediately
+        queryClient.invalidateQueries({ queryKey: ["/api/nutritionists"] });
+        
+        toast({
+          title: "Conta criada com sucesso!",
+          description: "Bem-vindo ao NutriChatBot.",
+        });
+        onComplete();
+      } catch (loginError) {
+        // If auto-login fails, still show success and redirect
+        console.error("Auto-login failed:", loginError);
+        toast({
+          title: "Conta criada com sucesso!",
+          description: "Por favor, faça login para continuar.",
+        });
+        onComplete();
+      }
     },
     onError: (error: any) => {
       toast({
