@@ -7,6 +7,7 @@ import { Check, Loader2, Crown, Zap, Star } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
+import { getStripe } from "@/lib/stripe";
 
 const plans = [
   {
@@ -78,10 +79,38 @@ export default function SubscriptionPlans() {
       });
       return await response.json();
     },
-    onSuccess: (data) => {
-      // Redirect to Stripe Checkout
-      if (data.url) {
-        window.location.href = data.url;
+    onSuccess: async (data) => {
+      try {
+        // Get Stripe instance and redirect to checkout
+        const stripe = await getStripe();
+        
+        if (!stripe) {
+          throw new Error("Stripe não foi carregado corretamente. Verifique sua conexão.");
+        }
+
+        if (data.sessionId) {
+          // Use Stripe.js para redirecionar para o checkout
+          const { error } = await stripe.redirectToCheckout({
+            sessionId: data.sessionId
+          });
+          
+          if (error) {
+            throw new Error(error.message || "Erro ao redirecionar para o checkout");
+          }
+        } else if (data.url) {
+          // Fallback para redirecionamento direto se sessionId não estiver disponível
+          window.location.href = data.url;
+        } else {
+          throw new Error("Nenhuma URL de checkout retornada do servidor");
+        }
+      } catch (error: any) {
+        console.error("Erro ao processar checkout:", error);
+        toast({
+          title: "Erro no checkout",
+          description: error.message || "Erro ao processar pagamento. Tente novamente.",
+          variant: "destructive"
+        });
+        setSelectedPlan(null);
       }
     },
     onError: (error: any) => {
