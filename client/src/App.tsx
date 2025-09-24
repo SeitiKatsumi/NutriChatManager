@@ -103,16 +103,12 @@ function Router() {
             </PublicRoute>
           </Route>
           
-          {/* Subscription routes - Protected but accessible without subscription */}
+          {/* Subscription routes - Public routes handled by SubscriptionGuard */}
           <Route path="/subscription/plans">
-            <ProtectedRoute>
-              <SubscriptionPlans />
-            </ProtectedRoute>
+            <SubscriptionPlans />
           </Route>
           <Route path="/subscription/success">
-            <ProtectedRoute>
-              <SubscriptionSuccess />
-            </ProtectedRoute>
+            <SubscriptionSuccess />
           </Route>
           
           {/* Main app routes - Protected and require active subscription */}
