@@ -223,8 +223,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // WhatsApp instances routes (PROTECTED)
-  app.get("/api/whatsapp-instances", requireAuth, async (req, res) => {
+  // WhatsApp instances routes (PROTECTED with subscription)
+  app.get("/api/whatsapp-instances", requireAuth, requireActiveSubscription, async (req, res) => {
     try {
       // Security: Users can only see their own instance
       const nutritionistId = req.session.user.nutritionistId;
@@ -251,7 +251,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/whatsapp-instances/nutritionist/:nutritionistId", requireAuth, async (req, res) => {
+  app.get("/api/whatsapp-instances/nutritionist/:nutritionistId", requireAuth, requireActiveSubscription, async (req, res) => {
     try {
       // Security: Users can only access their own instance
       if (req.params.nutritionistId !== req.session.user.nutritionistId) {
@@ -268,7 +268,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/whatsapp-instances", requireAuth, async (req, res) => {
+  app.post("/api/whatsapp-instances", requireAuth, requireActiveSubscription, async (req, res) => {
     try {
       // Security: Add nutritionistId from session
       const instanceData = {
@@ -287,7 +287,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/whatsapp-instances/:id", requireAuth, async (req, res) => {
+  app.put("/api/whatsapp-instances/:id", requireAuth, requireActiveSubscription, async (req, res) => {
     try {
       // Security: Verify ownership before update
       const existingInstance = await storage.getWhatsappInstance(req.params.id);
@@ -311,8 +311,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Patients routes (protected)
-  app.get("/api/patients", requireAuth, async (req, res) => {
+  // Patients routes (protected with subscription)
+  app.get("/api/patients", requireAuth, requireActiveSubscription, async (req, res) => {
     try {
       const nutritionistId = req.session.user.nutritionistId;
       const userToken = req.session.user.accessToken;
@@ -341,7 +341,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/patients/:id", requireAuth, async (req, res) => {
+  app.get("/api/patients/:id", requireAuth, requireActiveSubscription, async (req, res) => {
     try {
       const nutritionistId = req.session.user.nutritionistId;
       const userToken = req.session.user.accessToken;
@@ -362,7 +362,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/patients", requireAuth, async (req, res) => {
+  app.post("/api/patients", requireAuth, requireActiveSubscription, async (req, res) => {
     try {
       const nutritionistId = req.session.user.nutritionistId;
       const userToken = req.session.user.accessToken;
@@ -385,7 +385,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/patients/:id", requireAuth, async (req, res) => {
+  app.put("/api/patients/:id", requireAuth, requireActiveSubscription, async (req, res) => {
     try {
       const nutritionistId = req.session.user.nutritionistId;
       const userToken = req.session.user.accessToken;
@@ -420,7 +420,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/patients/:id", requireAuth, async (req, res) => {
+  app.delete("/api/patients/:id", requireAuth, requireActiveSubscription, async (req, res) => {
     try {
       const nutritionistId = req.session.user.nutritionistId;
       const userToken = req.session.user.accessToken;
@@ -448,7 +448,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Evolution API WhatsApp routes
-  app.get("/api/whatsapp/qrcode/:nutritionistId", requireAuth, async (req, res) => {
+  app.get("/api/whatsapp/qrcode/:nutritionistId", requireAuth, requireActiveSubscription, async (req, res) => {
     try {
       // Security: Users can only get QR code for their own instance  
       if (req.params.nutritionistId !== req.session.user.id) {
@@ -475,7 +475,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/whatsapp/status/:nutritionistId", requireAuth, async (req, res) => {
+  app.get("/api/whatsapp/status/:nutritionistId", requireAuth, requireActiveSubscription, async (req, res) => {
     try {
       // Security: Users can only check status of their own instance
       if (req.params.nutritionistId !== req.session.user.id) {
@@ -537,8 +537,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Nutritionist individual dashboard stats (protected)
-  app.get("/api/nutritionists/:id/dashboard", requireAuth, async (req, res) => {
+  // Nutritionist individual dashboard stats (protected with subscription)
+  app.get("/api/nutritionists/:id/dashboard", requireAuth, requireActiveSubscription, async (req, res) => {
     try {
       const requestedId = req.params.id;
       const loggedInNutritionistId = req.session.user.nutritionistId;
@@ -578,8 +578,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Convenience endpoint to get current user's dashboard
-  app.get("/api/dashboard", requireAuth, async (req, res) => {
+  // Convenience endpoint to get current user's dashboard (requires subscription)
+  app.get("/api/dashboard", requireAuth, requireActiveSubscription, async (req, res) => {
     try {
       const nutritionistId = req.session.user.nutritionistId;
       const nutritionist = await storage.getNutritionist(nutritionistId);
@@ -925,7 +925,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }).optional()
   });
 
-  app.post("/api/ai/ask", requireAuth, async (req, res) => {
+  app.post("/api/ai/ask", requireAuth, requireActiveSubscription, async (req, res) => {
     try {
       const { patientId, question, dateRange } = askRequestSchema.parse(req.body);
       
@@ -992,7 +992,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/ai/insights/:patientId", requireAuth, async (req, res) => {
+  app.get("/api/ai/insights/:patientId", requireAuth, requireActiveSubscription, async (req, res) => {
     try {
       const patientId = req.params.patientId;
       

@@ -9,7 +9,6 @@ interface SubscriptionGuardProps {
 
 export function SubscriptionGuard({ children }: SubscriptionGuardProps) {
   const { user, isLoading: authLoading } = useAuth();
-  const { data: subscriptionStatus, isLoading: subscriptionLoading } = useSubscriptionStatus();
   const [location] = useLocation();
 
   // Don't protect these routes
@@ -18,10 +17,16 @@ export function SubscriptionGuard({ children }: SubscriptionGuardProps) {
     '/register', 
     '/subscription/plans', 
     '/subscription/success',
-    '/subscription/cancel'
+    '/subscription/cancel',
+    '/admin/login',
+    '/admin'
   ];
 
   const isPublicRoute = publicRoutes.some(route => location.startsWith(route));
+  
+  // Only check subscription status for authenticated users on non-public routes
+  const shouldCheckSubscription = !!user && !isPublicRoute;
+  const { data: subscriptionStatus, isLoading: subscriptionLoading } = useSubscriptionStatus(shouldCheckSubscription);
 
   // If user is not logged in or on public routes, allow access
   if (!user || isPublicRoute) {
