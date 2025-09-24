@@ -727,7 +727,7 @@ export class DirectusStorage implements IStorage {
     trialEndDate?: string;
   }) {
     try {
-      console.log(`[Stripe] Updating subscription for user ${userId}:`, subscriptionData);
+      // Updating subscription for user
       
       const updateData: Partial<DirectusUser> = {};
       
@@ -744,10 +744,10 @@ export class DirectusStorage implements IStorage {
         body: JSON.stringify(updateData),
       });
       
-      console.log(`[Stripe] Subscription updated successfully for user ${userId}`);
+      // Subscription updated successfully
       return response.data;
     } catch (error) {
-      console.error('[Stripe] Error updating user subscription:', error);
+      console.error('Error updating user subscription:', error);
       throw error;
     }
   }
@@ -761,7 +761,7 @@ export class DirectusStorage implements IStorage {
       const users = response.data || [];
       return users.length > 0 ? transformUserFromDirectus(users[0]) : undefined;
     } catch (error) {
-      console.error('[Stripe] Error getting user by Stripe customer ID:', error);
+      console.error('Error getting user by customer ID:', error);
       return undefined;
     }
   }
@@ -777,7 +777,7 @@ export class DirectusStorage implements IStorage {
       const status = user.subscriptionStatus;
       return ['active', 'trial'].includes(status || '');
     } catch (error) {
-      console.error('[Stripe] Error checking subscription status:', error);
+      console.error('Error checking subscription status:', error);
       return false;
     }
   }
@@ -790,7 +790,7 @@ export class DirectusStorage implements IStorage {
       const user = await this.getNutritionist(userId);
       return user?.subscriptionStatus || null;
     } catch (error) {
-      console.error('[Stripe] Error getting subscription status:', error);
+      console.error('Error getting subscription status:', error);
       return null;
     }
   }
@@ -805,7 +805,7 @@ export class DirectusStorage implements IStorage {
         trialEndDate: trialEndDate
       });
     } catch (error) {
-      console.error('[Stripe] Error setting trial status:', error);
+      console.error('Error setting trial status:', error);
       throw error;
     }
   }
@@ -819,7 +819,7 @@ export class DirectusStorage implements IStorage {
       const status = user.subscriptionStatus;
       return ['active', 'trial'].includes(status || '');
     } catch (error) {
-      console.error('[Stripe] Error checking subscription status:', error);
+      console.error('Error checking subscription status:', error);
       return false;
     }
   }
@@ -829,7 +829,7 @@ export class DirectusStorage implements IStorage {
       const user = await this.getNutritionist(userId);
       return user?.subscriptionStatus || null;
     } catch (error) {
-      console.error('[Stripe] Error getting subscription status:', error);
+      console.error('Error getting subscription status:', error);
       return null;
     }
   }
@@ -840,7 +840,7 @@ export class DirectusStorage implements IStorage {
       const users = response.data || [];
       return users.length > 0 ? transformUserFromDirectus(users[0]) : undefined;
     } catch (error) {
-      console.error('[Stripe] Error getting user by Stripe customer ID:', error);
+      console.error('Error getting user by customer ID:', error);
       return undefined;
     }
   }

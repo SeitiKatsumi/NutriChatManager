@@ -26,26 +26,9 @@ if (!process.env.STRIPE_SECRET_KEY) {
   throw new Error('Missing required Stripe secret: STRIPE_SECRET_KEY');
 }
 
-// Debug logging to check which key is being used
-const stripeKey = process.env.STRIPE_SECRET_KEY;
-const keyType = stripeKey?.startsWith('sk_') ? 'secret' : stripeKey?.startsWith('pk_') ? 'publishable' : 'unknown';
-const keyPrefix = stripeKey?.substring(0, 12) + '...';
-console.log(`[Stripe] Initializing with ${keyType} key: ${keyPrefix}`);
-console.log(`[Stripe] Environment check - STRIPE_SECRET_KEY exists: ${!!process.env.STRIPE_SECRET_KEY}`);
-console.log(`[Stripe] Environment check - Key length: ${process.env.STRIPE_SECRET_KEY?.length || 0}`);
-
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 });
-
-// Verify the Stripe instance was created correctly
-console.log('[Stripe] Instance created, checking apiKey property...');
-console.log(`[Stripe] Instance apiKey available: ${!!stripe.apiKey}`);
-if (stripe.apiKey) {
-  console.log(`[Stripe] Instance apiKey prefix: ${stripe.apiKey.substring(0, 12)}...`);
-} else {
-  console.log('[Stripe] WARNING: Instance apiKey is undefined!');
-}
 
 // Subscription validation schemas
 const createSubscriptionSchema = z.object({
@@ -112,7 +95,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           error: errorMessage,
           code: errorCode,
           subscriptionStatus: subscriptionStatus,
-          redirectTo: "/subscription"
+          redirectTo: "/subscription/plans"
         });
       }
       
@@ -451,7 +434,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/whatsapp/qrcode/:nutritionistId", requireAuth, requireActiveSubscription, async (req, res) => {
     try {
       // Security: Users can only get QR code for their own instance  
-      if (req.params.nutritionistId !== req.session.user.id) {
+      if (req.params.nutritionistId !== req.session.user.nutritionistId) {
         return res.status(403).json({ error: "Access denied" });
       }
 
@@ -478,7 +461,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/whatsapp/status/:nutritionistId", requireAuth, requireActiveSubscription, async (req, res) => {
     try {
       // Security: Users can only check status of their own instance
-      if (req.params.nutritionistId !== req.session.user.id) {
+      if (req.params.nutritionistId !== req.session.user.nutritionistId) {
         return res.status(403).json({ error: "Access denied" });
       }
 
@@ -1246,9 +1229,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Helper function to create or get Stripe products and prices
   async function ensureStripeProducts() {
     try {
-      console.log('[Stripe] Ensuring products and prices exist...');
-      console.log(`[Stripe] Current API key type: ${stripe.apiKey?.startsWith('sk_') ? 'secret' : 'publishable'}`);
-      console.log(`[Stripe] API key prefix: ${stripe.apiKey?.substring(0, 12)}...`);
+      // Ensuring products and prices exist
       
       const plans = [
         { id: 'basic', name: 'Plano Básico NutriChatBot', amount: 4900 },
@@ -1267,7 +1248,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let product = products.data.find(p => p.metadata?.planId === plan.id);
         
         if (!product) {
-          console.log(`[Stripe] Creating product: ${plan.name}`);
+          // Creating product
           product = await stripe.products.create({
             name: plan.name,
             description: `Assinatura mensal do ${plan.name}`,
@@ -1283,7 +1264,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let price = prices.data.find(p => p.unit_amount === plan.amount && p.currency === 'brl');
 
         if (!price) {
-          console.log(`[Stripe] Creating price for ${plan.name}: R$ ${plan.amount / 100}`);
+          // Creating price
           price = await stripe.prices.create({
             currency: 'brl',
             unit_amount: plan.amount,
@@ -1299,12 +1280,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           productId: product.id
         };
 
-        console.log(`[Stripe] Plan ${plan.id} ready: ${price.id}`);
+        // Plan ready
       }
 
       return ALLOWED_PLANS;
     } catch (error) {
-      console.error('[Stripe] Error ensuring products:', error);
+      console.error('Error ensuring products:', error);
       throw error;
     }
   }
@@ -1313,7 +1294,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/subscription/create-checkout", requireAuth, async (req, res) => {
     try {
       const { planId, mode, successUrl, cancelUrl, metadata } = req.body;
-      console.log(`[Stripe Checkout] Starting checkout creation for plan: ${planId}...`);
+      // Starting checkout creation
       // Validate planId instead of accepting any priceId
       
       if (!planId || typeof planId !== 'string') {
@@ -1343,7 +1324,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let stripeCustomerId = user.stripeCustomerId;
       
       if (!stripeCustomerId) {
-        console.log(`[Stripe] Creating customer for user ${userId}`);
+        // Creating customer
         const customer = await stripe.customers.create({
           email: user.email,
           name: user.fullName,
@@ -1361,7 +1342,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Create checkout session
       const baseUrl = req.get('origin') || 'http://localhost:5000';
-      console.log(`[Stripe Checkout] Creating session for plan: ${planId} with priceId: ${plan.priceId}`);
+      // Creating checkout session
       const session = await stripe.checkout.sessions.create({
         customer: stripeCustomerId,
         payment_method_types: ['card'],
@@ -1382,7 +1363,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         billing_address_collection: 'required',
       });
 
-      console.log(`[Stripe] Checkout session created: ${session.id} for user ${userId}, plan: ${planId} (${plan.name})`);
+      // Checkout session created successfully
       res.json({ 
         sessionId: session.id,
         url: session.url,
@@ -1394,7 +1375,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
     } catch (error: any) {
-      console.error('[Stripe] Error creating checkout session:', error);
+      console.error('Error creating checkout session:', error);
       
       if (error instanceof z.ZodError) {
         return res.status(400).json({ 
@@ -1445,14 +1426,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
           }
         } catch (stripeError) {
-          console.error('[Stripe] Error fetching subscription:', stripeError);
+          console.error('Error fetching subscription:', stripeError);
           // Continue with cached data
         }
       }
 
       res.json(subscriptionData);
     } catch (error) {
-      console.error('[Stripe] Error getting subscription status:', error);
+      console.error('Error getting subscription status:', error);
       res.status(500).json({ error: "Failed to get subscription status" });
     }
   });
@@ -1478,7 +1459,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         subscriptionEndDate: new Date(subscription.current_period_end * 1000).toISOString()
       });
 
-      console.log(`[Stripe] Subscription ${subscription.id} marked for cancellation at period end`);
+      // Subscription marked for cancellation
       res.json({ 
         message: "Subscription will be canceled at the end of the current billing period",
         subscription: {
@@ -1489,7 +1470,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
     } catch (error: any) {
-      console.error('[Stripe] Error canceling subscription:', error);
+      console.error('Error canceling subscription:', error);
       res.status(500).json({ 
         error: "Failed to cancel subscription",
         message: error.message 
@@ -1513,11 +1494,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return_url: `${baseUrl}/dashboard`,
       });
 
-      console.log(`[Stripe] Customer portal session created for user ${userId}`);
+      // Customer portal session created
       res.json({ url: session.url });
       
     } catch (error: any) {
-      console.error('[Stripe] Error creating customer portal session:', error);
+      console.error('Error creating customer portal session:', error);
       res.status(500).json({ 
         error: "Failed to create customer portal session",
         message: error.message 
@@ -1560,7 +1541,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           trialEndDate: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : undefined
         });
 
-        console.log(`[Stripe Success] Activated subscription for user ${userId}`);
+        // Subscription activated successfully
         
         res.json({ 
           success: true, 
@@ -1575,7 +1556,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
     } catch (error: any) {
-      console.error('[Stripe Success] Error verifying checkout:', error);
+      console.error('Error verifying checkout:', error);
       res.status(500).json({ 
         error: "Failed to verify checkout session",
         message: error.message 

@@ -55,7 +55,8 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!isLoading && user) {
-      navigate("/");
+      // Let SubscriptionGuard handle the redirect logic instead of going directly to dashboard
+      navigate("/dashboard");
     }
   }, [user, isLoading, navigate]);
 
