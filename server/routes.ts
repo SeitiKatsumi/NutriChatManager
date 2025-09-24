@@ -35,6 +35,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   };
 
+  // Middleware to check if user has active subscription
+  const requireActiveSubscription = async (req: any, res: any, next: any) => {
+    if (!req.session.user) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+
+    try {
+      const userId = req.session.user.id;
+      const hasActive = await storage.hasActiveSubscription(userId);
+      
+      if (!hasActive) {
+        const subscriptionStatus = await storage.getSubscriptionStatus(userId);
+        
+        // Provide specific error messages based on subscription status
+        let errorMessage = "Active subscription required";
+        let errorCode = "SUBSCRIPTION_REQUIRED";
+        
+        if (subscriptionStatus === 'past_due') {
+          errorMessage = "Payment overdue. Please update your payment method.";
+          errorCode = "PAYMENT_OVERDUE";
+        } else if (subscriptionStatus === 'canceled') {
+          errorMessage = "Subscription canceled. Reactivate to continue using the app.";
+          errorCode = "SUBSCRIPTION_CANCELED";
+        } else if (subscriptionStatus === 'incomplete') {
+          errorMessage = "Complete your subscription setup to access the app.";
+          errorCode = "SUBSCRIPTION_INCOMPLETE";
+        } else if (!subscriptionStatus) {
+          errorMessage = "No active subscription found. Subscribe to access the app.";
+          errorCode = "NO_SUBSCRIPTION";
+        }
+
+        return res.status(402).json({ 
+          error: errorMessage,
+          code: errorCode,
+          subscriptionStatus: subscriptionStatus,
+          redirectTo: "/subscription"
+        });
+      }
+      
+      next();
+    } catch (error) {
+      console.error('[Subscription Middleware] Error checking subscription:', error);
+      return res.status(500).json({ error: "Error verifying subscription" });
+    }
+  };
+
   // Nutritionists routes
   app.get("/api/nutritionists", requireAuth, async (req, res) => {
     try {
