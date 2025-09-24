@@ -693,34 +693,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Email and password are required" });
       }
 
-      // Temporary: Allow specific admin email to bypass Directus authentication issues
-      if (email === 'seitikatsumi@gmail.com') {
-        console.log('Allowing admin access for known admin user');
-        
-        // Create local session with admin flag
-        req.session.user = {
-          id: 'admin-temp-id',
-          email: email,
-          nutritionistId: null,
-          role: 'admin',
-          accessToken: 'temp-admin-token',
-          refreshToken: 'temp-admin-refresh',
-          isAdmin: true
-        };
-
-        console.log(`=== Admin login successful (temp) ===`);
-        console.log(`Session ID: ${req.sessionID}`);
-        console.log(`Admin email: ${email}`);
-        
-        return res.json({
-          user: {
-            id: 'admin-temp-id',
-            email: email,
-            name: 'Admin User',
-            isAdmin: true,
-          },
-        });
-      }
 
       console.log(`Attempting Directus authentication for: ${email}`);
       // Use Directus authentication
@@ -739,20 +711,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: directusUser.data.status
       });
       
-      // Check if user has admin access - be more flexible
-      // Known admin emails (as confirmed by user)
-      const adminEmails = ['seitikatsumi@gmail.com'];
-      
-      // Check admin_access flag, specific admin role IDs, or known admin emails
-      const adminRoleIds = ['70df1b96-2eec-455e-809e-5517390892fb']; // Known admin role ID from system
-      const isAdmin = directusUser.data.admin_access === true || 
-                     adminRoleIds.includes(directusUser.data.role) ||
-                     adminEmails.includes(directusUser.data.email);
+      // Check admin access through Directus admin_access flag only
+      const isAdmin = directusUser.data.admin_access === true;
       
       console.log(`Admin check result for ${email}: isAdmin=${isAdmin}`);
       console.log(`- admin_access: ${directusUser.data.admin_access}`);
-      console.log(`- role in adminRoleIds: ${adminRoleIds.includes(directusUser.data.role)}`);
-      console.log(`- email in adminEmails: ${adminEmails.includes(directusUser.data.email)}`);
       
       if (!isAdmin) {
         console.log(`Access denied for ${email} - not recognized as admin`);
