@@ -28,13 +28,27 @@ export function SubscriptionGuard({ children }: SubscriptionGuardProps) {
   const shouldCheckSubscription = !!user && !isPublicRoute;
   const { data: subscriptionStatus, isLoading: subscriptionLoading } = useSubscriptionStatus(shouldCheckSubscription);
 
-  // If user is not logged in or on public routes, allow access
-  if (!user || isPublicRoute) {
+  // If on public routes, allow access
+  if (isPublicRoute) {
     return <>{children}</>;
   }
 
+  // Show loading while checking authentication
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
+
+  // If user is not logged in, redirect to subscription plans for registration flow
+  if (!user) {
+    return <Redirect to="/subscription/plans" />;
+  }
+
   // Show loading while checking subscription status
-  if (authLoading || subscriptionLoading) {
+  if (subscriptionLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <LoadingSpinner size="lg" />

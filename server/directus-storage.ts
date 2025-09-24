@@ -774,8 +774,12 @@ export class DirectusStorage implements IStorage {
       const user = await this.getNutritionist(userId);
       if (!user) return false;
       
-      const status = user.subscriptionStatus;
-      return ['active', 'trial'].includes(status || '');
+      // SECURITY: Require active status AND valid subscription ID AND plan ID
+      // This prevents users from accessing the app without paying
+      const hasActiveStatus = user.subscriptionStatus === 'active';
+      const hasValidSubscription = !!(user.subscriptionId && user.planId);
+      
+      return hasActiveStatus && hasValidSubscription;
     } catch (error) {
       console.error('Error checking subscription status:', error);
       return false;
@@ -816,8 +820,12 @@ export class DirectusStorage implements IStorage {
       const user = await this.getNutritionist(userId);
       if (!user) return false;
       
-      const status = user.subscriptionStatus;
-      return ['active', 'trial'].includes(status || '');
+      // SECURITY: Require active status AND valid subscription ID AND plan ID
+      // This prevents users from accessing the app without paying
+      const hasActiveStatus = user.subscriptionStatus === 'active';
+      const hasValidSubscription = !!(user.subscriptionId && user.planId);
+      
+      return hasActiveStatus && hasValidSubscription;
     } catch (error) {
       console.error('Error checking subscription status:', error);
       return false;

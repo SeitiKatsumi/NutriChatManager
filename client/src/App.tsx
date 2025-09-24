@@ -111,36 +111,26 @@ function Router() {
             <SubscriptionSuccess />
           </Route>
           
-          {/* Main app routes - Protected and require active subscription */}
+          {/* Main app routes - Protected by SubscriptionGuard only */}
           <Route path="/">
-            <ProtectedRoute>
-              <Header />
-              <Dashboard />
-            </ProtectedRoute>
+            <Header />
+            <Dashboard />
           </Route>
           <Route path="/dashboard">
-            <ProtectedRoute>
-              <Header />
-              <Dashboard />
-            </ProtectedRoute>
+            <Header />
+            <Dashboard />
           </Route>
           <Route path="/users">
-            <ProtectedRoute>
-              <Header />
-              <Users />
-            </ProtectedRoute>
+            <Header />
+            <Users />
           </Route>
           <Route path="/patients">
-            <ProtectedRoute>
-              <Header />
-              <Patients />
-            </ProtectedRoute>
+            <Header />
+            <Patients />
           </Route>
           <Route path="/whatsapp">
-            <ProtectedRoute>
-              <Header />
-              <WhatsApp />
-            </ProtectedRoute>
+            <Header />
+            <WhatsApp />
           </Route>
           
           <Route component={NotFound} />

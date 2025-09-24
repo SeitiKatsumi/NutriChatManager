@@ -313,8 +313,17 @@ export class MemStorage implements IStorage {
   async hasActiveSubscription(userId: string): Promise<boolean> {
     const user = await this.getNutritionist(userId);
     if (!user) return false;
+    
+    // SECURITY: Require active status AND valid subscription ID AND plan ID
+    // This prevents users from accessing the app without paying
     const status = (user as any).subscriptionStatus;
-    return ['active', 'trial'].includes(status || '');
+    const subscriptionId = (user as any).subscriptionId;
+    const planId = (user as any).planId;
+    
+    const hasActiveStatus = status === 'active';
+    const hasValidSubscription = !!(subscriptionId && planId);
+    
+    return hasActiveStatus && hasValidSubscription;
   }
 
   async getSubscriptionStatus(userId: string): Promise<string | null> {
