@@ -38,6 +38,49 @@ Client-side state is managed through TanStack Query for server state and React h
 ## Development Tools
 The project uses modern development tooling including TypeScript for type safety, ESLint for code quality, Tailwind CSS for styling, and PostCSS for CSS processing. The build process supports both development and production environments with proper asset optimization.
 
+# Deployment Configuration
+
+## Required Environment Variables for Production
+
+### Stripe Payment Integration
+- **STRIPE_SECRET_KEY**: Stripe secret key for backend (starts with `sk_live_` or `sk_test_`)
+- **VITE_STRIPE_PUBLIC_KEY**: Stripe publishable key for frontend (starts with `pk_live_` or `pk_test_`)
+
+### Evolution API (WhatsApp Integration)  
+- **EVOLUTION_API_KEY**: API key for Evolution WhatsApp service
+- **EVOLUTION_API_URL**: Base URL for Evolution API (e.g., `https://api.evolution.com`)
+
+### Database Configuration
+- **DATABASE_URL**: PostgreSQL connection string (automatically provided by Replit/Neon)
+
+### Directus CMS Integration
+- **DIRECTUS_TOKEN**: Admin token for Directus CMS integration
+
+### Optional Redis Configuration
+- **REDIS_HOST**: Redis server hostname (if using external Redis)
+- **REDIS_PASSWORD**: Redis authentication password  
+- **REDIS_PORT**: Redis server port
+- **REDIS_URL**: Complete Redis connection URL
+
+## Deployment Steps
+
+1. **Configure Environment Variables in Replit Deploy:**
+   - Go to your Replit workspace
+   - Click "Publish" or find "Deployments" in command palette
+   - Select your deployment type (Autoscale/Reserved VM)
+   - Navigate to "Deployment secrets" section
+   - Add all required environment variables listed above
+
+2. **Verify Configuration:**
+   - Ensure `STRIPE_SECRET_KEY` and `VITE_STRIPE_PUBLIC_KEY` match (test/live environment)
+   - Test Evolution API connectivity with provided credentials
+   - Confirm Directus token has admin permissions
+
+3. **Common Issues:**
+   - **"Instância não configurada"**: Missing `EVOLUTION_API_KEY` or `EVOLUTION_API_URL`
+   - **Stripe not redirecting**: Missing `VITE_STRIPE_PUBLIC_KEY` in frontend
+   - **Payment failures**: Mismatched Stripe keys (test vs live environment)
+
 # External Dependencies
 
 ## Core Framework Dependencies
