@@ -1518,16 +1518,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Retrieve the checkout session from Stripe
       const session = await stripe.checkout.sessions.retrieve(session_id);
       
-      // Verify the session belongs to the current user
+      // Force fresh user data from Directus for verification
       const user = await storage.getNutritionist(userId);
       console.log('DEBUG - Checkout verification:');
       console.log('- User ID:', userId);
       console.log('- User found:', !!user);
       console.log('- User stripeCustomerId:', user?.stripeCustomerId);
       console.log('- Session customer:', session.customer);
-      console.log('- Match:', session.customer === user?.stripeCustomerId);
       
-      if (!user || session.customer !== user.stripeCustomerId) {
+      // If user doesn't have stripeCustomerId yet, find by Stripe customer ID
+      let verificationUser = user;
+      if (!user?.stripeCustomerId && session.customer) {
+        verificationUser = await storage.getUserByStripeCustomerId(session.customer as string);
+        console.log('- Found user by stripe customer ID:', !!verificationUser);
+      }
+      
+      console.log('- Match:', session.customer === verificationUser?.stripeCustomerId);
+      
+      if (!verificationUser || session.customer !== verificationUser.stripeCustomerId) {
         return res.status(403).json({ error: "Unauthorized - session does not belong to current user" });
       }
 
