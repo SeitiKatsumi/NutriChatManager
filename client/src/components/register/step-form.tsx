@@ -310,9 +310,7 @@ export default function StepForm({ currentStep, onStepChange, onComplete }: Step
     return (
       <form onSubmit={step3Form.handleSubmit(handleStep3Submit)} className="space-y-6">
         <div>
-          <Label htmlFor="whatsappNumber" className="block text-sm font-medium text-foreground mb-2">
-            WhatsApp Profissional
-          </Label>
+          <Label htmlFor="whatsappNumber" className="block text-sm font-medium text-foreground mb-2">WhatsApp Nutri Chatbot</Label>
           <div className="flex">
             <div className="flex items-center bg-input border border-border border-r-0 rounded-l-lg px-3">
               <span className="text-muted-foreground text-sm">+55</span>
@@ -334,7 +332,6 @@ export default function StepForm({ currentStep, onStepChange, onComplete }: Step
             </p>
           )}
         </div>
-
         <div className="bg-accent p-4 rounded-lg">
           <h4 className="font-medium text-accent-foreground mb-2">Configuração do Agente de IA</h4>
           <p className="text-sm text-muted-foreground mb-4">
@@ -374,7 +371,6 @@ export default function StepForm({ currentStep, onStepChange, onComplete }: Step
             </div>
           </div>
         </div>
-
         <div className="flex items-center space-x-2">
           <Checkbox
             id="termsAccepted"
@@ -397,7 +393,6 @@ export default function StepForm({ currentStep, onStepChange, onComplete }: Step
             {step3Form.formState.errors.termsAccepted.message}
           </p>
         )}
-
         <div className="flex space-x-3">
           <Button
             type="button"
