@@ -1284,44 +1284,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let stripeCustomerId = user.stripeCustomerId;
       
       if (!stripeCustomerId) {
+        console.log('[Stripe] Creating customer for user:', userId);
         // Creating customer
-        const customer = await stripe.customers.create({
-          email: user.email,
-          name: user.fullName,
-          metadata: {
-            userId: userId,
-            nutritionistId: userId
-          }
-        });
-        
-        stripeCustomerId = customer.id;
-        await storage.updateUserSubscription(userId, {
-          stripeCustomerId: stripeCustomerId
-        });
+        try {
+          const customer = await stripe.customers.create({
+            email: user.email,
+            name: user.fullName,
+            metadata: {
+              userId: userId,
+              nutritionistId: userId
+            }
+          });
+          
+          stripeCustomerId = customer.id;
+          console.log('[Stripe] Customer created successfully:', stripeCustomerId);
+          await storage.updateUserSubscription(userId, {
+            stripeCustomerId: stripeCustomerId
+          });
+        } catch (customerError: any) {
+          console.error('[Stripe] Customer creation failed:', customerError);
+          throw customerError;
+        }
+      } else {
+        console.log('[Stripe] Using existing customer:', stripeCustomerId);
       }
 
       // Create checkout session with secure BASE_URL
       const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
+      console.log('[Stripe] Creating checkout session with priceId:', plan.priceId);
       // Creating checkout session
-      const session = await stripe.checkout.sessions.create({
-        customer: stripeCustomerId,
-        payment_method_types: ['card'],
-        line_items: [{
-          price: plan.priceId, // Use server-side priceId, not client-provided
-          quantity: 1,
-        }],
-        mode: 'subscription',
-        success_url: `${baseUrl}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${baseUrl}/subscription/plans`,
-        metadata: {
-          userId: userId,
-          nutritionistId: userId,
-          planId: planId,
-          planName: plan.name
-        },
-        allow_promotion_codes: true,
-        billing_address_collection: 'required',
-      });
+      let session;
+      try {
+        session = await stripe.checkout.sessions.create({
+          customer: stripeCustomerId,
+          payment_method_types: ['card'],
+          line_items: [{
+            price: plan.priceId, // Use server-side priceId, not client-provided
+            quantity: 1,
+          }],
+          mode: 'subscription',
+          success_url: `${baseUrl}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${baseUrl}/subscription/plans`,
+          metadata: {
+            userId: userId,
+            nutritionistId: userId,
+            planId: planId,
+            planName: plan.name
+          },
+          allow_promotion_codes: true,
+          billing_address_collection: 'required',
+        });
+        console.log('[Stripe] Checkout session created successfully:', session.id);
+      } catch (sessionError: any) {
+        console.error('[Stripe] Checkout session creation failed:', sessionError);
+        console.error('[Stripe] Error details:', JSON.stringify({
+          type: sessionError.type,
+          code: sessionError.code,
+          message: sessionError.message,
+          statusCode: sessionError.statusCode
+        }, null, 2));
+        throw sessionError;
+      }
 
       // Checkout session created successfully
       res.json({ 
