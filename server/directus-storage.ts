@@ -55,6 +55,14 @@ export interface DirectusUser {
   Token_Evolution?: string;
   Instancia_Evolution?: string;
   Whatsapp_IA?: string;
+  // Stripe subscription fields
+  stripe_customer_id?: string;
+  subscription_status?: 'trial' | 'active' | 'past_due' | 'canceled' | 'incomplete' | null;
+  subscription_id?: string;
+  plan_id?: string;
+  subscription_start_date?: string; // ISO date string
+  subscription_end_date?: string; // ISO date string
+  trial_end_date?: string; // ISO date string
   date_created?: Date;
   date_updated?: Date;
 }
@@ -201,6 +209,14 @@ function transformUserToDirectus(nutritionist: any): DirectusUser {
     Token_Evolution: nutritionist.evolutionToken,
     Instancia_Evolution: nutritionist.evolutionInstanceName,
     Whatsapp_IA: nutritionist.whatsappIA,
+    // Stripe subscription fields
+    stripe_customer_id: nutritionist.stripeCustomerId,
+    subscription_status: nutritionist.subscriptionStatus,
+    subscription_id: nutritionist.subscriptionId,
+    plan_id: nutritionist.planId,
+    subscription_start_date: nutritionist.subscriptionStartDate,
+    subscription_end_date: nutritionist.subscriptionEndDate,
+    trial_end_date: nutritionist.trialEndDate,
   };
 }
 
@@ -223,6 +239,14 @@ function transformUserFromDirectus(directusUser: any): any {
     evolutionToken: directusUser.Token_Evolution,
     evolutionInstanceName: directusUser.Instancia_Evolution,
     whatsappIA: directusUser.Whatsapp_IA,
+    // Stripe subscription fields
+    stripeCustomerId: directusUser.stripe_customer_id,
+    subscriptionStatus: directusUser.subscription_status,
+    subscriptionId: directusUser.subscription_id,
+    planId: directusUser.plan_id,
+    subscriptionStartDate: directusUser.subscription_start_date,
+    subscriptionEndDate: directusUser.subscription_end_date,
+    trialEndDate: directusUser.trial_end_date,
     createdAt: directusUser.date_created,
     updatedAt: directusUser.date_updated,
   };
@@ -685,6 +709,104 @@ export class DirectusStorage implements IStorage {
     } catch (error) {
       console.error('Error updating consultation:', error);
       return undefined;
+    }
+  }
+
+  // ========== STRIPE SUBSCRIPTION METHODS ==========
+
+  /**
+   * Update user subscription data from Stripe webhooks
+   */
+  async updateUserSubscription(userId: string, subscriptionData: {
+    stripeCustomerId?: string;
+    subscriptionStatus?: string;
+    subscriptionId?: string;
+    planId?: string;
+    subscriptionStartDate?: string;
+    subscriptionEndDate?: string;
+    trialEndDate?: string;
+  }) {
+    try {
+      console.log(`[Stripe] Updating subscription for user ${userId}:`, subscriptionData);
+      
+      const updateData: Partial<DirectusUser> = {};
+      
+      if (subscriptionData.stripeCustomerId) updateData.stripe_customer_id = subscriptionData.stripeCustomerId;
+      if (subscriptionData.subscriptionStatus) updateData.subscription_status = subscriptionData.subscriptionStatus as any;
+      if (subscriptionData.subscriptionId) updateData.subscription_id = subscriptionData.subscriptionId;
+      if (subscriptionData.planId) updateData.plan_id = subscriptionData.planId;
+      if (subscriptionData.subscriptionStartDate) updateData.subscription_start_date = subscriptionData.subscriptionStartDate;
+      if (subscriptionData.subscriptionEndDate) updateData.subscription_end_date = subscriptionData.subscriptionEndDate;
+      if (subscriptionData.trialEndDate) updateData.trial_end_date = subscriptionData.trialEndDate;
+
+      const response = await this.client.request(`/users/${userId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(updateData),
+      });
+      
+      console.log(`[Stripe] Subscription updated successfully for user ${userId}`);
+      return response.data;
+    } catch (error) {
+      console.error('[Stripe] Error updating user subscription:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Find user by Stripe customer ID (for webhook processing)
+   */
+  async getUserByStripeCustomerId(stripeCustomerId: string) {
+    try {
+      const response = await this.client.request(`/users?filter[stripe_customer_id][_eq]=${encodeURIComponent(stripeCustomerId)}&fields=*`);
+      const users = response.data || [];
+      return users.length > 0 ? transformUserFromDirectus(users[0]) : undefined;
+    } catch (error) {
+      console.error('[Stripe] Error getting user by Stripe customer ID:', error);
+      return undefined;
+    }
+  }
+
+  /**
+   * Check if user has active subscription
+   */
+  async hasActiveSubscription(userId: string): Promise<boolean> {
+    try {
+      const user = await this.getNutritionist(userId);
+      if (!user) return false;
+      
+      const status = user.subscriptionStatus;
+      return ['active', 'trial'].includes(status || '');
+    } catch (error) {
+      console.error('[Stripe] Error checking subscription status:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get subscription status for a user
+   */
+  async getSubscriptionStatus(userId: string): Promise<string | null> {
+    try {
+      const user = await this.getNutritionist(userId);
+      return user?.subscriptionStatus || null;
+    } catch (error) {
+      console.error('[Stripe] Error getting subscription status:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Set user to trial status (for new signups)
+   */
+  async setTrialStatus(userId: string, trialEndDate: string) {
+    try {
+      return await this.updateUserSubscription(userId, {
+        subscriptionStatus: 'trial',
+        trialEndDate: trialEndDate
+      });
+    } catch (error) {
+      console.error('[Stripe] Error setting trial status:', error);
+      throw error;
     }
   }
 }
