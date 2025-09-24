@@ -232,6 +232,9 @@ export default function StepForm({ currentStep, onStepChange, onComplete }: Step
             />
             <Phone className="absolute left-3 top-3.5 w-4 h-4 text-muted-foreground" />
           </div>
+          <p className="text-sm text-muted-foreground mt-2">
+            Seu telefone pessoal para contato e cadastro
+          </p>
           {step2Form.formState.errors.phone && (
             <p className="text-sm text-destructive mt-1">
               {step2Form.formState.errors.phone.message}
@@ -328,7 +331,7 @@ export default function StepForm({ currentStep, onStepChange, onComplete }: Step
             />
           </div>
           <p className="text-sm text-muted-foreground mt-2">
-            Este será o número usado para atendimento aos seus pacientes
+            <strong>Número WhatsApp que será utilizado pela IA</strong> para conversar automaticamente com seus pacientes
           </p>
           {step3Form.formState.errors.whatsappNumber && (
             <p className="text-sm text-destructive mt-1">
