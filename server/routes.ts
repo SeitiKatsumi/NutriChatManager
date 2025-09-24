@@ -1232,9 +1232,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Ensuring products and prices exist
       
       const plans = [
-        { id: 'basic', name: 'Plano Básico NutriChatBot', amount: 4900 },
-        { id: 'professional', name: 'Plano Profissional NutriChatBot', amount: 9900 },
-        { id: 'enterprise', name: 'Plano Enterprise NutriChatBot', amount: 19900 }
+        { id: 'pro', name: 'Nutri ChatBot Pro', amount: 4900 },
+        { id: 'enterprise', name: 'Nutri ChatBot Enterprise', amount: 9999 }
       ];
 
       const ALLOWED_PLANS: Record<string, any> = {};
@@ -1521,6 +1520,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Verify the session belongs to the current user
       const user = await storage.getNutritionist(userId);
+      console.log('DEBUG - Checkout verification:');
+      console.log('- User ID:', userId);
+      console.log('- User found:', !!user);
+      console.log('- User stripeCustomerId:', user?.stripeCustomerId);
+      console.log('- Session customer:', session.customer);
+      console.log('- Match:', session.customer === user?.stripeCustomerId);
+      
       if (!user || session.customer !== user.stripeCustomerId) {
         return res.status(403).json({ error: "Unauthorized - session does not belong to current user" });
       }
