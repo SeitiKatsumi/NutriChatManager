@@ -25,9 +25,27 @@ declare module 'express-session' {
 if (!process.env.STRIPE_SECRET_KEY) {
   throw new Error('Missing required Stripe secret: STRIPE_SECRET_KEY');
 }
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+
+// Debug logging to check which key is being used
+const stripeKey = process.env.STRIPE_SECRET_KEY;
+const keyType = stripeKey?.startsWith('sk_') ? 'secret' : stripeKey?.startsWith('pk_') ? 'publishable' : 'unknown';
+const keyPrefix = stripeKey?.substring(0, 12) + '...';
+console.log(`[Stripe] Initializing with ${keyType} key: ${keyPrefix}`);
+console.log(`[Stripe] Environment check - STRIPE_SECRET_KEY exists: ${!!process.env.STRIPE_SECRET_KEY}`);
+console.log(`[Stripe] Environment check - Key length: ${process.env.STRIPE_SECRET_KEY?.length || 0}`);
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 });
+
+// Verify the Stripe instance was created correctly
+console.log('[Stripe] Instance created, checking apiKey property...');
+console.log(`[Stripe] Instance apiKey available: ${!!stripe.apiKey}`);
+if (stripe.apiKey) {
+  console.log(`[Stripe] Instance apiKey prefix: ${stripe.apiKey.substring(0, 12)}...`);
+} else {
+  console.log('[Stripe] WARNING: Instance apiKey is undefined!');
+}
 
 // Subscription validation schemas
 const createSubscriptionSchema = z.object({
@@ -1194,34 +1212,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ========== STRIPE SUBSCRIPTION ROUTES ==========
 
-  // Plan mapping for security - only these plans are allowed
-  const ALLOWED_PLANS = {
-    basic: {
-      name: "Básico",
-      priceId: "price_1QN5E8ITFH3Xe7M3x5vfhOqx", // Replace with real Stripe price ID for basic plan
-      amount: 4900, // R$ 49.00 in cents
-    },
-    professional: {
-      name: "Profissional", 
-      priceId: "price_1QN5E8ITFH3Xe7M3x5vfhOqy", // Replace with real Stripe price ID for professional plan
-      amount: 9900, // R$ 99.00 in cents
-    },
-    enterprise: {
-      name: "Enterprise",
-      priceId: "price_1QN5E8ITFH3Xe7M3x5vfhOqz", // Replace with real Stripe price ID for enterprise plan
-      amount: 19900, // R$ 199.00 in cents
+
+  // Helper function to create or get Stripe products and prices
+  async function ensureStripeProducts() {
+    try {
+      console.log('[Stripe] Ensuring products and prices exist...');
+      console.log(`[Stripe] Current API key type: ${stripe.apiKey?.startsWith('sk_') ? 'secret' : 'publishable'}`);
+      console.log(`[Stripe] API key prefix: ${stripe.apiKey?.substring(0, 12)}...`);
+      
+      const plans = [
+        { id: 'basic', name: 'Plano Básico NutriChatBot', amount: 4900 },
+        { id: 'professional', name: 'Plano Profissional NutriChatBot', amount: 9900 },
+        { id: 'enterprise', name: 'Plano Enterprise NutriChatBot', amount: 19900 }
+      ];
+
+      const ALLOWED_PLANS: Record<string, any> = {};
+
+      for (const plan of plans) {
+        // Check if product exists
+        const products = await stripe.products.list({
+          limit: 100
+        });
+        
+        let product = products.data.find(p => p.metadata?.planId === plan.id);
+        
+        if (!product) {
+          console.log(`[Stripe] Creating product: ${plan.name}`);
+          product = await stripe.products.create({
+            name: plan.name,
+            description: `Assinatura mensal do ${plan.name}`,
+            metadata: { planId: plan.id }
+          });
+        }
+
+        // Check if price exists for this product
+        const prices = await stripe.prices.list({ 
+          product: product.id,
+          limit: 100
+        });
+        let price = prices.data.find(p => p.unit_amount === plan.amount && p.currency === 'brl');
+
+        if (!price) {
+          console.log(`[Stripe] Creating price for ${plan.name}: R$ ${plan.amount / 100}`);
+          price = await stripe.prices.create({
+            currency: 'brl',
+            unit_amount: plan.amount,
+            recurring: { interval: 'month' },
+            product: product.id
+          });
+        }
+
+        ALLOWED_PLANS[plan.id] = {
+          name: plan.name,
+          priceId: price.id,
+          amount: plan.amount,
+          productId: product.id
+        };
+
+        console.log(`[Stripe] Plan ${plan.id} ready: ${price.id}`);
+      }
+
+      return ALLOWED_PLANS;
+    } catch (error) {
+      console.error('[Stripe] Error ensuring products:', error);
+      throw error;
     }
-  } as const;
+  }
 
   // Create subscription checkout session
   app.post("/api/subscription/create-checkout", requireAuth, async (req, res) => {
     try {
-      // Validate planId instead of accepting any priceId
       const { planId, mode, successUrl, cancelUrl, metadata } = req.body;
+      console.log(`[Stripe Checkout] Starting checkout creation for plan: ${planId}...`);
+      // Validate planId instead of accepting any priceId
       
       if (!planId || typeof planId !== 'string') {
         return res.status(400).json({ error: "planId is required and must be a string" });
       }
+      
+      // Get or create Stripe products and prices
+      const ALLOWED_PLANS = await ensureStripeProducts();
       
       // Validate planId against allowed plans
       if (!(planId in ALLOWED_PLANS)) {
@@ -1231,7 +1301,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      const plan = ALLOWED_PLANS[planId as keyof typeof ALLOWED_PLANS];
+      const plan = ALLOWED_PLANS[planId];
       const userId = req.session.user.id;
       const user = await storage.getNutritionist(userId);
       
@@ -1261,6 +1331,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Create checkout session
       const baseUrl = req.get('origin') || 'http://localhost:5000';
+      console.log(`[Stripe Checkout] Creating session for plan: ${planId} with priceId: ${plan.priceId}`);
       const session = await stripe.checkout.sessions.create({
         customer: stripeCustomerId,
         payment_method_types: ['card'],
