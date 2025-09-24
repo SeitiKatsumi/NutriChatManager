@@ -27,7 +27,7 @@ if (!process.env.STRIPE_SECRET_KEY) {
 }
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-06-20",
+  apiVersion: "2024-06-20" as any,
 });
 
 // Subscription validation schemas
@@ -1416,7 +1416,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const subscription = await stripe.subscriptions.retrieve(user.subscriptionId);
           subscriptionData.status = subscription.status;
           subscriptionData.startDate = new Date(subscription.start_date * 1000).toISOString();
-          subscriptionData.endDate = subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null;
+          subscriptionData.endDate = (subscription as any).current_period_end ? new Date((subscription as any).current_period_end * 1000).toISOString() : null;
           
           // Update local cache if status changed
           if (subscription.status !== user.subscriptionStatus) {
@@ -1455,7 +1455,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Update local status
       await storage.updateUserSubscription(userId, {
         subscriptionStatus: subscription.status,
-        subscriptionEndDate: subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : undefined
+        subscriptionEndDate: (subscription as any).current_period_end ? new Date((subscription as any).current_period_end * 1000).toISOString() : undefined
       });
 
       // Subscription marked for cancellation
@@ -1464,7 +1464,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         subscription: {
           status: subscription.status,
           cancelAtPeriodEnd: subscription.cancel_at_period_end,
-          currentPeriodEnd: subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null
+          currentPeriodEnd: (subscription as any).current_period_end ? new Date((subscription as any).current_period_end * 1000).toISOString() : null
         }
       });
       
@@ -1530,7 +1530,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         user = await storage.getNutritionist(userId);
         console.log('- User found via getNutritionist:', !!user);
         console.log('- User stripeCustomerId:', user?.stripeCustomerId);
-      } catch (error) {
+      } catch (error: any) {
         console.log('- Error getting user:', error.message);
         user = null;
       }
@@ -1541,7 +1541,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           verificationUser = await storage.getUserByStripeCustomerId(session.customer as string);
           console.log('- Found user by stripe customer ID:', !!verificationUser);
-        } catch (error) {
+        } catch (error: any) {
           console.log('- Error finding user by customer ID:', error.message);
         }
       }
@@ -1572,7 +1572,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           subscriptionStatus: 'active',
           planId: subscription.items.data[0]?.price?.id || undefined,
           subscriptionStartDate: new Date(subscription.start_date * 1000).toISOString(),
-          subscriptionEndDate: subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : undefined,
+          subscriptionEndDate: (subscription as any).current_period_end ? new Date((subscription as any).current_period_end * 1000).toISOString() : undefined,
           trialEndDate: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : undefined
         });
 
