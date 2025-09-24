@@ -33,8 +33,6 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 // Subscription validation schemas
 const createSubscriptionSchema = z.object({
   planId: z.string().min(1, "Plan ID is required"),
-  successUrl: z.string().url().optional(),
-  cancelUrl: z.string().url().optional(),
 });
 
 const webhookSchema = z.object({
@@ -1255,7 +1253,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create subscription checkout session
   app.post("/api/subscription/create-checkout", requireAuth, async (req, res) => {
     try {
-      const { planId, mode, successUrl, cancelUrl, metadata } = req.body;
+      const { planId } = req.body;
       // Starting checkout creation
       // Validate planId instead of accepting any priceId
       
@@ -1313,8 +1311,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           quantity: 1,
         }],
         mode: 'subscription',
-        success_url: successUrl || `${baseUrl}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: cancelUrl || `${baseUrl}/subscription/plans`,
+        success_url: `${baseUrl}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${baseUrl}/subscription/plans`,
         metadata: {
           userId: userId,
           nutritionistId: userId,
