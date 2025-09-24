@@ -1416,7 +1416,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const subscription = await stripe.subscriptions.retrieve(user.subscriptionId);
           subscriptionData.status = subscription.status;
           subscriptionData.startDate = new Date(subscription.start_date * 1000).toISOString();
-          subscriptionData.endDate = new Date(subscription.current_period_end * 1000).toISOString();
+          subscriptionData.endDate = subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null;
           
           // Update local cache if status changed
           if (subscription.status !== user.subscriptionStatus) {
@@ -1455,7 +1455,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Update local status
       await storage.updateUserSubscription(userId, {
         subscriptionStatus: subscription.status,
-        subscriptionEndDate: new Date(subscription.current_period_end * 1000).toISOString()
+        subscriptionEndDate: subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : undefined
       });
 
       // Subscription marked for cancellation
@@ -1464,7 +1464,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         subscription: {
           status: subscription.status,
           cancelAtPeriodEnd: subscription.cancel_at_period_end,
-          currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString()
+          currentPeriodEnd: subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null
         }
       });
       
@@ -1518,24 +1518,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Retrieve the checkout session from Stripe
       const session = await stripe.checkout.sessions.retrieve(session_id);
       
-      // Force fresh user data from Directus for verification
-      const user = await storage.getNutritionist(userId);
+      // Robust verification approach - handle Directus errors
       console.log('DEBUG - Checkout verification:');
       console.log('- User ID:', userId);
-      console.log('- User found:', !!user);
-      console.log('- User stripeCustomerId:', user?.stripeCustomerId);
       console.log('- Session customer:', session.customer);
+      console.log('- Session metadata:', session.metadata);
       
-      // If user doesn't have stripeCustomerId yet, find by Stripe customer ID
-      let verificationUser = user;
-      if (!user?.stripeCustomerId && session.customer) {
-        verificationUser = await storage.getUserByStripeCustomerId(session.customer as string);
-        console.log('- Found user by stripe customer ID:', !!verificationUser);
+      // Primary verification: Try to get user data
+      let user;
+      try {
+        user = await storage.getNutritionist(userId);
+        console.log('- User found via getNutritionist:', !!user);
+        console.log('- User stripeCustomerId:', user?.stripeCustomerId);
+      } catch (error) {
+        console.log('- Error getting user:', error.message);
+        user = null;
       }
       
-      console.log('- Match:', session.customer === verificationUser?.stripeCustomerId);
+      // Alternative verification: Find by Stripe customer ID
+      let verificationUser = user;
+      if ((!user || !user.stripeCustomerId) && session.customer) {
+        try {
+          verificationUser = await storage.getUserByStripeCustomerId(session.customer as string);
+          console.log('- Found user by stripe customer ID:', !!verificationUser);
+        } catch (error) {
+          console.log('- Error finding user by customer ID:', error.message);
+        }
+      }
       
-      if (!verificationUser || session.customer !== verificationUser.stripeCustomerId) {
+      // Final verification: Check session metadata for additional security
+      const sessionUserId = session.metadata?.userId || session.client_reference_id;
+      console.log('- Session userId from metadata:', sessionUserId);
+      console.log('- Match customer ID:', session.customer === verificationUser?.stripeCustomerId);
+      console.log('- Match user ID:', sessionUserId === userId);
+      
+      // Allow if either customer ID matches OR user ID in session matches (for redundancy)
+      const isAuthorized = (verificationUser && session.customer === verificationUser.stripeCustomerId) || 
+                          (sessionUserId === userId);
+      
+      if (!isAuthorized) {
         return res.status(403).json({ error: "Unauthorized - session does not belong to current user" });
       }
 
@@ -1551,7 +1572,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           subscriptionStatus: 'active',
           planId: subscription.items.data[0]?.price?.id || undefined,
           subscriptionStartDate: new Date(subscription.start_date * 1000).toISOString(),
-          subscriptionEndDate: new Date(subscription.current_period_end * 1000).toISOString(),
+          subscriptionEndDate: subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : undefined,
           trialEndDate: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : undefined
         });
 
