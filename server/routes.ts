@@ -1194,10 +1194,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ========== STRIPE SUBSCRIPTION ROUTES ==========
 
+  // Plan mapping for security - only these plans are allowed
+  const ALLOWED_PLANS = {
+    basic: {
+      name: "Básico",
+      priceId: "price_1QN5E8ITFH3Xe7M3x5vfhOqx", // Replace with real Stripe price ID for basic plan
+      amount: 4900, // R$ 49.00 in cents
+    },
+    professional: {
+      name: "Profissional", 
+      priceId: "price_1QN5E8ITFH3Xe7M3x5vfhOqy", // Replace with real Stripe price ID for professional plan
+      amount: 9900, // R$ 99.00 in cents
+    },
+    enterprise: {
+      name: "Enterprise",
+      priceId: "price_1QN5E8ITFH3Xe7M3x5vfhOqz", // Replace with real Stripe price ID for enterprise plan
+      amount: 19900, // R$ 199.00 in cents
+    }
+  } as const;
+
   // Create subscription checkout session
   app.post("/api/subscription/create-checkout", requireAuth, async (req, res) => {
     try {
-      const validatedData = createSubscriptionSchema.parse(req.body);
+      // Validate planId instead of accepting any priceId
+      const { planId, mode, successUrl, cancelUrl, metadata } = req.body;
+      
+      if (!planId || typeof planId !== 'string') {
+        return res.status(400).json({ error: "planId is required and must be a string" });
+      }
+      
+      // Validate planId against allowed plans
+      if (!(planId in ALLOWED_PLANS)) {
+        return res.status(400).json({ 
+          error: "Invalid plan", 
+          allowedPlans: Object.keys(ALLOWED_PLANS)
+        });
+      }
+      
+      const plan = ALLOWED_PLANS[planId as keyof typeof ALLOWED_PLANS];
       const userId = req.session.user.id;
       const user = await storage.getNutritionist(userId);
       
@@ -1231,24 +1265,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         customer: stripeCustomerId,
         payment_method_types: ['card'],
         line_items: [{
-          price: validatedData.planId,
+          price: plan.priceId, // Use server-side priceId, not client-provided
           quantity: 1,
         }],
         mode: 'subscription',
-        success_url: validatedData.successUrl || `${baseUrl}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: validatedData.cancelUrl || `${baseUrl}/subscription/cancel`,
+        success_url: successUrl || `${baseUrl}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: cancelUrl || `${baseUrl}/subscription/plans`,
         metadata: {
           userId: userId,
-          nutritionistId: userId
+          nutritionistId: userId,
+          planId: planId,
+          planName: plan.name
         },
         allow_promotion_codes: true,
         billing_address_collection: 'required',
       });
 
-      console.log(`[Stripe] Checkout session created: ${session.id} for user ${userId}`);
+      console.log(`[Stripe] Checkout session created: ${session.id} for user ${userId}, plan: ${planId} (${plan.name})`);
       res.json({ 
         sessionId: session.id,
-        url: session.url 
+        url: session.url,
+        plan: {
+          id: planId,
+          name: plan.name,
+          amount: plan.amount
+        }
       });
       
     } catch (error: any) {

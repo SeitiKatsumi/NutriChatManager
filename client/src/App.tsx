@@ -13,6 +13,8 @@ import Patients from "@/pages/patients";
 import WhatsApp from "@/pages/whatsapp";
 import AdminLogin from "@/pages/admin-login";
 import Admin from "@/pages/admin";
+import SubscriptionPlans from "@/pages/subscription-plans";
+import SubscriptionSuccess from "@/pages/subscription-success";
 import Header from "@/components/layout/header";
 import { useEffect } from "react";
 
@@ -96,6 +98,18 @@ function Router() {
           <PublicRoute>
             <Register />
           </PublicRoute>
+        </Route>
+        
+        {/* Subscription routes - Protected */}
+        <Route path="/subscription/plans">
+          <ProtectedRoute>
+            <SubscriptionPlans />
+          </ProtectedRoute>
+        </Route>
+        <Route path="/subscription/success">
+          <ProtectedRoute>
+            <SubscriptionSuccess />
+          </ProtectedRoute>
         </Route>
         
         {/* Protected routes */}
