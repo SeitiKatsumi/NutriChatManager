@@ -219,9 +219,7 @@ export default function StepForm({ currentStep, onStepChange, onComplete }: Step
     return (
       <form onSubmit={step2Form.handleSubmit(handleStep2Submit)} className="space-y-6">
         <div>
-          <Label htmlFor="phone" className="block text-sm font-medium text-foreground mb-2">
-            Telefone Principal
-          </Label>
+          <Label htmlFor="phone" className="block text-sm font-medium text-foreground mb-2">Telefone Pessoal</Label>
           <div className="relative">
             <Input
               id="phone"
@@ -241,7 +239,6 @@ export default function StepForm({ currentStep, onStepChange, onComplete }: Step
             </p>
           )}
         </div>
-
         <div>
           <Label htmlFor="address" className="block text-sm font-medium text-foreground mb-2">
             Endereço do Consultório
@@ -263,7 +260,6 @@ export default function StepForm({ currentStep, onStepChange, onComplete }: Step
             </p>
           )}
         </div>
-
         <div>
           <Label htmlFor="specialization" className="block text-sm font-medium text-foreground mb-2">
             Especialização
@@ -286,7 +282,6 @@ export default function StepForm({ currentStep, onStepChange, onComplete }: Step
             </p>
           )}
         </div>
-
         <div className="flex space-x-3">
           <Button
             type="button"
