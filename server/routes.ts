@@ -1212,6 +1212,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ========== STRIPE SUBSCRIPTION ROUTES ==========
 
+  // Check user subscription status
+  app.get("/api/subscription/status", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.user.id;
+      const user = await storage.getNutritionist(userId);
+      
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Check if user has an active subscription
+      const hasActiveSubscription = user.subscriptionStatus === 'active' && 
+                                  user.subscriptionId && 
+                                  user.planId;
+
+      res.json({
+        hasActiveSubscription,
+        subscriptionStatus: user.subscriptionStatus || 'none',
+        planId: user.planId || null,
+        subscriptionStartDate: user.subscriptionStartDate || null,
+        subscriptionEndDate: user.subscriptionEndDate || null,
+        stripeCustomerId: user.stripeCustomerId || null,
+        needsSubscription: !hasActiveSubscription
+      });
+    } catch (error: any) {
+      console.error('[Subscription Status] Error:', error);
+      res.status(500).json({ error: "Failed to get subscription status" });
+    }
+  });
+
 
   // Helper function to create or get Stripe products and prices
   async function ensureStripeProducts() {

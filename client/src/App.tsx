@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/auth-context";
+import { SubscriptionGuard } from "@/components/SubscriptionGuard";
 import NotFound from "@/pages/not-found";
 import Register from "@/pages/register";
 import LoginPage from "@/pages/login";
@@ -79,73 +80,75 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 function Router() {
   return (
     <div className="min-h-screen bg-background">
-      <Switch>
-        {/* Hidden Admin routes - no navigation, no header */}
-        <Route path="/admin/login">
-          <AdminLogin />
-        </Route>
-        <Route path="/admin">
-          <Admin />
-        </Route>
-        
-        {/* Public routes */}
-        <Route path="/login">
-          <PublicRoute>
-            <LoginPage />
-          </PublicRoute>
-        </Route>
-        <Route path="/register">
-          <PublicRoute>
-            <Register />
-          </PublicRoute>
-        </Route>
-        
-        {/* Subscription routes - Protected */}
-        <Route path="/subscription/plans">
-          <ProtectedRoute>
-            <SubscriptionPlans />
-          </ProtectedRoute>
-        </Route>
-        <Route path="/subscription/success">
-          <ProtectedRoute>
-            <SubscriptionSuccess />
-          </ProtectedRoute>
-        </Route>
-        
-        {/* Protected routes */}
-        <Route path="/">
-          <ProtectedRoute>
-            <Header />
-            <Dashboard />
-          </ProtectedRoute>
-        </Route>
-        <Route path="/dashboard">
-          <ProtectedRoute>
-            <Header />
-            <Dashboard />
-          </ProtectedRoute>
-        </Route>
-        <Route path="/users">
-          <ProtectedRoute>
-            <Header />
-            <Users />
-          </ProtectedRoute>
-        </Route>
-        <Route path="/patients">
-          <ProtectedRoute>
-            <Header />
-            <Patients />
-          </ProtectedRoute>
-        </Route>
-        <Route path="/whatsapp">
-          <ProtectedRoute>
-            <Header />
-            <WhatsApp />
-          </ProtectedRoute>
-        </Route>
-        
-        <Route component={NotFound} />
-      </Switch>
+      <SubscriptionGuard>
+        <Switch>
+          {/* Hidden Admin routes - no navigation, no header */}
+          <Route path="/admin/login">
+            <AdminLogin />
+          </Route>
+          <Route path="/admin">
+            <Admin />
+          </Route>
+          
+          {/* Public routes */}
+          <Route path="/login">
+            <PublicRoute>
+              <LoginPage />
+            </PublicRoute>
+          </Route>
+          <Route path="/register">
+            <PublicRoute>
+              <Register />
+            </PublicRoute>
+          </Route>
+          
+          {/* Subscription routes - Protected but accessible without subscription */}
+          <Route path="/subscription/plans">
+            <ProtectedRoute>
+              <SubscriptionPlans />
+            </ProtectedRoute>
+          </Route>
+          <Route path="/subscription/success">
+            <ProtectedRoute>
+              <SubscriptionSuccess />
+            </ProtectedRoute>
+          </Route>
+          
+          {/* Main app routes - Protected and require active subscription */}
+          <Route path="/">
+            <ProtectedRoute>
+              <Header />
+              <Dashboard />
+            </ProtectedRoute>
+          </Route>
+          <Route path="/dashboard">
+            <ProtectedRoute>
+              <Header />
+              <Dashboard />
+            </ProtectedRoute>
+          </Route>
+          <Route path="/users">
+            <ProtectedRoute>
+              <Header />
+              <Users />
+            </ProtectedRoute>
+          </Route>
+          <Route path="/patients">
+            <ProtectedRoute>
+              <Header />
+              <Patients />
+            </ProtectedRoute>
+          </Route>
+          <Route path="/whatsapp">
+            <ProtectedRoute>
+              <Header />
+              <WhatsApp />
+            </ProtectedRoute>
+          </Route>
+          
+          <Route component={NotFound} />
+        </Switch>
+      </SubscriptionGuard>
     </div>
   );
 }
