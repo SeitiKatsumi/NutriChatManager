@@ -1466,11 +1466,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Verify successful checkout and activate subscription
-  app.get("/api/subscription/checkout-success", requireAuth, async (req, res) => {
+  // Verify successful checkout and activate subscription (no auth required - uses Stripe session verification)
+  app.get("/api/subscription/checkout-success", async (req, res) => {
     try {
       const { session_id } = req.query;
-      const userId = req.session.user.id;
       
       if (!session_id || typeof session_id !== 'string') {
         return res.status(400).json({ error: "Missing session_id parameter" });
@@ -1479,16 +1478,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Retrieve the checkout session from Stripe
       const session = await stripe.checkout.sessions.retrieve(session_id);
       
-      // Robust verification approach - handle Directus errors
+      // Get user ID from Stripe session metadata (secure verification)
+      const sessionUserId = session.metadata?.userId || session.metadata?.nutritionistId;
+      
+      if (!sessionUserId) {
+        return res.status(400).json({ error: "Session metadata missing - unable to verify user" });
+      }
+      
       console.log('DEBUG - Checkout verification:');
-      console.log('- User ID:', userId);
+      console.log('- Session userId from metadata:', sessionUserId);
       console.log('- Session customer:', session.customer);
       console.log('- Session metadata:', session.metadata);
       
-      // Primary verification: Try to get user data
+      // Primary verification: Get user data using session metadata
       let user;
       try {
-        user = await storage.getNutritionist(userId);
+        user = await storage.getNutritionist(sessionUserId);
         console.log('- User found via getNutritionist:', !!user);
         console.log('- User stripeCustomerId:', user?.stripeCustomerId);
       } catch (error: any) {
@@ -1507,19 +1512,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      // Final verification: Check session metadata for additional security
-      const sessionUserId = session.metadata?.userId || session.client_reference_id;
-      console.log('- Session userId from metadata:', sessionUserId);
-      console.log('- Match customer ID:', session.customer === verificationUser?.stripeCustomerId);
-      console.log('- Match user ID:', sessionUserId === userId);
-      
-      // Allow if either customer ID matches OR user ID in session matches (for redundancy)
+      // Security verification: Ensure session belongs to user
       const isAuthorized = (verificationUser && session.customer === verificationUser.stripeCustomerId) || 
-                          (sessionUserId === userId);
+                          (verificationUser && verificationUser.id === sessionUserId);
       
       if (!isAuthorized) {
-        return res.status(403).json({ error: "Unauthorized - session does not belong to current user" });
+        return res.status(403).json({ error: "Unauthorized - session does not belong to user" });
       }
+      
+      // Use the verified user ID for subscription update
+      const userId = verificationUser.id;
 
       // Check if payment was successful
       if (session.payment_status === 'paid') {
