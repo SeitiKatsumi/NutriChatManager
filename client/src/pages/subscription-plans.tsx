@@ -10,55 +10,48 @@ import { useLocation } from "wouter";
 
 const plans = [
   {
-    id: "basic",
-    name: "Básico",
-    description: "Perfeito para nutricionistas iniciantes",
+    id: "pro",
+    name: "Nutri ChatBot Pro",
+    description: "Solução completa para nutricionistas profissionais",
     price: "R$ 49",
-    period: "/mês",
-    icon: Star,
-    features: [
-      "Até 50 pacientes",
-      "WhatsApp integrado",
-      "IA consultiva básica",
-      "Relatórios simples",
-      "Suporte por email"
-    ],
-    popular: false
-  },
-  {
-    id: "professional",
-    name: "Profissional",
-    description: "Para nutricionistas estabelecidos",
-    price: "R$ 99",
-    period: "/mês",
+    period: " por mês",
     icon: Zap,
     features: [
-      "Até 200 pacientes",
-      "WhatsApp integrado",
-      "IA consultiva avançada",
-      "Relatórios completos",
-      "Automações personalizadas",
+      "Chatbot IA ilimitado no WhatsApp",
+      "Anamnese automatizada completa",
+      "Prontuário digital compatível CFN",
+      "Análise nutricional inteligente",
+      "Acompanhamento 24h dos pacientes",
+      "Relatórios e dashboards avançados",
+      "Backup automático na nuvem",
       "Suporte prioritário",
-      "Integrações premium"
+      "Conformidade total com LGPD",
+      "Atualizações automáticas",
+      "Integração com agendas",
+      "Exportação em PDF e Excel"
     ],
     popular: true
   },
   {
     id: "enterprise",
-    name: "Enterprise",
-    description: "Para clínicas e grandes práticas",
-    price: "R$ 199",
-    period: "/mês",
+    name: "Nutri ChatBot Enterprise",
+    description: "Para clínicas e consultórios com múltiplos profissionais",
+    price: "R$ 99,99",
+    period: " por mês",
     icon: Crown,
     features: [
-      "Pacientes ilimitados",
-      "WhatsApp integrado",
-      "IA consultiva completa",
-      "Relatórios avançados",
-      "Automações ilimitadas",
-      "Suporte dedicado",
-      "API personalizada",
-      "Treinamento incluso"
+      "Tudo do plano Pro incluído",
+      "Múltiplos nutricionistas na mesma conta",
+      "Dashboard administrativo completo",
+      "API para integrações customizadas",
+      "White label (sua marca)",
+      "Treinamento personalizado",
+      "Suporte dedicado 24/7",
+      "SLA garantido 99.9%",
+      "Customizações exclusivas",
+      "Consultoria especializada",
+      "Anuidade: R$ 1.199,88 (desconto de 12%)",
+      "Parcelamento em até 12x no cartão"
     ],
     popular: false
   }
@@ -131,7 +124,7 @@ export default function SubscriptionPlans() {
           </p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+        <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
           {plans.map((plan) => {
             const Icon = plan.icon;
             const isLoading = selectedPlan === plan.id && createCheckoutMutation.isPending;
