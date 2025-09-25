@@ -395,4 +395,18 @@ export class MemStorage implements IStorage {
 
 // Use DirectusStorage instead of local database
 import { DirectusStorage } from './directus-storage';
-export const storage = new DirectusStorage();
+
+// Create storage instance
+const directusStorage = new DirectusStorage();
+
+// Initialize storage function
+export async function initializeStorage(): Promise<void> {
+  try {
+    await directusStorage.init();
+    console.log('[Storage] Directus storage initialized successfully');
+  } catch (error: any) {
+    console.warn('[Storage] Error initializing DirectusStorage:', error.message);
+  }
+}
+
+export const storage = directusStorage;

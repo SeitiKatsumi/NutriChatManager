@@ -274,7 +274,170 @@ function transformUserFromDirectus(directusUser: any): any {
 export class DirectusStorage implements IStorage {
   private client = directusClient;
   private memStorage = new MemStorage(); // Fallback for patients when Directus lacks permissions
+  private baseUrl = process.env.DIRECTUS_URL || "https://nutrichatbot.app.11mind.com.br";
+  private token = process.env.DIRECTUS_TOKEN;
   
+  // Initialization method to ensure required fields exist
+  async init(): Promise<void> {
+    console.log('[Directus] Storage initialized successfully');
+    await this.ensureRequiredFields();
+  }
+
+  private async ensureRequiredFields(): Promise<void> {
+    try {
+      console.log('[Directus] Checking required fields in directus_users collection...');
+      
+      // Get current fields in directus_users collection
+      const fieldsResponse = await fetch(`${this.baseUrl}/fields/directus_users`, {
+        headers: {
+          'Authorization': `Bearer ${this.token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!fieldsResponse.ok) {
+        console.warn(`[Directus] Could not fetch fields (${fieldsResponse.status}): ${fieldsResponse.statusText}`);
+        return;
+      }
+
+      const fieldsData = await fieldsResponse.json();
+      const existingFields = fieldsData.data?.map((field: any) => field.field) || [];
+      
+      console.log('[Directus] Existing fields count:', existingFields.length);
+
+      // Check if status_pagamento field exists
+      if (!existingFields.includes('status_pagamento')) {
+        console.log('[Directus] Creating status_pagamento field...');
+        await this.createStatusPagamentoField();
+      } else {
+        console.log('[Directus] ✓ status_pagamento field already exists');
+      }
+
+      // Check other required subscription fields
+      const requiredFields = ['stripe_customer_id', 'subscription_id', 'subscription_status', 'plan_id'];
+      for (const field of requiredFields) {
+        if (!existingFields.includes(field)) {
+          console.log(`[Directus] Creating missing field: ${field}`);
+          await this.createSubscriptionField(field);
+        } else {
+          console.log(`[Directus] ✓ ${field} field already exists`);
+        }
+      }
+
+    } catch (error: any) {
+      console.warn('[Directus] Error checking/creating fields:', error.message);
+    }
+  }
+
+  private async createStatusPagamentoField(): Promise<void> {
+    try {
+      const fieldConfig = {
+        field: 'status_pagamento',
+        type: 'string',
+        meta: {
+          interface: 'select-dropdown',
+          display: 'labels',
+          display_options: {
+            showAsDot: true,
+            choices: [
+              { text: 'Pendente', value: 'pendente', foreground: '#FFA500', background: '#FFF3CD' },
+              { text: 'Ativo', value: 'ativo', foreground: '#28A745', background: '#D4EDDA' },
+              { text: 'Cancelado', value: 'cancelado', foreground: '#DC3545', background: '#F8D7DA' },
+              { text: 'Expirado', value: 'expirado', foreground: '#6C757D', background: '#E2E3E5' }
+            ]
+          },
+          options: {
+            choices: [
+              { text: 'Pendente', value: 'pendente' },
+              { text: 'Ativo', value: 'ativo' },
+              { text: 'Cancelado', value: 'cancelado' },
+              { text: 'Expirado', value: 'expirado' }
+            ]
+          },
+          width: 'half',
+          note: 'Status da assinatura do usuário'
+        },
+        schema: {
+          default_value: 'pendente',
+          is_nullable: true
+        }
+      };
+
+      const response = await fetch(`${this.baseUrl}/fields/directus_users`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(fieldConfig)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      console.log('[Directus] ✓ status_pagamento field created successfully');
+    } catch (error: any) {
+      console.error('[Directus] Error creating status_pagamento field:', error.message);
+      throw error;
+    }
+  }
+
+  private async createSubscriptionField(fieldName: string): Promise<void> {
+    try {
+      let fieldConfig: any = {
+        field: fieldName,
+        type: 'string',
+        meta: {
+          width: 'half',
+          interface: 'input'
+        },
+        schema: {
+          is_nullable: true
+        }
+      };
+
+      // Customize config based on field type
+      switch (fieldName) {
+        case 'stripe_customer_id':
+          fieldConfig.meta.note = 'ID do cliente no Stripe';
+          fieldConfig.meta.readonly = true;
+          break;
+        case 'subscription_id':
+          fieldConfig.meta.note = 'ID da assinatura no Stripe';
+          fieldConfig.meta.readonly = true;
+          break;
+        case 'subscription_status':
+          fieldConfig.meta.note = 'Status original da assinatura do Stripe';
+          fieldConfig.meta.readonly = true;
+          break;
+        case 'plan_id':
+          fieldConfig.meta.note = 'ID do plano de assinatura';
+          break;
+      }
+
+      const response = await fetch(`${this.baseUrl}/fields/directus_users`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(fieldConfig)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.warn(`[Directus] Could not create field ${fieldName} (${response.status}): ${errorText}`);
+        return;
+      }
+
+      console.log(`[Directus] ✓ ${fieldName} field created successfully`);
+    } catch (error: any) {
+      console.warn(`[Directus] Error creating ${fieldName} field:`, error.message);
+    }
+  }
+
   // Create a client instance with user token
   private getUserClient(userToken?: string) {
     if (userToken) {

@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import bcrypt from "bcrypt";
-import { storage } from "./storage";
+import { storage, initializeStorage } from "./storage";
 import { insertNutritionistSchema, insertWhatsappInstanceSchema, insertPatientSchema } from "@shared/schema";
 import { z } from "zod";
 // Import real API clients (server-side versions)
@@ -56,6 +56,9 @@ const webhookSchema = z.object({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Initialize storage and ensure required fields exist in Directus
+  await initializeStorage();
+
   // Middleware to check authentication
   const requireAuth = (req: any, res: any, next: any) => {
     if (!req.session.user) {
