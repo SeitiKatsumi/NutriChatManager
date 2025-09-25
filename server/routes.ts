@@ -215,99 +215,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         case 'payment_intent.succeeded': {
+          // DISABLED FOR SAFETY: This handler was used for the deprecated payment intent flow
+          // Now that we use Stripe Checkout with mode:'subscription', Stripe automatically
+          // creates subscriptions and sends checkout.session.completed events instead.
+          // Keeping this handler active risks double subscription creation.
+          
           const paymentIntent = event.data.object as Stripe.PaymentIntent;
-          const customerId = paymentIntent.customer as string;
-          
-          // Only process subscription-related payment intents
-          if (paymentIntent.metadata.type !== 'subscription') {
-            console.log(`[Stripe Webhook] Ignoring non-subscription payment intent: ${paymentIntent.id}`);
-            break;
-          }
-
-          console.log(`[Stripe Webhook] Payment intent succeeded: ${paymentIntent.id} for customer: ${customerId}`);
-          console.log(`[Stripe Webhook] Payment metadata:`, paymentIntent.metadata);
-
-          // Get the plan details from metadata
-          const planId = paymentIntent.metadata.planId;
-          const userId = paymentIntent.metadata.userId;
-
-          if (!planId || !userId) {
-            console.error(`[Stripe Webhook] Missing required metadata in payment intent: ${paymentIntent.id}`);
-            break;
-          }
-
-          // Get plan configuration to create subscription
-          const ALLOWED_PLANS = await ensureStripeProducts();
-          if (!(planId in ALLOWED_PLANS)) {
-            console.error(`[Stripe Webhook] Invalid plan ID in payment intent: ${planId}`);
-            break;
-          }
-
-          const plan = ALLOWED_PLANS[planId];
-
-          try {
-            // Check for existing subscription from this payment intent (idempotency)
-            const existingSubscriptions = await stripe.subscriptions.list({
-              customer: customerId,
-              limit: 10
-            });
-            
-            const existingSubscription = existingSubscriptions.data.find(sub => 
-              sub.metadata?.createdFromPaymentIntent === paymentIntent.id
-            );
-
-            if (existingSubscription) {
-              console.log(`[Stripe Webhook] Subscription already exists for payment intent: ${paymentIntent.id}, subscription: ${existingSubscription.id}`);
-              break;
-            }
-
-            // Create a Stripe subscription now that payment succeeded
-            console.log(`[Stripe Webhook] Creating subscription for customer: ${customerId}, plan: ${planId}`);
-            
-            const subscription = await stripe.subscriptions.create({
-              customer: customerId,
-              items: [{
-                price: plan.priceId,
-              }],
-              default_payment_method: paymentIntent.payment_method as string,
-              metadata: {
-                userId: userId,
-                nutritionistId: userId,
-                planId: planId,
-                planName: plan.name,
-                createdFromPaymentIntent: paymentIntent.id
-              }
-            }, {
-              idempotencyKey: `sub_${paymentIntent.id}` // Ensure idempotent subscription creation
-            });
-
-            console.log(`[Stripe Webhook] Subscription created successfully: ${subscription.id}`);
-
-            // Update user subscription status
-            await storage.updateSubscriptionFromWebhook(customerId, {
-              subscriptionId: subscription.id,
-              status: subscription.status,
-              currentPeriodStart: new Date((subscription as any).current_period_start * 1000),
-              currentPeriodEnd: new Date((subscription as any).current_period_end * 1000),
-              priceId: plan.priceId,
-            });
-
-            console.log(`[Stripe Webhook] Successfully activated subscription for customer: ${customerId}`);
-
-          } catch (subscriptionError) {
-            console.error(`[Stripe Webhook] Error creating subscription:`, subscriptionError);
-            
-            // Update user with payment success but subscription creation failure
-            // This allows manual intervention
-            const user = await storage.getUserByStripeCustomerId(customerId);
-            if (user) {
-              await storage.updateUserSubscription(user.id, {
-                subscriptionStatus: 'incomplete', // Mark as incomplete for manual review
-                planId: planId
-              });
-            }
-          }
-          
+          console.log(`[Stripe Webhook] Payment intent succeeded: ${paymentIntent.id} - HANDLER DISABLED FOR SAFETY`);
+          console.log(`[Stripe Webhook] Use checkout.session.completed for subscription handling instead`);
           break;
         }
         
@@ -1441,8 +1356,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.updateSubscriptionFromWebhook(customerId, {
         subscriptionId: subscription.id,
         status: subscription.status,
-        currentPeriodStart: new Date(subscription.current_period_start * 1000),
-        currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+        currentPeriodStart: new Date((subscription as any).current_period_start * 1000),
+        currentPeriodEnd: new Date((subscription as any).current_period_end * 1000),
         priceId: subscription.items.data[0]?.price.id || null,
       });
 
@@ -1512,8 +1427,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const user = await storage.getUserByStripeCustomerId(customerId);
           if (user) {
             await storage.updateUserSubscription(user.id, {
-              subscriptionStatus: 'active', // Mark as active since payment succeeded
-              status_pagamento: 'ativo'
+              subscriptionStatus: 'active' // Mark as active since payment succeeded
             });
             
             return res.json({
@@ -1542,8 +1456,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.updateSubscriptionFromWebhook(customerId, {
         subscriptionId: subscription.id,
         status: subscription.status,
-        currentPeriodStart: new Date(subscription.current_period_start * 1000),
-        currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+        currentPeriodStart: new Date((subscription as any).current_period_start * 1000),
+        currentPeriodEnd: new Date((subscription as any).current_period_end * 1000),
         priceId: subscription.items.data[0]?.price.id || null,
       });
 
@@ -1556,8 +1470,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         subscription: {
           id: subscription.id,
           status: subscription.status,
-          current_period_start: subscription.current_period_start,
-          current_period_end: subscription.current_period_end,
+          current_period_start: (subscription as any).current_period_start,
+          current_period_end: (subscription as any).current_period_end,
           customerId: customerId
         }
       });
@@ -1604,7 +1518,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (user) {
             await storage.updateUserSubscription(user.id, {
               subscriptionStatus: 'active',
-              status_pagamento: 'ativo',
               planId: paymentIntent.metadata.planId
             });
             
@@ -1683,7 +1596,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Update user to active status based on successful payment
           await storage.updateUserSubscription(user.id, {
             subscriptionStatus: 'active',
-            status_pagamento: 'ativo',
             planId: paymentIntent.metadata.planId || 'pro'
           });
           
@@ -1935,105 +1847,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Create payment intent for embedded checkout
+  // DEPRECATED: Payment intent endpoint removed
+  // This endpoint was creating one-time payments instead of subscriptions
+  // All subscription payments now use /api/subscription/create-checkout
   app.post("/api/subscription/create-payment-intent", requireAuth, async (req, res) => {
-    try {
-      console.log('[Stripe] Payment Intent creation attempt');
-      
-      const { planId } = req.body;
-      
-      if (!planId || typeof planId !== 'string') {
-        return res.status(400).json({ error: "planId is required and must be a string" });
-      }
-      
-      // Get or create Stripe products and prices
-      const ALLOWED_PLANS = await ensureStripeProducts();
-      
-      // Validate planId against allowed plans
-      if (!(planId in ALLOWED_PLANS)) {
-        return res.status(400).json({ 
-          error: "Invalid plan", 
-          allowedPlans: Object.keys(ALLOWED_PLANS)
-        });
-      }
-      
-      const plan = ALLOWED_PLANS[planId];
-      const userId = req.session.user.id;
-      const user = await storage.getNutritionist(userId);
-      
-      if (!user) {
-        return res.status(404).json({ error: "User not found" });
-      }
-
-      // Create or get Stripe customer
-      let stripeCustomerId = user.stripeCustomerId;
-      
-      if (!stripeCustomerId) {
-        console.log('[Stripe] Creating customer for user:', userId);
-        const customer = await stripe.customers.create({
-          email: user.email,
-          name: user.fullName,
-          metadata: {
-            userId: userId,
-            nutritionistId: userId
-          }
-        });
-        
-        stripeCustomerId = customer.id;
-        console.log('[Stripe] Customer created successfully:', stripeCustomerId);
-        await storage.updateUserSubscription(userId, {
-          stripeCustomerId: stripeCustomerId
-        });
-      } else {
-        console.log('[Stripe] Using existing customer:', stripeCustomerId);
-      }
-
-      // Create payment intent for subscription
-      console.log('[Stripe] Creating payment intent with amount:', plan.amount);
-      const paymentIntent = await stripe.paymentIntents.create({
-        amount: plan.amount,
-        currency: 'brl',
-        customer: stripeCustomerId,
-        automatic_payment_methods: {
-          enabled: true,
-        },
-        metadata: {
-          userId: userId,
-          nutritionistId: userId,
-          planId: planId,
-          planName: plan.name,
-          type: 'subscription'
-        },
-        description: `Assinatura ${plan.name} - NutriChatBot`,
-      });
-
-      console.log('[Stripe] Payment Intent created successfully:', paymentIntent.id);
-
-      res.json({
-        clientSecret: paymentIntent.client_secret,
-        paymentIntentId: paymentIntent.id,
-        plan: {
-          id: planId,
-          name: plan.name,
-          amount: plan.amount
-        }
-      });
-      
-    } catch (error: any) {
-      console.error('Error creating payment intent:', error);
-      
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ 
-          error: "Invalid request data",
-          details: error.errors 
-        });
-      }
-      
-      res.status(500).json({ 
-        error: "Failed to create payment intent",
-        message: error.message 
-      });
-    }
+    return res.status(410).json({ 
+      error: "Endpoint deprecated",
+      message: "This endpoint has been removed. Use /api/subscription/create-checkout for subscription payments.",
+      redirectTo: "/subscription/plans"
+    });
   });
 
   // Get subscription status
