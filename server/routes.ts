@@ -48,12 +48,33 @@ const createSubscriptionSchema = z.object({
   planId: z.string().min(1, "Plan ID is required"),
 });
 
+const createEmbeddedSubscriptionSchema = z.object({
+  planId: z.enum(['pro', 'enterprise'], { 
+    errorMap: () => ({ message: "Plan ID must be 'pro' or 'enterprise'" })
+  }),
+});
+
 const webhookSchema = z.object({
   type: z.string(),
   data: z.object({
     object: z.any(),
   }),
 });
+
+// Helper function for consistent error logging with context
+const logError = (context: string, error: any, additionalData?: any) => {
+  const timestamp = new Date().toISOString();
+  const errorMessage = error?.message || error;
+  const stack = error?.stack;
+  
+  console.error(`[${timestamp}] [${context}] Error: ${errorMessage}`);
+  if (additionalData) {
+    console.error(`[${timestamp}] [${context}] Additional data:`, JSON.stringify(additionalData, null, 2));
+  }
+  if (stack) {
+    console.error(`[${timestamp}] [${context}] Stack trace:`, stack);
+  }
+};
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize storage and ensure required fields exist in Directus
@@ -211,6 +232,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
           
           console.log(`[Stripe Webhook] Successfully marked subscription as canceled for customer: ${customerId}`);
+          break;
+        }
+
+        case 'customer.subscription.created': {
+          const subscription = event.data.object as Stripe.Subscription;
+          const customerId = subscription.customer as string;
+          
+          console.log(`[Stripe Webhook] Subscription created: ${subscription.id} for customer: ${customerId}, status: ${subscription.status}`);
+          
+          // Update user subscription status for initial creation
+          await storage.updateSubscriptionFromWebhook(customerId, {
+            subscriptionId: subscription.id,
+            status: subscription.status,
+            currentPeriodStart: new Date((subscription as any).current_period_start * 1000),
+            currentPeriodEnd: new Date((subscription as any).current_period_end * 1000),
+            priceId: subscription.items.data[0]?.price.id || null,
+          });
+          
+          console.log(`[Stripe Webhook] Successfully created subscription record for customer: ${customerId}`);
+          break;
+        }
+
+        case 'invoice.payment_succeeded': {
+          const invoice = event.data.object as Stripe.Invoice;
+          const customerId = invoice.customer as string;
+          const subscriptionId = (invoice as any).subscription as string;
+          
+          console.log(`[Stripe Webhook] Invoice payment succeeded: ${invoice.id} for customer: ${customerId}, subscription: ${subscriptionId}`);
+          
+          if (subscriptionId) {
+            try {
+              // Get the latest subscription details to ensure accurate status
+              const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+              
+              console.log(`[Stripe Webhook] Retrieved subscription ${subscriptionId} with status: ${subscription.status}`);
+              
+              // Update subscription status to reflect successful payment
+              await storage.updateSubscriptionFromWebhook(customerId, {
+                subscriptionId: subscription.id,
+                status: subscription.status,
+                currentPeriodStart: new Date((subscription as any).current_period_start * 1000),
+                currentPeriodEnd: new Date((subscription as any).current_period_end * 1000),
+                priceId: subscription.items.data[0]?.price.id || null,
+              });
+              
+              console.log(`[Stripe Webhook] Successfully updated subscription status after payment for customer: ${customerId}`);
+            } catch (error: any) {
+              console.error(`[Stripe Webhook] Error retrieving subscription ${subscriptionId}:`, error.message);
+              // Continue processing - don't fail the webhook for this error
+            }
+          } else {
+            console.log(`[Stripe Webhook] Invoice ${invoice.id} is not associated with a subscription, skipping update`);
+          }
           break;
         }
 
@@ -663,12 +737,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Access denied. You can only view your own dashboard." });
       }
 
-      const nutritionist = await storage.getNutritionist(requestedId);
+      const userToken = req.session.user.accessToken;
+      const nutritionist = await storage.getNutritionist(requestedId, userToken);
       if (!nutritionist) {
         return res.status(404).json({ error: "Nutritionist not found" });
       }
-
-      const userToken = req.session.user.accessToken;
       const patients = await storage.getPatientsByNutritionist(nutritionist.id, userToken);
       const whatsappInstance = await storage.getWhatsappInstanceByNutritionist(nutritionist.id, userToken);
       const messages = whatsappInstance ? await storage.getMessagesByInstance(whatsappInstance.id) : [];
@@ -697,13 +770,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/dashboard", requireAuth, requireActiveSubscription, async (req, res) => {
     try {
       const nutritionistId = req.session.user.nutritionistId;
-      const nutritionist = await storage.getNutritionist(nutritionistId);
+      const userToken = req.session.user.accessToken;
+      const nutritionist = await storage.getNutritionist(nutritionistId, userToken);
       
       if (!nutritionist) {
         return res.status(404).json({ error: "Nutritionist profile not found" });
       }
-
-      const userToken = req.session.user.accessToken;
       const patients = await storage.getPatientsByNutritionist(nutritionist.id, userToken);
       const whatsappInstance = await storage.getWhatsappInstanceByNutritionist(nutritionist.id, userToken);
       const messages = whatsappInstance ? await storage.getMessagesByInstance(whatsappInstance.id) : [];
@@ -1294,7 +1366,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/subscription/status", requireAuth, async (req, res) => {
     try {
       const userId = req.session.user.id;
-      const user = await storage.getNutritionist(userId);
+      const userToken = req.session.user.accessToken;
+      const user = await storage.getNutritionist(userId, userToken);
       
       if (!user) {
         return res.status(404).json({ error: "User not found" });
@@ -1842,6 +1915,146 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.status(500).json({ 
         error: "Failed to create checkout session",
+        message: error.message 
+      });
+    }
+  });
+
+  // Create embedded subscription with incomplete payment
+  app.post("/api/subscription/create-embedded-subscription", requireAuth, async (req, res) => {
+    try {
+      console.log('[Stripe Embedded] Creating embedded subscription - Secret key available:', !!process.env.STRIPE_SECRET_KEY);
+      
+      // Validate request body with Zod
+      const validationResult = createEmbeddedSubscriptionSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        logError('Stripe Embedded Validation', 'Invalid request body', { 
+          errors: validationResult.error.errors,
+          body: req.body 
+        });
+        return res.status(400).json({ 
+          error: "Invalid request data", 
+          details: validationResult.error.errors 
+        });
+      }
+      
+      const { planId } = validationResult.data;
+      
+      // Get or create Stripe products and prices
+      const ALLOWED_PLANS = await ensureStripeProducts();
+      
+      // Validate planId against allowed plans
+      if (!(planId in ALLOWED_PLANS)) {
+        return res.status(400).json({ 
+          error: "Invalid plan", 
+          allowedPlans: Object.keys(ALLOWED_PLANS)
+        });
+      }
+      
+      const plan = ALLOWED_PLANS[planId];
+      const userId = req.session.user.id;
+      const user = await storage.getNutritionist(userId);
+      
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Create or get Stripe customer
+      let stripeCustomerId = user.stripeCustomerId;
+      
+      if (!stripeCustomerId) {
+        console.log('[Stripe Embedded] Creating customer for user:', userId);
+        try {
+          const customer = await stripe.customers.create({
+            email: user.email,
+            name: user.fullName,
+            metadata: {
+              userId: userId,
+              nutritionistId: userId
+            }
+          });
+          
+          stripeCustomerId = customer.id;
+          console.log('[Stripe Embedded] Customer created successfully:', stripeCustomerId);
+          await storage.updateUserSubscription(userId, {
+            stripeCustomerId: stripeCustomerId
+          });
+        } catch (customerError: any) {
+          console.error('[Stripe Embedded] Customer creation failed:', customerError);
+          throw customerError;
+        }
+      } else {
+        console.log('[Stripe Embedded] Using existing customer:', stripeCustomerId);
+      }
+
+      console.log('[Stripe Embedded] Creating subscription with priceId:', plan.priceId);
+      
+      try {
+        // Create subscription with incomplete payment behavior
+        const subscription = await stripe.subscriptions.create({
+          customer: stripeCustomerId,
+          items: [{
+            price: plan.priceId,
+          }],
+          payment_behavior: 'default_incomplete',
+          payment_settings: {
+            save_default_payment_method: 'on_subscription',
+          },
+          expand: ['latest_invoice.payment_intent'],
+          metadata: {
+            userId: userId,
+            nutritionistId: userId,
+            planId: planId,
+            planName: plan.name
+          },
+        });
+
+        console.log('[Stripe Embedded] Subscription created successfully:', subscription.id);
+
+        // Extract the client secret from the payment intent
+        const invoice = subscription.latest_invoice as any;
+        const paymentIntent = invoice?.payment_intent;
+        
+        if (!paymentIntent || !paymentIntent.client_secret) {
+          throw new Error('Failed to get payment intent client secret');
+        }
+
+        console.log('[Stripe Embedded] Client secret obtained for payment intent:', paymentIntent.id);
+
+        // Return the client secret and subscription info
+        res.json({
+          clientSecret: paymentIntent.client_secret,
+          subscriptionId: subscription.id,
+          plan: {
+            id: planId,
+            name: plan.name,
+            amount: plan.amount
+          }
+        });
+        
+      } catch (subscriptionError: any) {
+        console.error('[Stripe Embedded] Subscription creation failed:', subscriptionError);
+        console.error('[Stripe Embedded] Error details:', JSON.stringify({
+          type: subscriptionError.type,
+          code: subscriptionError.code,
+          message: subscriptionError.message,
+          statusCode: subscriptionError.statusCode
+        }, null, 2));
+        throw subscriptionError;
+      }
+
+    } catch (error: any) {
+      console.error('Error creating embedded subscription:', error);
+      
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          error: "Invalid request data",
+          details: error.errors 
+        });
+      }
+      
+      res.status(500).json({ 
+        error: "Failed to create embedded subscription",
         message: error.message 
       });
     }
