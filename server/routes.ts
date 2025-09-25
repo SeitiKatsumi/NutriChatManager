@@ -1405,6 +1405,332 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // DIAGNOSTIC ENDPOINTS FOR WEBHOOK DEBUGGING
+  
+  // Test webhook processing with simulated event
+  app.post("/api/stripe/webhook-test", requireAuth, async (req, res) => {
+    try {
+      const { eventType, customerId } = req.body;
+      
+      if (!eventType || !customerId) {
+        return res.status(400).json({ error: "eventType and customerId are required" });
+      }
+
+      console.log(`[Webhook Test] Simulating ${eventType} for customer: ${customerId}`);
+      
+      // Get customer and subscription info from Stripe
+      const customer = await stripe.customers.retrieve(customerId);
+      if (!customer || customer.deleted) {
+        return res.status(404).json({ error: "Customer not found in Stripe" });
+      }
+
+      const subscriptions = await stripe.subscriptions.list({
+        customer: customerId,
+        limit: 10
+      });
+
+      console.log(`[Webhook Test] Customer has ${subscriptions.data.length} subscriptions`);
+      
+      if (subscriptions.data.length === 0) {
+        return res.status(404).json({ error: "No subscriptions found for customer" });
+      }
+
+      const subscription = subscriptions.data[0];
+      
+      // Simulate webhook processing
+      await storage.updateSubscriptionFromWebhook(customerId, {
+        subscriptionId: subscription.id,
+        status: subscription.status,
+        currentPeriodStart: new Date(subscription.current_period_start * 1000),
+        currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+        priceId: subscription.items.data[0]?.price.id || null,
+      });
+
+      console.log(`[Webhook Test] Successfully processed simulated ${eventType}`);
+      
+      res.json({
+        success: true,
+        message: `Simulated ${eventType} processed successfully`,
+        subscription: {
+          id: subscription.id,
+          status: subscription.status,
+          customerId: customerId
+        }
+      });
+
+    } catch (error: any) {
+      console.error('[Webhook Test] Error:', error);
+      res.status(500).json({
+        error: 'Failed to process webhook test',
+        message: error.message
+      });
+    }
+  });
+
+  // Manual subscription sync endpoint for fixing missed webhooks (no auth for testing)
+  app.post("/api/stripe/sync-subscription", async (req, res) => {
+    try {
+      const { customerId } = req.body;
+      
+      if (!customerId) {
+        return res.status(400).json({ error: "customerId is required" });
+      }
+
+      console.log(`[Manual Sync] Syncing subscription for customer: ${customerId}`);
+      
+      // Get customer subscription from Stripe
+      const subscriptions = await stripe.subscriptions.list({
+        customer: customerId,
+        status: 'all',
+        limit: 10
+      });
+
+      if (subscriptions.data.length === 0) {
+        // Check payment intents for this customer
+        const paymentIntents = await stripe.paymentIntents.list({
+          customer: customerId,
+          limit: 10
+        });
+
+        console.log(`[Manual Sync] Found ${paymentIntents.data.length} payment intents for customer`);
+        
+        // Log details about all payment intents
+        paymentIntents.data.forEach((pi, index) => {
+          console.log(`[Manual Sync] Payment Intent ${index + 1}: ${pi.id}, status: ${pi.status}, amount: ${pi.amount}`);
+          console.log(`[Manual Sync] Payment Intent ${index + 1} metadata:`, pi.metadata);
+        });
+        
+        const succeededPayments = paymentIntents.data.filter(pi => pi.status === 'succeeded');
+        console.log(`[Manual Sync] Found ${succeededPayments.length} succeeded payments out of ${paymentIntents.data.length} total`);
+        
+        if (succeededPayments.length > 0) {
+          const latestPayment = succeededPayments[0];
+          console.log(`[Manual Sync] Latest successful payment: ${latestPayment.id}`);
+          console.log(`[Manual Sync] Payment metadata:`, latestPayment.metadata);
+          
+          // If payment succeeded but no subscription exists, update user status
+          const user = await storage.getUserByStripeCustomerId(customerId);
+          if (user) {
+            await storage.updateUserSubscription(user.id, {
+              subscriptionStatus: 'active', // Mark as active since payment succeeded
+              status_pagamento: 'ativo'
+            });
+            
+            return res.json({
+              success: true,
+              message: "Payment found and status updated to active",
+              action: "activated_based_on_payment",
+              paymentIntent: {
+                id: latestPayment.id,
+                status: latestPayment.status,
+                amount: latestPayment.amount,
+                metadata: latestPayment.metadata
+              }
+            });
+          }
+        }
+        
+        return res.status(404).json({ 
+          error: "No subscriptions or successful payments found for customer",
+          paymentIntents: succeededPayments.length
+        });
+      }
+
+      const subscription = subscriptions.data[0];
+      
+      // Update subscription data
+      await storage.updateSubscriptionFromWebhook(customerId, {
+        subscriptionId: subscription.id,
+        status: subscription.status,
+        currentPeriodStart: new Date(subscription.current_period_start * 1000),
+        currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+        priceId: subscription.items.data[0]?.price.id || null,
+      });
+
+      console.log(`[Manual Sync] Successfully synced subscription: ${subscription.id}`);
+      
+      res.json({
+        success: true,
+        message: "Subscription synced successfully",
+        action: "subscription_synced",
+        subscription: {
+          id: subscription.id,
+          status: subscription.status,
+          current_period_start: subscription.current_period_start,
+          current_period_end: subscription.current_period_end,
+          customerId: customerId
+        }
+      });
+
+    } catch (error: any) {
+      console.error('[Manual Sync] Error:', error);
+      res.status(500).json({
+        error: 'Failed to sync subscription',
+        message: error.message
+      });
+    }
+  });
+
+  // Search for specific payment intent by ID
+  app.post("/api/stripe/search-payment-intent", async (req, res) => {
+    try {
+      const { paymentIntentId } = req.body;
+      
+      if (!paymentIntentId) {
+        return res.status(400).json({ error: "paymentIntentId is required" });
+      }
+
+      console.log(`[Payment Search] Looking for payment intent: ${paymentIntentId}`);
+      
+      // Retrieve specific payment intent
+      const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+      
+      console.log(`[Payment Search] Found payment intent: ${paymentIntent.id}`);
+      console.log(`[Payment Search] Status: ${paymentIntent.status}`);
+      console.log(`[Payment Search] Amount: ${paymentIntent.amount}`);
+      console.log(`[Payment Search] Customer: ${paymentIntent.customer}`);
+      console.log(`[Payment Search] Metadata:`, paymentIntent.metadata);
+      console.log(`[Payment Search] Created: ${new Date(paymentIntent.created * 1000).toISOString()}`);
+      
+      // If this is a successful payment, try to sync it
+      if (paymentIntent.status === 'succeeded' && paymentIntent.customer) {
+        const customerId = paymentIntent.customer as string;
+        console.log(`[Payment Search] Attempting to sync successful payment for customer: ${customerId}`);
+        
+        // Check if this payment has subscription metadata
+        if (paymentIntent.metadata.type === 'subscription' && paymentIntent.metadata.planId) {
+          // Update user status to active since payment succeeded
+          const user = await storage.getUserByStripeCustomerId(customerId);
+          if (user) {
+            await storage.updateUserSubscription(user.id, {
+              subscriptionStatus: 'active',
+              status_pagamento: 'ativo',
+              planId: paymentIntent.metadata.planId
+            });
+            
+            console.log(`[Payment Search] Successfully activated user based on successful payment`);
+            
+            return res.json({
+              success: true,
+              message: "Found successful payment and activated user",
+              action: "activated_from_successful_payment",
+              paymentIntent: {
+                id: paymentIntent.id,
+                status: paymentIntent.status,
+                amount: paymentIntent.amount,
+                customer: paymentIntent.customer,
+                metadata: paymentIntent.metadata,
+                created: new Date(paymentIntent.created * 1000).toISOString()
+              }
+            });
+          }
+        }
+      }
+      
+      res.json({
+        success: true,
+        paymentIntent: {
+          id: paymentIntent.id,
+          status: paymentIntent.status,
+          amount: paymentIntent.amount,
+          customer: paymentIntent.customer,
+          metadata: paymentIntent.metadata,
+          created: new Date(paymentIntent.created * 1000).toISOString()
+        }
+      });
+
+    } catch (error: any) {
+      console.error('[Payment Search] Error:', error);
+      res.status(500).json({
+        error: 'Failed to search payment intent',
+        message: error.message
+      });
+    }
+  });
+
+  // Fix customer ID mismatch and sync subscription
+  app.post("/api/stripe/fix-customer-mismatch", async (req, res) => {
+    try {
+      const { oldCustomerId, newCustomerId, paymentIntentId } = req.body;
+      
+      if (!oldCustomerId || !newCustomerId) {
+        return res.status(400).json({ error: "oldCustomerId and newCustomerId are required" });
+      }
+
+      console.log(`[Customer Fix] Fixing customer ID mismatch: ${oldCustomerId} -> ${newCustomerId}`);
+      
+      // Find user with old customer ID
+      const user = await storage.getUserByStripeCustomerId(oldCustomerId);
+      if (!user) {
+        return res.status(404).json({ error: `User not found with customer ID: ${oldCustomerId}` });
+      }
+
+      console.log(`[Customer Fix] Found user: ${user.id} (${user.fullName})`);
+      
+      // Update the customer ID
+      await storage.updateUserSubscription(user.id, {
+        stripeCustomerId: newCustomerId
+      });
+      
+      console.log(`[Customer Fix] Updated customer ID for user ${user.id}`);
+      
+      // Verify payment intent if provided
+      if (paymentIntentId) {
+        const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+        console.log(`[Customer Fix] Verified payment intent ${paymentIntentId}: status=${paymentIntent.status}`);
+        
+        if (paymentIntent.status === 'succeeded' && paymentIntent.metadata.type === 'subscription') {
+          // Update user to active status based on successful payment
+          await storage.updateUserSubscription(user.id, {
+            subscriptionStatus: 'active',
+            status_pagamento: 'ativo',
+            planId: paymentIntent.metadata.planId || 'pro'
+          });
+          
+          console.log(`[Customer Fix] Activated subscription for user ${user.id} based on successful payment`);
+          
+          return res.json({
+            success: true,
+            message: "Customer ID updated and subscription activated",
+            action: "customer_id_fixed_and_activated",
+            user: {
+              id: user.id,
+              name: user.fullName,
+              oldCustomerId: oldCustomerId,
+              newCustomerId: newCustomerId,
+              status: 'ativo'
+            },
+            paymentIntent: {
+              id: paymentIntent.id,
+              status: paymentIntent.status,
+              amount: paymentIntent.amount
+            }
+          });
+        }
+      }
+      
+      // Just return success if no payment intent to verify
+      res.json({
+        success: true,
+        message: "Customer ID updated successfully",
+        action: "customer_id_updated",
+        user: {
+          id: user.id,
+          name: user.fullName,
+          oldCustomerId: oldCustomerId,
+          newCustomerId: newCustomerId
+        }
+      });
+
+    } catch (error: any) {
+      console.error('[Customer Fix] Error:', error);
+      res.status(500).json({
+        error: 'Failed to fix customer mismatch',
+        message: error.message
+      });
+    }
+  });
+
 
   // Helper function to create or get Stripe products and prices
   async function ensureStripeProducts() {
