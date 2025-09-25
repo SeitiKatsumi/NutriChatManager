@@ -9,8 +9,8 @@ export default function Register() {
   const [currentStep, setCurrentStep] = useState(1);
 
   const handleRegistrationComplete = () => {
-    // Redirect new users directly to subscription plans after registration
-    setLocation("/subscription/plans");
+    // Redirect new users directly to dashboard after registration (subscription managed in dashboard)
+    setLocation("/");
   };
 
   return (

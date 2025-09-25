@@ -172,12 +172,12 @@ export default function SubscriptionSuccess() {
                     Fazer Login
                   </Button>
                   <Button 
-                    onClick={() => navigate('/subscription/plans')} 
+                    onClick={() => navigate('/dashboard/assinatura')} 
                     variant="ghost" 
                     className="w-full"
                     data-testid="button-back-plans"
                   >
-                    Voltar aos Planos
+                    Gerenciar Assinatura
                   </Button>
                 </div>
               </div>
