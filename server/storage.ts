@@ -294,10 +294,7 @@ export class MemStorage implements IStorage {
       ...insertConsultation,
       id,
       createdAt: now,
-      updatedAt: now,
-      notes: insertConsultation.notes ?? null,
-      diagnosis: insertConsultation.diagnosis ?? null,
-      treatment: insertConsultation.treatment ?? null,
+      notes: insertConsultation.notes ?? undefined,
     };
     this.consultations.set(id, consultation);
     return consultation;
@@ -310,7 +307,6 @@ export class MemStorage implements IStorage {
     const updated: Consultation = {
       ...existing,
       ...updateData,
-      updatedAt: new Date(),
     };
     this.consultations.set(id, updated);
     return updated;
@@ -395,171 +391,7 @@ export class MemStorage implements IStorage {
   }
 }
 
-export class DatabaseStorage implements IStorage {
-  // Nutritionists
-  async getNutritionist(id: string): Promise<Nutritionist | undefined> {
-    const [nutritionist] = await db.select().from(nutritionists).where(eq(nutritionists.id, id));
-    return nutritionist || undefined;
-  }
-
-  async getNutritionistByEmail(email: string): Promise<Nutritionist | undefined> {
-    const [nutritionist] = await db.select().from(nutritionists).where(eq(nutritionists.email, email));
-    return nutritionist || undefined;
-  }
-
-  async createNutritionist(insertNutritionist: InsertNutritionist): Promise<Nutritionist> {
-    // Hash the password before storing
-    const hashedPassword = await bcrypt.hash(insertNutritionist.password, 10);
-    
-    const [nutritionist] = await db
-      .insert(nutritionists)
-      .values({ ...insertNutritionist, password: hashedPassword })
-      .returning();
-    return nutritionist;
-  }
-
-  async updateNutritionist(id: string, updateData: Partial<InsertNutritionist>): Promise<Nutritionist | undefined> {
-    // Hash password if it's being updated
-    let processedUpdateData = { ...updateData };
-    if (updateData.password) {
-      processedUpdateData.password = await bcrypt.hash(updateData.password, 10);
-    }
-
-    const [updated] = await db
-      .update(nutritionists)
-      .set({ ...processedUpdateData, updatedAt: new Date() })
-      .where(eq(nutritionists.id, id))
-      .returning();
-    return updated || undefined;
-  }
-
-  async listNutritionists(): Promise<Nutritionist[]> {
-    return await db.select().from(nutritionists);
-  }
-
-  async deleteNutritionist(id: string): Promise<boolean> {
-    const result = await db.delete(nutritionists).where(eq(nutritionists.id, id));
-    return (result.rowCount ?? 0) > 0;
-  }
-
-  // WhatsApp Instances
-  async getWhatsappInstance(id: string): Promise<WhatsappInstance | undefined> {
-    const [instance] = await db.select().from(whatsappInstances).where(eq(whatsappInstances.id, id));
-    return instance || undefined;
-  }
-
-  async getWhatsappInstanceByNutritionist(nutritionistId: string): Promise<WhatsappInstance | undefined> {
-    const [instance] = await db.select().from(whatsappInstances).where(eq(whatsappInstances.nutritionistId, nutritionistId));
-    return instance || undefined;
-  }
-
-  async createWhatsappInstance(insertInstance: InsertWhatsappInstance): Promise<WhatsappInstance> {
-    const [instance] = await db
-      .insert(whatsappInstances)
-      .values(insertInstance)
-      .returning();
-    return instance;
-  }
-
-  async updateWhatsappInstance(id: string, updateData: Partial<InsertWhatsappInstance>): Promise<WhatsappInstance | undefined> {
-    const [updated] = await db
-      .update(whatsappInstances)
-      .set({ ...updateData, updatedAt: new Date() })
-      .where(eq(whatsappInstances.id, id))
-      .returning();
-    return updated || undefined;
-  }
-
-  async listWhatsappInstances(): Promise<WhatsappInstance[]> {
-    return await db.select().from(whatsappInstances);
-  }
-
-  async deleteWhatsappInstance(id: string): Promise<boolean> {
-    const result = await db.delete(whatsappInstances).where(eq(whatsappInstances.id, id));
-    return (result.rowCount ?? 0) > 0;
-  }
-
-  // Messages
-  async createMessage(insertMessage: InsertMessage): Promise<Message> {
-    const [message] = await db
-      .insert(messages)
-      .values(insertMessage)
-      .returning();
-    return message;
-  }
-
-  async getMessagesByInstance(instanceId: string): Promise<Message[]> {
-    return await db.select().from(messages).where(eq(messages.instanceId, instanceId));
-  }
-
-  async getMessagesCount(): Promise<number> {
-    const result = await db.select().from(messages);
-    return result.length;
-  }
-
-  // Patients
-  async getPatient(id: string): Promise<Patient | undefined> {
-    const [patient] = await db.select().from(patients).where(eq(patients.id, id));
-    return patient || undefined;
-  }
-
-  async getPatientsByNutritionist(nutritionistId: string): Promise<Patient[]> {
-    return await db.select().from(patients).where(eq(patients.nutritionistId, nutritionistId));
-  }
-
-  async createPatient(insertPatient: InsertPatient): Promise<Patient> {
-    const [patient] = await db
-      .insert(patients)
-      .values(insertPatient)
-      .returning();
-    return patient;
-  }
-
-  async updatePatient(id: string, updateData: Partial<InsertPatient>): Promise<Patient | undefined> {
-    const [updated] = await db
-      .update(patients)
-      .set({ ...updateData, updatedAt: new Date() })
-      .where(eq(patients.id, id))
-      .returning();
-    return updated || undefined;
-  }
-
-  async deletePatient(id: string): Promise<boolean> {
-    const result = await db.delete(patients).where(eq(patients.id, id));
-    return (result.rowCount ?? 0) > 0;
-  }
-
-  // Consultations
-  async getConsultation(id: string): Promise<Consultation | undefined> {
-    const [consultation] = await db.select().from(consultations).where(eq(consultations.id, id));
-    return consultation || undefined;
-  }
-
-  async getConsultationsByPatient(patientId: string): Promise<Consultation[]> {
-    return await db.select().from(consultations).where(eq(consultations.patientId, patientId));
-  }
-
-  async getConsultationsByNutritionist(nutritionistId: string): Promise<Consultation[]> {
-    return await db.select().from(consultations).where(eq(consultations.nutritionistId, nutritionistId));
-  }
-
-  async createConsultation(insertConsultation: InsertConsultation): Promise<Consultation> {
-    const [consultation] = await db
-      .insert(consultations)
-      .values(insertConsultation)
-      .returning();
-    return consultation;
-  }
-
-  async updateConsultation(id: string, updateData: Partial<InsertConsultation>): Promise<Consultation | undefined> {
-    const [updated] = await db
-      .update(consultations)
-      .set(updateData)
-      .where(eq(consultations.id, id))
-      .returning();
-    return updated || undefined;
-  }
-}
+// DatabaseStorage removed - using DirectusStorage in production
 
 // Use DirectusStorage instead of local database
 import { DirectusStorage } from './directus-storage';

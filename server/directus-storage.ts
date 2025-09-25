@@ -814,44 +814,6 @@ export class DirectusStorage implements IStorage {
     }
   }
 
-  // Add methods to IStorage interface
-  async hasActiveSubscription(userId: string): Promise<boolean> {
-    try {
-      const user = await this.getNutritionist(userId);
-      if (!user) return false;
-      
-      // SECURITY: Require active status AND valid subscription ID AND plan ID
-      // This prevents users from accessing the app without paying
-      const hasActiveStatus = user.subscriptionStatus === 'active';
-      const hasValidSubscription = !!(user.subscriptionId && user.planId);
-      
-      return hasActiveStatus && hasValidSubscription;
-    } catch (error) {
-      console.error('Error checking subscription status:', error);
-      return false;
-    }
-  }
-
-  async getSubscriptionStatus(userId: string): Promise<string | null> {
-    try {
-      const user = await this.getNutritionist(userId);
-      return user?.subscriptionStatus || null;
-    } catch (error) {
-      console.error('Error getting subscription status:', error);
-      return null;
-    }
-  }
-
-  async getUserByStripeCustomerId(stripeCustomerId: string): Promise<any> {
-    try {
-      const response = await this.client.request(`/users?filter[stripe_customer_id][_eq]=${encodeURIComponent(stripeCustomerId)}&fields=*`);
-      const users = response.data || [];
-      return users.length > 0 ? transformUserFromDirectus(users[0]) : undefined;
-    } catch (error) {
-      console.error('Error getting user by customer ID:', error);
-      return undefined;
-    }
-  }
 
   async updateSubscriptionFromWebhook(stripeCustomerId: string, subscriptionData: {
     subscriptionId: string;

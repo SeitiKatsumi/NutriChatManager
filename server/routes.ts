@@ -26,6 +26,10 @@ if (!process.env.STRIPE_SECRET_KEY) {
   throw new Error('Missing required Stripe secret: STRIPE_SECRET_KEY');
 }
 
+console.log('[Stripe Debug] Secret key exists:', !!process.env.STRIPE_SECRET_KEY);
+console.log('[Stripe Debug] Secret key starts with sk_:', process.env.STRIPE_SECRET_KEY?.startsWith('sk_'));
+console.log('[Stripe Debug] Secret key length:', process.env.STRIPE_SECRET_KEY?.length);
+
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20" as any,
 });
@@ -104,9 +108,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   };
 
-  // Stripe webhook endpoint - must be defined before JSON parsing middleware
+  // Stripe webhook endpoint - handles raw body from middleware
   app.post("/api/stripe/webhook", async (req, res) => {
-    const sig = req.headers['stripe-signature'];
+    // Get signature header - handle both string and array cases
+    const sigHeader = req.headers['stripe-signature'];
+    const sig = Array.isArray(sigHeader) ? sigHeader[0] : sigHeader;
 
     if (!sig) {
       console.error('[Stripe Webhook] Missing stripe-signature header');
