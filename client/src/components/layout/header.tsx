@@ -12,6 +12,7 @@ export default function Header() {
     { key: "dashboard", path: "/dashboard", label: "Dashboard" },
     { key: "patients", path: "/patients", label: "Pacientes" },
     { key: "whatsapp", path: "/whatsapp", label: "WhatsApp" },
+    { key: "assinatura", path: "/dashboard/assinatura", label: "Assinatura" },
   ];
 
   const currentPath = location;

@@ -58,6 +58,7 @@ export interface DirectusUser {
   // Stripe subscription fields
   stripe_customer_id?: string;
   subscription_status?: 'trial' | 'active' | 'past_due' | 'canceled' | 'incomplete' | null;
+  status_pagamento?: 'pendente' | 'ativo' | 'cancelado' | 'expirado';
   subscription_id?: string;
   plan_id?: string;
   subscription_start_date?: string; // ISO date string
@@ -100,6 +101,23 @@ export interface DirectusConsultation {
   status?: string;
   date_created?: Date;
   date_updated?: Date;
+}
+
+// Helper function to map Stripe status to status_pagamento
+function mapStripeStatusToPagamento(stripeStatus: string | null): 'pendente' | 'ativo' | 'cancelado' | 'expirado' {
+  switch (stripeStatus) {
+    case 'active':
+    case 'trial':
+      return 'ativo';
+    case 'canceled':
+      return 'cancelado';
+    case 'past_due':
+    case 'incomplete':
+    case 'incomplete_expired':
+      return 'expirado';
+    default:
+      return 'pendente';
+  }
 }
 
 // Transform functions between local types and Directus types
@@ -242,6 +260,7 @@ function transformUserFromDirectus(directusUser: any): any {
     // Stripe subscription fields
     stripeCustomerId: directusUser.stripe_customer_id,
     subscriptionStatus: directusUser.subscription_status,
+    status_pagamento: directusUser.status_pagamento || mapStripeStatusToPagamento(directusUser.subscription_status),
     subscriptionId: directusUser.subscription_id,
     planId: directusUser.plan_id,
     subscriptionStartDate: directusUser.subscription_start_date,
@@ -732,7 +751,11 @@ export class DirectusStorage implements IStorage {
       const updateData: Partial<DirectusUser> = {};
       
       if (subscriptionData.stripeCustomerId) updateData.stripe_customer_id = subscriptionData.stripeCustomerId;
-      if (subscriptionData.subscriptionStatus) updateData.subscription_status = subscriptionData.subscriptionStatus as any;
+      if (subscriptionData.subscriptionStatus) {
+        updateData.subscription_status = subscriptionData.subscriptionStatus as any;
+        // Also update status_pagamento with mapped value
+        updateData.status_pagamento = mapStripeStatusToPagamento(subscriptionData.subscriptionStatus);
+      }
       if (subscriptionData.subscriptionId) updateData.subscription_id = subscriptionData.subscriptionId;
       if (subscriptionData.planId) updateData.plan_id = subscriptionData.planId;
       if (subscriptionData.subscriptionStartDate) updateData.subscription_start_date = subscriptionData.subscriptionStartDate;
@@ -834,6 +857,7 @@ export class DirectusStorage implements IStorage {
       const updateData = {
         subscription_id: subscriptionData.subscriptionId,
         subscription_status: subscriptionData.status,
+        status_pagamento: mapStripeStatusToPagamento(subscriptionData.status), // Map to frontend status
         plan_id: subscriptionData.priceId, // Map priceId to planId
         subscription_start_date: subscriptionData.currentPeriodStart.toISOString(),
         subscription_end_date: subscriptionData.currentPeriodEnd.toISOString(),

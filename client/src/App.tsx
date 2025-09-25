@@ -16,6 +16,7 @@ import AdminLogin from "@/pages/admin-login";
 import Admin from "@/pages/admin";
 import SubscriptionPlans from "@/pages/subscription-plans";
 import SubscriptionSuccess from "@/pages/subscription-success";
+import DashboardAssinatura from "@/pages/dashboard-assinatura";
 import Header from "@/components/layout/header";
 import { useEffect } from "react";
 
@@ -131,6 +132,10 @@ function Router() {
           <Route path="/whatsapp">
             <Header />
             <WhatsApp />
+          </Route>
+          <Route path="/dashboard/assinatura">
+            <Header />
+            <DashboardAssinatura />
           </Route>
           
           <Route component={NotFound} />

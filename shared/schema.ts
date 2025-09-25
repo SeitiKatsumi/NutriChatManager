@@ -17,6 +17,7 @@ export const nutritionistSchema = z.object({
   welcomeMessage: z.string().optional(),
   workingHours: z.string().default("commercial"),
   status: z.string().default("active"), // active, inactive, pending
+  status_pagamento: z.enum(["pendente", "ativo", "cancelado", "expirado"]).default("pendente"), // Payment status
   // Evolution API integration fields
   evolutionInstanceName: z.string().optional(), // Instancia_Evolution in Directus
   evolutionToken: z.string().optional(),        // Token_Evolution in Directus  

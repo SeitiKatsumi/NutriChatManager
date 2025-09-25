@@ -17,6 +17,7 @@ interface Nutritionist {
   specialization: string | null;
   whatsappNumber: string | null;
   status: string | null;
+  status_pagamento: "pendente" | "ativo" | "cancelado" | "expirado";
 }
 
 interface AuthContextType {
