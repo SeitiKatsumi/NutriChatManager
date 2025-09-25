@@ -81,10 +81,16 @@ export default function SubscriptionPlans() {
     },
     onSuccess: async (data) => {
       try {
+        console.log('[DEBUG] Received data from server:', data);
+        
         // Detectar se estamos no ambiente de desenvolvimento (Replit)
         const isDevelopment = window.location.hostname.includes('.replit.dev') || 
                             window.location.hostname === 'localhost' ||
                             window.location.hostname.includes('.repl.co');
+
+        console.log('[DEBUG] isDevelopment:', isDevelopment);
+        console.log('[DEBUG] data.url exists:', !!data.url);
+        console.log('[DEBUG] data.sessionId exists:', !!data.sessionId);
 
         if (data.url) {
           if (isDevelopment) {

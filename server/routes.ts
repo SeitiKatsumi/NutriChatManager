@@ -26,6 +26,18 @@ if (!process.env.STRIPE_SECRET_KEY) {
   throw new Error('Missing required Stripe secret: STRIPE_SECRET_KEY');
 }
 
+// Validate that the Stripe key is a SECRET key, not a public key
+if (!process.env.STRIPE_SECRET_KEY.startsWith('sk_')) {
+  console.error('🚨 CONFIGURATION ERROR:');
+  console.error('STRIPE_SECRET_KEY must start with "sk_" (secret key), not "pk_" (public key)');
+  console.error('Current key starts with:', process.env.STRIPE_SECRET_KEY.substring(0, 3));
+  console.error('Please update your environment variables in Replit Secrets:');
+  console.error('1. Go to your Replit workspace');
+  console.error('2. Open Secrets tab (lock icon in sidebar)');
+  console.error('3. Update STRIPE_SECRET_KEY with your secret key (sk_test_... or sk_live_...)');
+  console.error('4. Restart your application');
+  throw new Error('STRIPE_SECRET_KEY must be a secret key starting with "sk_", not a public key starting with "pk_"');
+}
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20" as any,
