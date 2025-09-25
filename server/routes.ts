@@ -104,6 +104,110 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   };
 
+  // Stripe webhook endpoint - must be defined before JSON parsing middleware
+  app.post("/api/stripe/webhook", async (req, res) => {
+    const sig = req.headers['stripe-signature'];
+
+    if (!sig) {
+      console.error('[Stripe Webhook] Missing stripe-signature header');
+      return res.status(400).send('Missing stripe-signature header');
+    }
+
+    let event: Stripe.Event;
+
+    try {
+      // Verify webhook signature
+      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+      if (!webhookSecret) {
+        console.error('[Stripe Webhook] Missing STRIPE_WEBHOOK_SECRET environment variable');
+        return res.status(500).send('Webhook secret not configured');
+      }
+
+      event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+      console.log(`[Stripe Webhook] Received event: ${event.type}`);
+    } catch (err: any) {
+      console.error('[Stripe Webhook] Webhook signature verification failed:', err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    try {
+      // Handle the event
+      switch (event.type) {
+        case 'checkout.session.completed': {
+          const session = event.data.object as Stripe.Checkout.Session;
+          console.log(`[Stripe Webhook] Checkout session completed: ${session.id}`);
+          
+          if (session.mode === 'subscription') {
+            // Get the subscription details
+            const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
+            const customerId = session.customer as string;
+            
+            console.log(`[Stripe Webhook] Processing subscription: ${subscription.id} for customer: ${customerId}`);
+            
+            // Update user subscription status
+            await storage.updateSubscriptionFromWebhook(customerId, {
+              subscriptionId: subscription.id,
+              status: subscription.status,
+              currentPeriodStart: new Date((subscription as any).current_period_start * 1000),
+              currentPeriodEnd: new Date((subscription as any).current_period_end * 1000),
+              priceId: subscription.items.data[0]?.price.id || null,
+            });
+            
+            console.log(`[Stripe Webhook] Successfully updated subscription for customer: ${customerId}`);
+          }
+          break;
+        }
+        
+        case 'customer.subscription.updated': {
+          const subscription = event.data.object as Stripe.Subscription;
+          const customerId = subscription.customer as string;
+          
+          console.log(`[Stripe Webhook] Subscription updated: ${subscription.id} for customer: ${customerId}, status: ${subscription.status}`);
+          
+          // Update user subscription status
+          await storage.updateSubscriptionFromWebhook(customerId, {
+            subscriptionId: subscription.id,
+            status: subscription.status,
+            currentPeriodStart: new Date((subscription as any).current_period_start * 1000),
+            currentPeriodEnd: new Date((subscription as any).current_period_end * 1000),
+            priceId: subscription.items.data[0]?.price.id || null,
+          });
+          
+          console.log(`[Stripe Webhook] Successfully updated subscription status for customer: ${customerId}`);
+          break;
+        }
+        
+        case 'customer.subscription.deleted': {
+          const subscription = event.data.object as Stripe.Subscription;
+          const customerId = subscription.customer as string;
+          
+          console.log(`[Stripe Webhook] Subscription deleted: ${subscription.id} for customer: ${customerId}`);
+          
+          // Mark subscription as canceled
+          await storage.updateSubscriptionFromWebhook(customerId, {
+            subscriptionId: subscription.id,
+            status: 'canceled',
+            currentPeriodStart: new Date((subscription as any).current_period_start * 1000),
+            currentPeriodEnd: new Date((subscription as any).current_period_end * 1000),
+            priceId: subscription.items.data[0]?.price.id || null,
+          });
+          
+          console.log(`[Stripe Webhook] Successfully marked subscription as canceled for customer: ${customerId}`);
+          break;
+        }
+        
+        default:
+          console.log(`[Stripe Webhook] Unhandled event type: ${event.type}`);
+      }
+
+      // Return a 200 response to acknowledge receipt of the event
+      res.status(200).json({ received: true });
+    } catch (error: any) {
+      console.error('[Stripe Webhook] Error processing webhook:', error);
+      res.status(500).json({ error: 'Webhook processing failed' });
+    }
+  });
+
   // Nutritionists routes
   app.get("/api/nutritionists", requireAuth, async (req, res) => {
     try {

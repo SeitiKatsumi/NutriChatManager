@@ -42,9 +42,9 @@ export function SubscriptionGuard({ children }: SubscriptionGuardProps) {
     );
   }
 
-  // If user is not logged in, redirect to subscription plans for registration flow
+  // If user is not logged in, redirect to registration page
   if (!user) {
-    return <Redirect to="/subscription/plans" />;
+    return <Redirect to="/register" />;
   }
 
   // Show loading while checking subscription status

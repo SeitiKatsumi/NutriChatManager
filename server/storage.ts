@@ -51,6 +51,13 @@ export interface IStorage {
     trialEndDate?: string;
   }): Promise<any>;
   getUserByStripeCustomerId(stripeCustomerId: string): Promise<any>;
+  updateSubscriptionFromWebhook(stripeCustomerId: string, subscriptionData: {
+    subscriptionId: string;
+    status: string;
+    currentPeriodStart: Date;
+    currentPeriodEnd: Date;
+    priceId: string | null;
+  }): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -357,6 +364,34 @@ export class MemStorage implements IStorage {
   async getUserByStripeCustomerId(stripeCustomerId: string): Promise<any> {
     const users = Array.from(this.nutritionists.values());
     return users.find((user: any) => user.stripeCustomerId === stripeCustomerId) || null;
+  }
+
+  async updateSubscriptionFromWebhook(stripeCustomerId: string, subscriptionData: {
+    subscriptionId: string;
+    status: string;
+    currentPeriodStart: Date;
+    currentPeriodEnd: Date;
+    priceId: string | null;
+  }): Promise<void> {
+    const user = await this.getUserByStripeCustomerId(stripeCustomerId);
+    if (!user) {
+      console.error(`[MemStorage] User not found for Stripe customer ID: ${stripeCustomerId}`);
+      return;
+    }
+
+    // Update user with webhook subscription data
+    const updatedUser = {
+      ...user,
+      subscriptionId: subscriptionData.subscriptionId,
+      subscriptionStatus: subscriptionData.status,
+      planId: subscriptionData.priceId, // Map priceId to planId
+      subscriptionStartDate: subscriptionData.currentPeriodStart.toISOString(),
+      subscriptionEndDate: subscriptionData.currentPeriodEnd.toISOString(),
+      updatedAt: new Date(),
+    };
+    
+    this.nutritionists.set(user.id, updatedUser as any);
+    console.log(`[MemStorage] Updated subscription for user ${user.id}: status=${subscriptionData.status}`);
   }
 }
 

@@ -852,4 +852,43 @@ export class DirectusStorage implements IStorage {
       return undefined;
     }
   }
+
+  async updateSubscriptionFromWebhook(stripeCustomerId: string, subscriptionData: {
+    subscriptionId: string;
+    status: string;
+    currentPeriodStart: Date;
+    currentPeriodEnd: Date;
+    priceId: string | null;
+  }): Promise<void> {
+    try {
+      // First find the user by Stripe customer ID
+      const user = await this.getUserByStripeCustomerId(stripeCustomerId);
+      if (!user) {
+        console.error(`[DirectusStorage] User not found for Stripe customer ID: ${stripeCustomerId}`);
+        return;
+      }
+
+      // Update user subscription data in Directus
+      const updateData = {
+        subscription_id: subscriptionData.subscriptionId,
+        subscription_status: subscriptionData.status,
+        plan_id: subscriptionData.priceId, // Map priceId to planId
+        subscription_start_date: subscriptionData.currentPeriodStart.toISOString(),
+        subscription_end_date: subscriptionData.currentPeriodEnd.toISOString(),
+      };
+
+      await this.client.request(`/users/${user.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(updateData),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      console.log(`[DirectusStorage] Updated subscription for user ${user.id}: status=${subscriptionData.status}`);
+    } catch (error) {
+      console.error('[DirectusStorage] Error updating subscription from webhook:', error);
+      throw error;
+    }
+  }
 }
