@@ -26,9 +26,6 @@ if (!process.env.STRIPE_SECRET_KEY) {
   throw new Error('Missing required Stripe secret: STRIPE_SECRET_KEY');
 }
 
-console.log('[Stripe Debug] Secret key exists:', !!process.env.STRIPE_SECRET_KEY);
-console.log('[Stripe Debug] Secret key starts with sk_:', process.env.STRIPE_SECRET_KEY?.startsWith('sk_'));
-console.log('[Stripe Debug] Secret key length:', process.env.STRIPE_SECRET_KEY?.length);
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20" as any,
@@ -1363,6 +1360,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create subscription checkout session
   app.post("/api/subscription/create-checkout", requireAuth, async (req, res) => {
     try {
+      console.log('[Stripe] Checkout creation attempt - Secret key available:', !!process.env.STRIPE_SECRET_KEY);
+      console.log('[Stripe] Secret key starts with sk_:', process.env.STRIPE_SECRET_KEY?.startsWith('sk_'));
+      
       const { planId } = req.body;
       // Starting checkout creation
       // Validate planId instead of accepting any priceId

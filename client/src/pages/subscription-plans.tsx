@@ -81,35 +81,90 @@ export default function SubscriptionPlans() {
     },
     onSuccess: async (data) => {
       try {
-        // Get Stripe instance and redirect to checkout
-        const stripe = await getStripe();
-        
-        if (!stripe) {
-          throw new Error("Stripe não foi carregado corretamente. Verifique sua conexão.");
+        // Detectar se estamos no ambiente de desenvolvimento (Replit)
+        const isDevelopment = window.location.hostname.includes('.replit.dev') || 
+                            window.location.hostname === 'localhost' ||
+                            window.location.hostname.includes('.repl.co');
+
+        if (data.url) {
+          if (isDevelopment) {
+            // No ambiente de desenvolvimento, abrir em nova aba para contornar restrições
+            const newWindow = window.open(data.url, '_blank', 'noopener,noreferrer');
+            
+            if (!newWindow) {
+              throw new Error("Pop-up bloqueado. Por favor, permita pop-ups para este site e tente novamente.");
+            }
+            
+            toast({
+              title: "Checkout aberto",
+              description: "O checkout foi aberto em uma nova aba. Complete o pagamento e retorne aqui.",
+              variant: "default"
+            });
+            
+            setSelectedPlan(null);
+            return;
+          } else {
+            // Em produção, usar redirecionamento normal
+            window.location.href = data.url;
+            return;
+          }
         }
 
         if (data.sessionId) {
-          // Use Stripe.js para redirecionar para o checkout
-          const { error } = await stripe.redirectToCheckout({
-            sessionId: data.sessionId
-          });
+          // Get Stripe instance and redirect to checkout
+          const stripe = await getStripe();
           
-          if (error) {
-            throw new Error(error.message || "Erro ao redirecionar para o checkout");
+          if (!stripe) {
+            throw new Error("Stripe não foi carregado corretamente. Verifique sua conexão.");
           }
-        } else if (data.url) {
-          // Fallback para redirecionamento direto se sessionId não estiver disponível
-          window.location.href = data.url;
+
+          if (isDevelopment) {
+            // No desenvolvimento, construir URL manualmente e abrir em nova aba
+            const checkoutUrl = `https://checkout.stripe.com/c/pay/${data.sessionId}`;
+            const newWindow = window.open(checkoutUrl, '_blank', 'noopener,noreferrer');
+            
+            if (!newWindow) {
+              throw new Error("Pop-up bloqueado. Por favor, permita pop-ups para este site e tente novamente.");
+            }
+            
+            toast({
+              title: "Checkout aberto",
+              description: "O checkout foi aberto em uma nova aba. Complete o pagamento e retorne aqui.",
+              variant: "default"
+            });
+            
+            setSelectedPlan(null);
+          } else {
+            // Em produção, usar Stripe.js normal
+            const { error } = await stripe.redirectToCheckout({
+              sessionId: data.sessionId
+            });
+            
+            if (error) {
+              throw new Error(error.message || "Erro ao redirecionar para o checkout");
+            }
+          }
         } else {
           throw new Error("Nenhuma URL de checkout retornada do servidor");
         }
       } catch (error: any) {
         console.error("Erro ao processar checkout:", error);
-        toast({
-          title: "Erro no checkout",
-          description: error.message || "Erro ao processar pagamento. Tente novamente.",
-          variant: "destructive"
-        });
+        
+        // Se for erro de permissão de navegação, mostrar instruções específicas
+        if (error.message?.includes('Failed to set the \'href\' property on \'Location\'') || 
+            error.message?.includes('permission to navigate')) {
+          toast({
+            title: "Redirecionamento bloqueado",
+            description: "O ambiente não permite redirecionamentos automáticos. O link do checkout foi copiado para uso manual.",
+            variant: "destructive"
+          });
+        } else {
+          toast({
+            title: "Erro no checkout",
+            description: error.message || "Erro ao processar pagamento. Tente novamente.",
+            variant: "destructive"
+          });
+        }
         setSelectedPlan(null);
       }
     },
