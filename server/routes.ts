@@ -76,9 +76,84 @@ const logError = (context: string, error: any, additionalData?: any) => {
   }
 };
 
+// PII Masking utility function
+const maskEmail = (email: string): string => {
+  if (!email || typeof email !== 'string') return 'No email';
+  const [localPart, domain] = email.split('@');
+  if (!domain) return 'Invalid email';
+  const maskedLocal = localPart.length > 3 ? localPart.substring(0, 3) + '****' : '***';
+  return `${maskedLocal}@${domain}`;
+};
+
+// Stripe Price ID to Plan ID mapping
+const STRIPE_PRICE_TO_PLAN_MAP: Record<string, string> = {
+  // These will be populated dynamically from Stripe products
+};
+
+// Initialize price mapping from Stripe products
+const initializePriceMapping = async () => {
+  try {
+    const products = await stripe.products.list({ limit: 100 });
+    for (const product of products.data) {
+      if (product.metadata?.planId) {
+        const prices = await stripe.prices.list({ product: product.id, limit: 100 });
+        for (const price of prices.data) {
+          STRIPE_PRICE_TO_PLAN_MAP[price.id] = product.metadata.planId;
+        }
+      }
+    }
+    console.log('[Security] Initialized price mapping:', Object.keys(STRIPE_PRICE_TO_PLAN_MAP).length, 'mappings');
+  } catch (error) {
+    console.error('[Security] Failed to initialize price mapping:', error);
+  }
+};
+
+// Get plan ID from price ID with fallback
+const getPlanIdFromPriceId = (priceId: string | null | undefined): string => {
+  if (!priceId) return 'pro'; // Safe fallback
+  const planId = STRIPE_PRICE_TO_PLAN_MAP[priceId];
+  if (planId) return planId;
+  
+  // Log unknown price ID for investigation
+  console.warn(`[Security] Unknown price ID: ${priceId}, falling back to 'pro'`);
+  return 'pro';
+};
+
+// Rate limiting for manual sync operations
+const syncRateLimit = new Map<string, { count: number; resetTime: number }>();
+const SYNC_RATE_LIMIT = 5; // 5 requests per hour per user
+const SYNC_RATE_WINDOW = 60 * 60 * 1000; // 1 hour in milliseconds
+
+const checkSyncRateLimit = (userId: string): boolean => {
+  const now = Date.now();
+  const userLimit = syncRateLimit.get(userId);
+  
+  if (!userLimit || now > userLimit.resetTime) {
+    // Reset or initialize limit
+    syncRateLimit.set(userId, { count: 1, resetTime: now + SYNC_RATE_WINDOW });
+    return true;
+  }
+  
+  if (userLimit.count >= SYNC_RATE_LIMIT) {
+    return false; // Rate limit exceeded
+  }
+  
+  userLimit.count++;
+  return true;
+};
+
+// Audit logging for manual sync operations
+const auditLog = (action: string, userId: string, details: any) => {
+  const timestamp = new Date().toISOString();
+  console.log(`[AUDIT] [${timestamp}] ${action} by user ${userId}:`, JSON.stringify(details, null, 2));
+};
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize storage and ensure required fields exist in Directus
   await initializeStorage();
+  
+  // Initialize price mapping for security
+  await initializePriceMapping();
 
   // Middleware to check authentication
   const requireAuth = (req: any, res: any, next: any) => {
@@ -1455,16 +1530,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Manual subscription sync endpoint for fixing missed webhooks (no auth for testing)
-  app.post("/api/stripe/sync-subscription", async (req, res) => {
+  // Manual subscription sync endpoint for fixing missed webhooks (ADMIN ONLY)
+  app.post("/api/stripe/sync-subscription", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { customerId } = req.body;
+      const adminUserId = req.session.user.id;
+      
+      // Rate limiting check
+      if (!checkSyncRateLimit(adminUserId)) {
+        auditLog('MANUAL_SYNC_RATE_LIMITED', adminUserId, { customerId, endpoint: 'sync-subscription' });
+        return res.status(429).json({ 
+          error: "Rate limit exceeded",
+          message: `Maximum ${SYNC_RATE_LIMIT} sync requests per hour allowed`
+        });
+      }
       
       if (!customerId) {
-        return res.status(400).json({ error: "customerId is required" });
+        auditLog('MANUAL_SYNC_BAD_REQUEST', adminUserId, { error: 'Missing customerId' });
+        return res.status(400).json({ 
+          error: "customerId is required",
+          usage: "POST /api/stripe/sync-subscription with { customerId: 'cus_...' }"
+        });
       }
 
-      console.log(`[Manual Sync] Syncing subscription for customer: ${customerId}`);
+      auditLog('MANUAL_SYNC_STARTED', adminUserId, { customerId, endpoint: 'sync-subscription' });
+      console.log(`[Manual Sync] Starting sync for customer: ${customerId}`);
+      
+      // Verify customer exists in Stripe
+      try {
+        const customer = await stripe.customers.retrieve(customerId);
+        const customerEmail = (customer as any).email || 'No email';
+        const maskedEmail = maskEmail(customerEmail);
+        console.log(`[Manual Sync] Customer verified: ${customer.id} (${maskedEmail})`);
+      } catch (error: any) {
+        console.error(`[Manual Sync] Customer not found:`, error.message);
+        auditLog('MANUAL_SYNC_CUSTOMER_NOT_FOUND', adminUserId, { customerId, error: error.message });
+        return res.status(404).json({ 
+          error: "Customer not found in Stripe",
+          customerId: customerId 
+        });
+      }
       
       // Get customer subscription from Stripe
       const subscriptions = await stripe.subscriptions.list({
@@ -1473,7 +1578,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         limit: 10
       });
 
+      console.log(`[Manual Sync] Found ${subscriptions.data.length} subscriptions for customer`);
+      
+      // Log all subscriptions for debugging
+      subscriptions.data.forEach((sub, index) => {
+        console.log(`[Manual Sync] Subscription ${index + 1}: ${sub.id}`);
+        console.log(`  - Status: ${sub.status}`);
+        console.log(`  - Created: ${new Date(sub.created * 1000).toISOString()}`);
+        console.log(`  - Price ID: ${sub.items.data[0]?.price?.id || 'N/A'}`);
+      });
+
       if (subscriptions.data.length === 0) {
+        console.log(`[Manual Sync] No subscriptions found, checking payment intents...`);
+        
         // Check payment intents for this customer
         const paymentIntents = await stripe.paymentIntents.list({
           customer: customerId,
@@ -1485,6 +1602,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Log details about all payment intents
         paymentIntents.data.forEach((pi, index) => {
           console.log(`[Manual Sync] Payment Intent ${index + 1}: ${pi.id}, status: ${pi.status}, amount: ${pi.amount}`);
+          console.log(`[Manual Sync] Payment Intent ${index + 1} created: ${new Date(pi.created * 1000).toISOString()}`);
           console.log(`[Manual Sync] Payment Intent ${index + 1} metadata:`, pi.metadata);
         });
         
@@ -1496,36 +1614,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`[Manual Sync] Latest successful payment: ${latestPayment.id}`);
           console.log(`[Manual Sync] Payment metadata:`, latestPayment.metadata);
           
-          // If payment succeeded but no subscription exists, update user status
+          // Find user by customer ID
           const user = await storage.getUserByStripeCustomerId(customerId);
           if (user) {
+            console.log(`[Manual Sync] Found user ${user.id} for customer ${customerId}`);
+            
+            // Update user status based on successful payment
+            const planId = getPlanIdFromPriceId(latestPayment.metadata?.planId);
             await storage.updateUserSubscription(user.id, {
-              subscriptionStatus: 'active' // Mark as active since payment succeeded
+              subscriptionStatus: 'active',
+              planId: planId,
+              stripeCustomerId: customerId
             });
+            
+            auditLog('MANUAL_SYNC_USER_ACTIVATED', adminUserId, { 
+              userId: user.id, 
+              email: maskEmail(user.email),
+              planId: planId,
+              paymentIntentId: latestPayment.id 
+            });
+            
+            console.log(`[Manual Sync] Successfully activated user based on payment`);
             
             return res.json({
               success: true,
               message: "Payment found and status updated to active",
               action: "activated_based_on_payment",
+              user: {
+                id: user.id,
+                email: user.email
+              },
               paymentIntent: {
                 id: latestPayment.id,
                 status: latestPayment.status,
                 amount: latestPayment.amount,
+                created: new Date(latestPayment.created * 1000).toISOString(),
                 metadata: latestPayment.metadata
               }
+            });
+          } else {
+            console.warn(`[Manual Sync] No user found for customer ${customerId}`);
+            return res.status(404).json({
+              error: "No user found for this Stripe customer",
+              customerId: customerId,
+              suggestion: "Check if the customer ID is correct or if the user exists in Directus"
             });
           }
         }
         
         return res.status(404).json({ 
           error: "No subscriptions or successful payments found for customer",
-          paymentIntents: succeededPayments.length
+          customerId: customerId,
+          paymentIntentsFound: paymentIntents.data.length,
+          succeededPayments: succeededPayments.length
         });
       }
 
+      // Process the most recent subscription
       const subscription = subscriptions.data[0];
+      console.log(`[Manual Sync] Processing subscription: ${subscription.id}`);
       
-      // Update subscription data
+      // Find user by customer ID
+      const user = await storage.getUserByStripeCustomerId(customerId);
+      if (!user) {
+        console.warn(`[Manual Sync] No user found for customer ${customerId}`);
+        return res.status(404).json({
+          error: "No user found for this Stripe customer",
+          customerId: customerId,
+          subscriptionId: subscription.id
+        });
+      }
+      
+      console.log(`[Manual Sync] Found user ${user.id} for customer ${customerId}`);
+      
+      // Update subscription data using webhook method
       await storage.updateSubscriptionFromWebhook(customerId, {
         subscriptionId: subscription.id,
         status: subscription.status,
@@ -1540,20 +1702,282 @@ export async function registerRoutes(app: Express): Promise<Server> {
         success: true,
         message: "Subscription synced successfully",
         action: "subscription_synced",
+        user: {
+          id: user.id,
+          email: user.email
+        },
         subscription: {
           id: subscription.id,
           status: subscription.status,
-          current_period_start: (subscription as any).current_period_start,
-          current_period_end: (subscription as any).current_period_end,
+          priceId: subscription.items.data[0]?.price?.id,
+          created: new Date(subscription.created * 1000).toISOString(),
+          currentPeriodStart: new Date((subscription as any).current_period_start * 1000).toISOString(),
+          currentPeriodEnd: new Date((subscription as any).current_period_end * 1000).toISOString(),
           customerId: customerId
+        },
+        debug: {
+          totalSubscriptionsFound: subscriptions.data.length,
+          timestamp: new Date().toISOString()
         }
       });
 
     } catch (error: any) {
-      console.error('[Manual Sync] Error:', error);
+      logError('Manual Sync', error, { customerId: req.body.customerId });
       res.status(500).json({
         error: 'Failed to sync subscription',
-        message: error.message
+        message: error.message,
+        details: error.stack,
+        customerId: req.body.customerId
+      });
+    }
+  });
+
+  // Enhanced manual subscription sync endpoint - accepts user ID or customer ID
+  app.post("/api/stripe/sync-subscription-manual", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { userId, customerId } = req.body;
+      
+      if (!userId && !customerId) {
+        return res.status(400).json({ 
+          error: "Either userId or customerId is required",
+          usage: {
+            userIdExample: "442a12b7-edc2-4192-90b5-cdf833bd49c9",
+            customerIdExample: "cus_T7d8nx7GuHSa4T"
+          }
+        });
+      }
+
+      console.log(`[Manual Sync Enhanced] Starting sync with userId: ${userId}, customerId: ${customerId}`);
+      
+      let user;
+      let stripeCustomerId = customerId;
+
+      // Step 1: Resolve user and customer ID
+      if (userId && !customerId) {
+        // Find user by ID and get their Stripe customer ID
+        try {
+          user = await storage.getNutritionist(userId);
+          if (!user) {
+            return res.status(404).json({ error: "User not found" });
+          }
+          stripeCustomerId = user.stripeCustomerId;
+          if (!stripeCustomerId) {
+            return res.status(400).json({ 
+              error: "User has no Stripe customer ID",
+              userId: userId,
+              suggestion: "User may need to complete a payment first"
+            });
+          }
+          console.log(`[Manual Sync Enhanced] Found user ${userId} with customer ID: ${stripeCustomerId}`);
+        } catch (error: any) {
+          return res.status(500).json({ 
+            error: "Failed to get user",
+            details: error.message 
+          });
+        }
+      } else if (customerId && !userId) {
+        // Find user by Stripe customer ID
+        try {
+          user = await storage.getUserByStripeCustomerId(customerId);
+          if (!user) {
+            return res.status(404).json({ 
+              error: "No user found for this Stripe customer ID",
+              customerId: customerId
+            });
+          }
+          console.log(`[Manual Sync Enhanced] Found user ${user.id} for customer ID: ${customerId}`);
+        } catch (error: any) {
+          return res.status(500).json({ 
+            error: "Failed to find user by customer ID",
+            details: error.message 
+          });
+        }
+      } else {
+        // Both provided - verify they match
+        try {
+          user = await storage.getNutritionist(userId);
+          if (!user) {
+            return res.status(404).json({ error: "User not found" });
+          }
+          if (user.stripeCustomerId !== customerId) {
+            return res.status(400).json({ 
+              error: "User ID and customer ID do not match",
+              userCustomerId: user.stripeCustomerId,
+              providedCustomerId: customerId
+            });
+          }
+          stripeCustomerId = customerId;
+          console.log(`[Manual Sync Enhanced] Verified user ${userId} matches customer ${customerId}`);
+        } catch (error: any) {
+          return res.status(500).json({ 
+            error: "Failed to verify user and customer match",
+            details: error.message 
+          });
+        }
+      }
+
+      // Step 2: Fetch all subscriptions from Stripe
+      console.log(`[Manual Sync Enhanced] Fetching subscriptions for customer: ${stripeCustomerId}`);
+      
+      const subscriptions = await stripe.subscriptions.list({
+        customer: stripeCustomerId,
+        status: 'all',
+        limit: 10
+      });
+
+      console.log(`[Manual Sync Enhanced] Found ${subscriptions.data.length} subscriptions`);
+
+      // Log subscription details
+      subscriptions.data.forEach((sub, index) => {
+        console.log(`[Manual Sync Enhanced] Subscription ${index + 1}: ${sub.id}`);
+        console.log(`  - Status: ${sub.status}`);
+        console.log(`  - Created: ${new Date(sub.created * 1000).toISOString()}`);
+        console.log(`  - Current period: ${new Date((sub as any).current_period_start * 1000).toISOString()} to ${new Date((sub as any).current_period_end * 1000).toISOString()}`);
+        console.log(`  - Price ID: ${sub.items.data[0]?.price?.id || 'N/A'}`);
+      });
+
+      if (subscriptions.data.length === 0) {
+        console.log(`[Manual Sync Enhanced] No subscriptions found, checking payment intents...`);
+        
+        // Check payment intents as fallback
+        const paymentIntents = await stripe.paymentIntents.list({
+          customer: stripeCustomerId,
+          limit: 10
+        });
+
+        console.log(`[Manual Sync Enhanced] Found ${paymentIntents.data.length} payment intents`);
+        
+        const succeededPayments = paymentIntents.data.filter(pi => pi.status === 'succeeded');
+        console.log(`[Manual Sync Enhanced] Found ${succeededPayments.length} succeeded payments`);
+        
+        if (succeededPayments.length > 0) {
+          const latestPayment = succeededPayments[0];
+          console.log(`[Manual Sync Enhanced] Latest successful payment: ${latestPayment.id}`);
+          
+          // Update user status based on successful payment
+          const planId = getPlanIdFromPriceId(latestPayment.metadata?.planId);
+          await storage.updateUserSubscription(user.id, {
+            subscriptionStatus: 'active',
+            planId: planId,
+          });
+          
+          auditLog('MANUAL_SYNC_ENHANCED_USER_ACTIVATED', adminUserId, { 
+            userId: user.id, 
+            email: maskEmail(user.email),
+            planId: planId,
+            paymentIntentId: latestPayment.id 
+          });
+          
+          return res.json({
+            success: true,
+            message: "No subscriptions found, but activated user based on successful payment",
+            action: "activated_based_on_payment",
+            user: {
+              id: user.id,
+              email: maskEmail(user.email),
+              stripeCustomerId: stripeCustomerId
+            },
+            paymentIntent: {
+              id: latestPayment.id,
+              status: latestPayment.status,
+              amount: latestPayment.amount,
+              created: new Date(latestPayment.created * 1000).toISOString()
+            }
+          });
+        }
+        
+        return res.status(404).json({ 
+          error: "No subscriptions or successful payments found for customer",
+          customerId: stripeCustomerId,
+          user: {
+            id: user.id,
+            email: maskEmail(user.email)
+          }
+        });
+      }
+
+      // Step 3: Process the latest subscription
+      const latestSubscription = subscriptions.data[0]; // Most recent subscription
+      console.log(`[Manual Sync Enhanced] Processing latest subscription: ${latestSubscription.id}`);
+
+      // Step 4: Map plan ID correctly using centralized mapping
+      const priceId = latestSubscription.items.data[0]?.price?.id;
+      const planId = getPlanIdFromPriceId(priceId);
+
+      console.log(`[Manual Sync Enhanced] Price ID: ${priceId}, mapped to plan: ${planId}`);
+
+      // Step 5: Update Directus with subscription data
+      const subscriptionData = {
+        subscriptionId: latestSubscription.id,
+        status: latestSubscription.status,
+        currentPeriodStart: new Date((latestSubscription as any).current_period_start * 1000),
+        currentPeriodEnd: new Date((latestSubscription as any).current_period_end * 1000),
+        priceId: planId,
+      };
+
+      console.log(`[Manual Sync Enhanced] Updating subscription data:`, subscriptionData);
+
+      await storage.updateSubscriptionFromWebhook(stripeCustomerId, subscriptionData);
+
+      // Also update user subscription status with additional fields
+      await storage.updateUserSubscription(user.id, {
+        stripeCustomerId: stripeCustomerId,
+        subscriptionStatus: latestSubscription.status,
+        subscriptionId: latestSubscription.id,
+        planId: planId,
+        subscriptionStartDate: new Date((latestSubscription as any).current_period_start * 1000).toISOString(),
+        subscriptionEndDate: new Date((latestSubscription as any).current_period_end * 1000).toISOString(),
+      });
+
+      console.log(`[Manual Sync Enhanced] Successfully synced subscription: ${latestSubscription.id}`);
+      
+      // Audit log successful sync
+      auditLog('MANUAL_SYNC_ENHANCED_SUCCESS', adminUserId, {
+        userId: user.id,
+        email: maskEmail(user.email),
+        subscriptionId: latestSubscription.id,
+        planId: planId,
+        customerId: stripeCustomerId
+      });
+      
+      // Step 6: Return detailed sync results
+      res.json({
+        success: true,
+        message: "Subscription synced successfully",
+        action: "subscription_synced",
+        user: {
+          id: user.id,
+          email: maskEmail(user.email),
+          fullName: user.fullName
+        },
+        subscription: {
+          id: latestSubscription.id,
+          status: latestSubscription.status,
+          priceId: priceId,
+          planId: planId,
+          created: new Date(latestSubscription.created * 1000).toISOString(),
+          currentPeriodStart: new Date((latestSubscription as any).current_period_start * 1000).toISOString(),
+          currentPeriodEnd: new Date((latestSubscription as any).current_period_end * 1000).toISOString(),
+          customerId: stripeCustomerId
+        },
+        syncDetails: {
+          totalSubscriptionsFound: subscriptions.data.length,
+          syncedSubscriptionIndex: 0, // We always sync the first (latest) one
+          timestamp: new Date().toISOString()
+        }
+      });
+
+    } catch (error: any) {
+      auditLog('MANUAL_SYNC_ENHANCED_ERROR', adminUserId, { 
+        userId: req.body.userId, 
+        customerId: req.body.customerId, 
+        error: error.message 
+      });
+      logError('Manual Sync Enhanced', error, { userId: req.body.userId, customerId: req.body.customerId });
+      res.status(500).json({
+        error: 'Failed to sync subscription',
+        message: error.message,
+        details: error.stack
       });
     }
   });
@@ -1589,9 +2013,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Update user status to active since payment succeeded
           const user = await storage.getUserByStripeCustomerId(customerId);
           if (user) {
+            const planId = getPlanIdFromPriceId(paymentIntent.metadata.planId);
             await storage.updateUserSubscription(user.id, {
               subscriptionStatus: 'active',
-              planId: paymentIntent.metadata.planId
+              planId: planId
             });
             
             console.log(`[Payment Search] Successfully activated user based on successful payment`);
