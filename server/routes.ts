@@ -1432,7 +1432,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Create checkout session with secure BASE_URL
-      const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
+      // Auto-detect production URL or use environment variable
+      let baseUrl = process.env.BASE_URL;
+      if (!baseUrl) {
+        // Auto-detect based on environment
+        const isProduction = process.env.NODE_ENV === 'production' || 
+                           process.env.REPL_SLUG || 
+                           process.env.REPLIT_DB_URL;
+        
+        baseUrl = isProduction 
+          ? 'https://app.nutrichatbot.com.br'  // Production URL
+          : 'http://localhost:5000';            // Development URL
+      }
+      
+      console.log('[Stripe] Using baseUrl for redirects:', baseUrl);
       console.log('[Stripe] Creating checkout session with priceId:', plan.priceId);
       // Creating checkout session
       let session;

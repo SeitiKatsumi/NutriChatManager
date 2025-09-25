@@ -93,24 +93,34 @@ export default function SubscriptionPlans() {
         console.log('[DEBUG] data.sessionId exists:', !!data.sessionId);
 
         if (data.url) {
+          console.log('[DEBUG] Attempting to redirect to:', data.url);
+          
           if (isDevelopment) {
             // No ambiente de desenvolvimento, abrir em nova aba para contornar restrições
-            const newWindow = window.open(data.url, '_blank', 'noopener,noreferrer');
-            
-            if (!newWindow) {
-              throw new Error("Pop-up bloqueado. Por favor, permita pop-ups para este site e tente novamente.");
+            try {
+              const newWindow = window.open(data.url, '_blank', 'noopener,noreferrer');
+              
+              if (!newWindow) {
+                throw new Error("Pop-up bloqueado. Por favor, permita pop-ups para este site e tente novamente.");
+              }
+              
+              toast({
+                title: "Checkout aberto",
+                description: "O checkout foi aberto em uma nova aba. Complete o pagamento e retorne aqui.",
+                variant: "default"
+              });
+              
+              setSelectedPlan(null);
+              return;
+            } catch (popupError: any) {
+              console.warn('[DEBUG] Popup failed, trying direct redirect:', popupError.message);
+              // Fallback para redirecionamento direto se popup falhar
+              window.location.href = data.url;
+              return;
             }
-            
-            toast({
-              title: "Checkout aberto",
-              description: "O checkout foi aberto em uma nova aba. Complete o pagamento e retorne aqui.",
-              variant: "default"
-            });
-            
-            setSelectedPlan(null);
-            return;
           } else {
             // Em produção, usar redirecionamento normal
+            console.log('[DEBUG] Production redirect to:', data.url);
             window.location.href = data.url;
             return;
           }
