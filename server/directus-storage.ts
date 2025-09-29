@@ -909,7 +909,9 @@ export class DirectusStorage implements IStorage {
     trialEndDate?: string;
   }) {
     try {
-      // Updating subscription for user
+      console.log(`[DirectusStorage] === UPDATE USER SUBSCRIPTION ===`);
+      console.log(`[DirectusStorage] User ID: ${userId}`);
+      console.log(`[DirectusStorage] Subscription data:`, JSON.stringify(subscriptionData, null, 2));
       
       const updateData: Partial<DirectusUser> = {};
       
@@ -925,15 +927,26 @@ export class DirectusStorage implements IStorage {
       if (subscriptionData.subscriptionEndDate) updateData.subscription_end_date = subscriptionData.subscriptionEndDate;
       if (subscriptionData.trialEndDate) updateData.trial_end_date = subscriptionData.trialEndDate;
 
+      console.log(`[DirectusStorage] Update payload:`, JSON.stringify(updateData, null, 2));
+      console.log(`[DirectusStorage] Sending PATCH to /users/${userId}`);
+
       const response = await this.client.request(`/users/${userId}`, {
         method: 'PATCH',
         body: JSON.stringify(updateData),
       });
       
-      // Subscription updated successfully
+      console.log(`[DirectusStorage] ✅ Update successful!`);
+      console.log(`[DirectusStorage] Response:`, JSON.stringify(response.data, null, 2));
+      
       return response.data;
-    } catch (error) {
-      console.error('Error updating user subscription:', error);
+    } catch (error: any) {
+      console.error(`[DirectusStorage] ❌ Error updating user subscription:`, error);
+      console.error(`[DirectusStorage] Error details:`, {
+        message: error.message,
+        status: error.status,
+        statusText: error.statusText,
+        data: error.data
+      });
       throw error;
     }
   }
