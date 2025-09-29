@@ -1009,10 +1009,17 @@ export class DirectusStorage implements IStorage {
     priceId: string | null;
   }): Promise<void> {
     try {
+      console.log(`[DirectusStorage] === WEBHOOK UPDATE CALLED ===`);
+      console.log(`[DirectusStorage] Looking for customer ID: ${stripeCustomerId}`);
+      console.log(`[DirectusStorage] Subscription data:`, JSON.stringify(subscriptionData, null, 2));
+      
       // First find the user by Stripe customer ID
       const user = await this.getUserByStripeCustomerId(stripeCustomerId);
+      console.log(`[DirectusStorage] User found:`, user ? `Yes (ID: ${user.id})` : 'No');
+      
       if (!user) {
-        console.error(`[DirectusStorage] User not found for Stripe customer ID: ${stripeCustomerId}`);
+        console.error(`[DirectusStorage] ❌ CRITICAL: User not found for Stripe customer ID: ${stripeCustomerId}`);
+        console.error(`[DirectusStorage] This means stripe_customer_id is not saved in Directus!`);
         return;
       }
 
@@ -1026,6 +1033,8 @@ export class DirectusStorage implements IStorage {
         subscription_end_date: subscriptionData.currentPeriodEnd.toISOString(),
       };
 
+      console.log(`[DirectusStorage] Updating user ${user.id} with data:`, JSON.stringify(updateData, null, 2));
+
       await this.client.request(`/users/${user.id}`, {
         method: 'PATCH',
         body: JSON.stringify(updateData),
@@ -1034,9 +1043,9 @@ export class DirectusStorage implements IStorage {
         },
       });
 
-      console.log(`[DirectusStorage] Updated subscription for user ${user.id}: status=${subscriptionData.status}`);
+      console.log(`[DirectusStorage] ✅ Successfully updated subscription for user ${user.id}: status=${subscriptionData.status}`);
     } catch (error) {
-      console.error('[DirectusStorage] Error updating subscription from webhook:', error);
+      console.error('[DirectusStorage] ❌ Error updating subscription from webhook:', error);
       throw error;
     }
   }
