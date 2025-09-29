@@ -32,6 +32,22 @@ All new WhatsApp instances are automatically configured with N8N webhook integra
 
 This automatic configuration ensures seamless integration between WhatsApp conversations and the N8N automation workflows, enabling real-time message processing and AI-powered responses without manual webhook setup.
 
+## Stripe Payment Integration
+
+### Webhook Processing with Directus Cache Solution
+The system implements a robust dual-strategy approach to handle Stripe webhooks, solving Directus API cache delays:
+
+**Problem**: Directus has a delay between write and read operations. When a user completes payment, the `stripe_customer_id` is saved but may not be immediately available via API queries due to caching.
+
+**Solution**: Two-tier user lookup strategy in `updateSubscriptionFromWebhook`:
+1. **Primary Strategy**: Attempts to find user by `stripe_customer_id` (fastest when cache is current)
+2. **Fallback Strategy**: If not found, retrieves customer email from Stripe API and searches user by email
+   - Email already exists in Directus (no cache delay)
+   - Once found, automatically updates `stripe_customer_id` for future webhooks
+   - Ensures webhook processing succeeds even during cache delays
+
+This approach guarantees reliable webhook processing while maintaining optimal performance when the cache is current.
+
 ## State Management
 Client-side state is managed through TanStack Query for server state and React hooks for local component state. The query client is configured with custom fetch functions that handle authentication and error responses uniformly across the application.
 

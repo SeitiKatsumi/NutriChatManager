@@ -51,6 +51,7 @@ export interface IStorage {
     trialEndDate?: string;
   }): Promise<any>;
   getUserByStripeCustomerId(stripeCustomerId: string): Promise<any>;
+  getUserByEmail(email: string): Promise<any>;
   updateSubscriptionFromWebhook(stripeCustomerId: string, subscriptionData: {
     subscriptionId: string;
     status: string;
@@ -360,6 +361,10 @@ export class MemStorage implements IStorage {
   async getUserByStripeCustomerId(stripeCustomerId: string): Promise<any> {
     const users = Array.from(this.nutritionists.values());
     return users.find((user: any) => user.stripeCustomerId === stripeCustomerId) || null;
+  }
+
+  async getUserByEmail(email: string): Promise<any> {
+    return this.getNutritionistByEmail(email);
   }
 
   async updateSubscriptionFromWebhook(stripeCustomerId: string, subscriptionData: {

@@ -909,10 +909,6 @@ export class DirectusStorage implements IStorage {
     trialEndDate?: string;
   }) {
     try {
-      console.log(`[DirectusStorage] === UPDATE USER SUBSCRIPTION ===`);
-      console.log(`[DirectusStorage] User ID: ${userId}`);
-      console.log(`[DirectusStorage] Subscription data:`, JSON.stringify(subscriptionData, null, 2));
-      
       const updateData: Partial<DirectusUser> = {};
       
       if (subscriptionData.stripeCustomerId) updateData.stripe_customer_id = subscriptionData.stripeCustomerId;
@@ -927,26 +923,14 @@ export class DirectusStorage implements IStorage {
       if (subscriptionData.subscriptionEndDate) updateData.subscription_end_date = subscriptionData.subscriptionEndDate;
       if (subscriptionData.trialEndDate) updateData.trial_end_date = subscriptionData.trialEndDate;
 
-      console.log(`[DirectusStorage] Update payload:`, JSON.stringify(updateData, null, 2));
-      console.log(`[DirectusStorage] Sending PATCH to /users/${userId}`);
-
       const response = await this.client.request(`/users/${userId}`, {
         method: 'PATCH',
         body: JSON.stringify(updateData),
       });
       
-      console.log(`[DirectusStorage] ✅ Update successful!`);
-      console.log(`[DirectusStorage] Response:`, JSON.stringify(response.data, null, 2));
-      
       return response.data;
     } catch (error: any) {
-      console.error(`[DirectusStorage] ❌ Error updating user subscription:`, error);
-      console.error(`[DirectusStorage] Error details:`, {
-        message: error.message,
-        status: error.status,
-        statusText: error.statusText,
-        data: error.data
-      });
+      console.error(`[DirectusStorage] Error updating user subscription:`, error);
       throw error;
     }
   }
@@ -961,6 +945,28 @@ export class DirectusStorage implements IStorage {
       return users.length > 0 ? transformUserFromDirectus(users[0]) : undefined;
     } catch (error) {
       console.error('Error getting user by customer ID:', error);
+      return undefined;
+    }
+  }
+
+  /**
+   * Find user by email (for webhook processing - avoids Directus cache issues)
+   */
+  async getUserByEmail(email: string) {
+    try {
+      console.log(`[DirectusStorage] Searching user by email: ${email}`);
+      const response = await this.client.request(`/users?filter[email][_eq]=${encodeURIComponent(email)}&fields=*`);
+      const users = response.data || [];
+      
+      if (users.length > 0) {
+        console.log(`[DirectusStorage] ✅ User found by email: ${users[0].id}`);
+        return transformUserFromDirectus(users[0]);
+      } else {
+        console.log(`[DirectusStorage] ❌ No user found with email: ${email}`);
+        return undefined;
+      }
+    } catch (error) {
+      console.error('[DirectusStorage] Error getting user by email:', error);
       return undefined;
     }
   }
@@ -1026,18 +1032,51 @@ export class DirectusStorage implements IStorage {
       console.log(`[DirectusStorage] Looking for customer ID: ${stripeCustomerId}`);
       console.log(`[DirectusStorage] Subscription data:`, JSON.stringify(subscriptionData, null, 2));
       
-      // First find the user by Stripe customer ID
-      const user = await this.getUserByStripeCustomerId(stripeCustomerId);
-      console.log(`[DirectusStorage] User found:`, user ? `Yes (ID: ${user.id})` : 'No');
+      // Strategy 1: Try to find user by Stripe customer ID
+      let user = await this.getUserByStripeCustomerId(stripeCustomerId);
+      console.log(`[DirectusStorage] User found by stripe_customer_id:`, user ? `Yes (ID: ${user.id})` : 'No');
+      
+      // Strategy 2: If not found, get email from Stripe and search by email (avoids Directus cache issues)
+      if (!user) {
+        console.log(`[DirectusStorage] ⚠️ User not found by stripe_customer_id, trying email lookup...`);
+        
+        try {
+          // Create Stripe instance to get customer email
+          const Stripe = (await import('stripe')).default;
+          const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+            apiVersion: '2025-08-27.basil',
+          });
+          const customer = await stripe.customers.retrieve(stripeCustomerId);
+          
+          if ('email' in customer && customer.email) {
+            console.log(`[DirectusStorage] Found email from Stripe customer: ${customer.email}`);
+            user = await this.getUserByEmail(customer.email);
+            
+            if (user) {
+              console.log(`[DirectusStorage] ✅ User found by email! ID: ${user.id}`);
+              
+              // Update stripe_customer_id to avoid this lookup next time
+              console.log(`[DirectusStorage] Saving stripe_customer_id to user for future webhooks...`);
+              await this.updateUserSubscription(user.id, {
+                stripeCustomerId: stripeCustomerId
+              });
+            }
+          } else {
+            console.error(`[DirectusStorage] ❌ Stripe customer has no email!`);
+          }
+        } catch (stripeError) {
+          console.error(`[DirectusStorage] Error fetching customer from Stripe:`, stripeError);
+        }
+      }
       
       if (!user) {
-        console.error(`[DirectusStorage] ❌ CRITICAL: User not found for Stripe customer ID: ${stripeCustomerId}`);
-        console.error(`[DirectusStorage] This means stripe_customer_id is not saved in Directus!`);
+        console.error(`[DirectusStorage] ❌ CRITICAL: User not found by stripe_customer_id OR email for customer: ${stripeCustomerId}`);
         return;
       }
 
       // Update user subscription data in Directus
       const updateData = {
+        stripe_customer_id: stripeCustomerId, // Always ensure this is set
         subscription_id: subscriptionData.subscriptionId,
         subscription_status: subscriptionData.status,
         status_pagamento: mapStripeStatusToPagamento(subscriptionData.status), // Map to frontend status
