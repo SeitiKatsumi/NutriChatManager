@@ -1,12 +1,27 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Star, Menu, X } from "lucide-react";
+import { Star, Menu, X, User, Settings, LogOut, ChevronDown } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useAuth } from "@/contexts/auth-context";
 
 export default function Header() {
   const [location, setLocation] = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { user, nutritionist, logout } = useAuth();
+
+  const handleLogout = async () => {
+    await logout();
+    setLocation("/login");
+  };
 
   const navItems = [
     { key: "dashboard", path: "/dashboard", label: "Dashboard" },
@@ -101,10 +116,50 @@ export default function Header() {
             </SheetContent>
           </Sheet>
 
-          {/* User Avatar */}
-          <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center">
-            <div className="w-4 h-4 bg-muted-foreground rounded-full" />
-          </div>
+          {/* User Profile Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button 
+                variant="ghost" 
+                className="flex items-center space-x-2 h-auto p-2 hover:bg-muted"
+                data-testid="profile-menu-trigger"
+              >
+                <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
+                  <User className="w-4 h-4 text-primary" />
+                </div>
+                <ChevronDown className="w-4 h-4 text-muted-foreground hidden md:block" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56" data-testid="profile-menu-content">
+              <DropdownMenuLabel>
+                <div className="flex flex-col space-y-1">
+                  <p className="text-sm font-medium leading-none">
+                    {nutritionist?.fullName || user?.email || "Usuário"}
+                  </p>
+                  <p className="text-xs leading-none text-muted-foreground">
+                    {user?.email}
+                  </p>
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem 
+                onClick={() => handleNavigation("/dashboard/assinatura")}
+                data-testid="menu-item-subscription"
+              >
+                <Settings className="w-4 h-4 mr-2" />
+                Configurações
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem 
+                onClick={handleLogout}
+                className="text-destructive focus:text-destructive"
+                data-testid="menu-item-logout"
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                Sair
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </header>
