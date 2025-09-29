@@ -1734,6 +1734,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Enhanced manual subscription sync endpoint - accepts user ID or customer ID
   app.post("/api/stripe/sync-subscription-manual", requireAuth, requireAdmin, async (req, res) => {
+    const adminUserId = req.session.user?.id || 'system';
     try {
       const { userId, customerId } = req.body;
       
