@@ -37,9 +37,9 @@ export function SubscriptionGuard({ children }: SubscriptionGuardProps) {
     );
   }
 
-  // If user is not logged in, redirect to registration page
+  // If user is not logged in, redirect to login page
   if (!user) {
-    return <Redirect to="/register" />;
+    return <Redirect to="/login" />;
   }
 
   // User is authenticated - allow access to dashboard (subscription managed inside)
