@@ -15,6 +15,9 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), (req,
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// Trust proxy for HTTPS cookies behind Replit proxy
+app.set('trust proxy', 1);
+
 // Session configuration
 app.use(session({
   secret: process.env.SESSION_SECRET || 'nutrichatbot-dev-secret-change-in-production',
@@ -23,7 +26,8 @@ app.use(session({
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    sameSite: 'lax' // Allow cookies in cross-site contexts
   }
 }));
 
