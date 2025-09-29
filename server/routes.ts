@@ -216,8 +216,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   };
 
+  // Test endpoint to verify webhook is reachable
+  app.get("/api/stripe/webhook-test", (req, res) => {
+    console.log('[Webhook Test] Endpoint called successfully');
+    res.json({ 
+      status: 'ok', 
+      message: 'Webhook endpoint is reachable',
+      timestamp: new Date().toISOString()
+    });
+  });
+
   // Stripe webhook endpoint - handles raw body from middleware
   app.post("/api/stripe/webhook", async (req, res) => {
+    console.log('[Stripe Webhook] === WEBHOOK CALLED ===');
+    console.log('[Stripe Webhook] Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('[Stripe Webhook] Body type:', typeof req.body);
+    console.log('[Stripe Webhook] Body length:', req.body?.length || 'undefined');
+    
     // Get signature header - handle both string and array cases
     const sigHeader = req.headers['stripe-signature'];
     const sig = Array.isArray(sigHeader) ? sigHeader[0] : sigHeader;
@@ -232,6 +247,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Verify webhook signature
       const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+      console.log('[Stripe Webhook] Secret configured:', !!webhookSecret);
+      console.log('[Stripe Webhook] Secret prefix:', webhookSecret?.substring(0, 7) || 'undefined');
+      
       if (!webhookSecret) {
         console.error('[Stripe Webhook] Missing STRIPE_WEBHOOK_SECRET environment variable');
         return res.status(500).send('Webhook secret not configured');
