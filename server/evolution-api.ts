@@ -83,7 +83,7 @@ export class EvolutionApiService {
         events: [
           "MESSAGES_UPSERT"
         ],
-        byEvents: true,
+        byEvents: false,
         base64: true,
         enabled: true
       }
