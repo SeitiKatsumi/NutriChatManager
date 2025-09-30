@@ -125,6 +125,15 @@ export default function SubscriptionSuccess() {
                 </p>
               </div>
               
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800" data-testid="validation-notice">
+                <p className="text-sm text-blue-700 dark:text-blue-300 flex items-start gap-2">
+                  <span className="text-base">⏱️</span>
+                  <span>
+                    <strong>Importante:</strong> Sua assinatura pode levar até 10 minutos para ser totalmente validada em nosso sistema. Se o status ainda aparecer como "Pendente", aguarde alguns minutos e atualize a página.
+                  </span>
+                </p>
+              </div>
+              
               <Button 
                 onClick={handleGoToDashboard} 
                 className="w-full"
