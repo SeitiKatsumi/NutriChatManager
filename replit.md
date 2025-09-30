@@ -48,6 +48,16 @@ The system implements a robust dual-strategy approach to handle Stripe webhooks,
 
 This approach guarantees reliable webhook processing while maintaining optimal performance when the cache is current.
 
+### Webhook Date Validation Fix
+To prevent "Invalid time value" errors when processing webhooks (especially `customer.subscription.created` before payment), all timestamp conversions now use a safe helper function:
+
+**`safeTimestampToDate()`** - Validates timestamps before conversion:
+- Returns valid Date if timestamp exists
+- Returns default date (2099-12-31) if timestamp is null/undefined/invalid
+- Prevents webhook failures from missing subscription dates
+
+**Critical for:** Events fired before payment completion where `current_period_start/end` may be null.
+
 ## State Management
 Client-side state is managed through TanStack Query for server state and React hooks for local component state. The query client is configured with custom fetch functions that handle authentication and error responses uniformly across the application.
 

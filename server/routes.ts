@@ -226,6 +226,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // Helper function to safely convert Unix timestamp to Date
+  const safeTimestampToDate = (timestamp: number | null | undefined): Date => {
+    if (!timestamp || isNaN(timestamp)) {
+      // Return a default date far in the future if timestamp is invalid
+      return new Date('2099-12-31');
+    }
+    return new Date(timestamp * 1000);
+  };
+
   // Stripe webhook endpoint - handles raw body from middleware
   app.post("/api/stripe/webhook", async (req, res) => {
     console.log('[Stripe Webhook] === WEBHOOK CALLED ===');
@@ -280,8 +289,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             await storage.updateSubscriptionFromWebhook(customerId, {
               subscriptionId: subscription.id,
               status: subscription.status,
-              currentPeriodStart: new Date((subscription as any).current_period_start * 1000),
-              currentPeriodEnd: new Date((subscription as any).current_period_end * 1000),
+              currentPeriodStart: safeTimestampToDate((subscription as any).current_period_start),
+              currentPeriodEnd: safeTimestampToDate((subscription as any).current_period_end),
               priceId: subscription.items.data[0]?.price.id || null,
             });
             
@@ -300,8 +309,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await storage.updateSubscriptionFromWebhook(customerId, {
             subscriptionId: subscription.id,
             status: subscription.status,
-            currentPeriodStart: new Date((subscription as any).current_period_start * 1000),
-            currentPeriodEnd: new Date((subscription as any).current_period_end * 1000),
+            currentPeriodStart: safeTimestampToDate((subscription as any).current_period_start),
+            currentPeriodEnd: safeTimestampToDate((subscription as any).current_period_end),
             priceId: subscription.items.data[0]?.price.id || null,
           });
           
@@ -319,8 +328,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await storage.updateSubscriptionFromWebhook(customerId, {
             subscriptionId: subscription.id,
             status: 'canceled',
-            currentPeriodStart: new Date((subscription as any).current_period_start * 1000),
-            currentPeriodEnd: new Date((subscription as any).current_period_end * 1000),
+            currentPeriodStart: safeTimestampToDate((subscription as any).current_period_start),
+            currentPeriodEnd: safeTimestampToDate((subscription as any).current_period_end),
             priceId: subscription.items.data[0]?.price.id || null,
           });
           
@@ -338,8 +347,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await storage.updateSubscriptionFromWebhook(customerId, {
             subscriptionId: subscription.id,
             status: subscription.status,
-            currentPeriodStart: new Date((subscription as any).current_period_start * 1000),
-            currentPeriodEnd: new Date((subscription as any).current_period_end * 1000),
+            currentPeriodStart: safeTimestampToDate((subscription as any).current_period_start),
+            currentPeriodEnd: safeTimestampToDate((subscription as any).current_period_end),
             priceId: subscription.items.data[0]?.price.id || null,
           });
           
@@ -365,8 +374,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               await storage.updateSubscriptionFromWebhook(customerId, {
                 subscriptionId: subscription.id,
                 status: subscription.status,
-                currentPeriodStart: new Date((subscription as any).current_period_start * 1000),
-                currentPeriodEnd: new Date((subscription as any).current_period_end * 1000),
+                currentPeriodStart: safeTimestampToDate((subscription as any).current_period_start),
+                currentPeriodEnd: safeTimestampToDate((subscription as any).current_period_end),
                 priceId: subscription.items.data[0]?.price.id || null,
               });
               
