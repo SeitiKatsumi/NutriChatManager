@@ -1041,12 +1041,13 @@ export class DirectusStorage implements IStorage {
         console.log(`[DirectusStorage] ⚠️ User not found by stripe_customer_id, trying email lookup...`);
         
         try {
-          // Create Stripe instance to get customer email
-          const Stripe = (await import('stripe')).default;
-          const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+          // Get customer email from Stripe - use environment's Stripe instance
+          const Stripe = require('stripe').default || require('stripe');
+          const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY, {
             apiVersion: '2025-08-27.basil',
           });
-          const customer = await stripe.customers.retrieve(stripeCustomerId);
+          
+          const customer = await stripeInstance.customers.retrieve(stripeCustomerId);
           
           if ('email' in customer && customer.email) {
             console.log(`[DirectusStorage] Found email from Stripe customer: ${customer.email}`);
@@ -1064,14 +1065,15 @@ export class DirectusStorage implements IStorage {
           } else {
             console.error(`[DirectusStorage] ❌ Stripe customer has no email!`);
           }
-        } catch (stripeError) {
-          console.error(`[DirectusStorage] Error fetching customer from Stripe:`, stripeError);
+        } catch (stripeError: any) {
+          console.error(`[DirectusStorage] Error fetching customer from Stripe:`, stripeError.message);
         }
       }
       
       if (!user) {
-        console.error(`[DirectusStorage] ❌ CRITICAL: User not found by stripe_customer_id OR email for customer: ${stripeCustomerId}`);
-        return;
+        const errorMsg = `User not found by stripe_customer_id OR email for customer: ${stripeCustomerId}`;
+        console.error(`[DirectusStorage] ❌ CRITICAL: ${errorMsg}`);
+        throw new Error(errorMsg);
       }
 
       // Update user subscription data in Directus
@@ -1096,8 +1098,9 @@ export class DirectusStorage implements IStorage {
       });
 
       console.log(`[DirectusStorage] ✅ Successfully updated subscription for user ${user.id}: status=${subscriptionData.status}`);
-    } catch (error) {
-      console.error('[DirectusStorage] ❌ Error updating subscription from webhook:', error);
+    } catch (error: any) {
+      console.error('[DirectusStorage] ❌ Error updating subscription from webhook:', error.message || error);
+      console.error('[DirectusStorage] Stack trace:', error.stack);
       throw error;
     }
   }

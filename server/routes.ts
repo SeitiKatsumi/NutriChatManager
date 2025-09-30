@@ -400,8 +400,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Return a 200 response to acknowledge receipt of the event
       res.status(200).json({ received: true });
     } catch (error: any) {
-      console.error('[Stripe Webhook] Error processing webhook:', error);
-      res.status(500).json({ error: 'Webhook processing failed' });
+      console.error('[Stripe Webhook] ❌ Error processing webhook:', error.message || error);
+      console.error('[Stripe Webhook] Error stack:', error.stack);
+      console.error('[Stripe Webhook] Error details:', JSON.stringify({
+        name: error.name,
+        message: error.message,
+        code: error.code,
+        type: error.type
+      }, null, 2));
+      res.status(500).json({ error: 'Webhook processing failed', details: error.message });
     }
   });
 
