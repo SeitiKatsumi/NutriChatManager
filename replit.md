@@ -61,13 +61,12 @@ To prevent "Invalid time value" errors when processing webhooks (especially `cus
 ### Frontend Cache and Real-time Updates
 To handle Directus API cache delays and ensure users see updated subscription status promptly:
 
-**Auto-refresh System** in Subscription Management Page:
-- **Automatic polling**: When subscription status is "pendente", the page checks for updates every 10 seconds
-- **Manual refresh**: "Atualizar Status" button allows users to force an immediate update
-- **Auto-stop**: Polling automatically stops once status changes to "ativo"
+**Manual Refresh System** in Subscription Management Page:
+- **Manual refresh button**: "Atualizar Status" button allows users to force an immediate update
 - **User feedback**: Clear messaging explains that validation can take up to 10 minutes
+- **Context-aware**: Uses AuthContext's `checkAuth()` method to fetch latest data from Directus
 
-This solves the cache synchronization issue where Directus updates from Stripe webhooks may not be immediately visible through API queries.
+This allows users to check their subscription status after payment without automatic polling that could degrade user experience.
 
 ## State Management
 Client-side state is managed through TanStack Query for server state and React hooks for local component state. The query client is configured with custom fetch functions that handle authentication and error responses uniformly across the application. The authentication context (AuthContext) manages user and nutritionist data with support for manual refresh via the `checkAuth()` method, which is utilized by the auto-refresh system in subscription management.

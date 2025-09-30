@@ -80,18 +80,6 @@ export default function DashboardAssinatura() {
     }
   };
 
-  // Auto-refresh when status is pending (every 10 seconds)
-  useEffect(() => {
-    if (currentStatus === 'pendente') {
-      const intervalId = setInterval(() => {
-        console.log('[Auto-refresh] Checking subscription status...');
-        checkAuth();
-      }, 10000); // 10 seconds
-
-      return () => clearInterval(intervalId);
-    }
-  }, [currentStatus, checkAuth]);
-
   return (
     <div className="container mx-auto p-6 max-w-6xl" data-testid="dashboard-assinatura">
       <div className="space-y-6">
@@ -148,7 +136,7 @@ export default function DashboardAssinatura() {
                       Após o pagamento, sua assinatura pode levar até 10 minutos para ser validada.
                     </p>
                     <p className="text-xs opacity-90">
-                      Esta página está verificando automaticamente a cada 10 segundos. Você também pode usar o botão "Atualizar Status" para forçar a atualização.
+                      Use o botão "Atualizar Status" para verificar se seu pagamento já foi processado.
                     </p>
                   </div>
                 </div>
