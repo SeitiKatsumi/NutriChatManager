@@ -58,8 +58,19 @@ To prevent "Invalid time value" errors when processing webhooks (especially `cus
 
 **Critical for:** Events fired before payment completion where `current_period_start/end` may be null.
 
+### Frontend Cache and Real-time Updates
+To handle Directus API cache delays and ensure users see updated subscription status promptly:
+
+**Auto-refresh System** in Subscription Management Page:
+- **Automatic polling**: When subscription status is "pendente", the page checks for updates every 10 seconds
+- **Manual refresh**: "Atualizar Status" button allows users to force an immediate update
+- **Auto-stop**: Polling automatically stops once status changes to "ativo"
+- **User feedback**: Clear messaging explains that validation can take up to 10 minutes
+
+This solves the cache synchronization issue where Directus updates from Stripe webhooks may not be immediately visible through API queries.
+
 ## State Management
-Client-side state is managed through TanStack Query for server state and React hooks for local component state. The query client is configured with custom fetch functions that handle authentication and error responses uniformly across the application.
+Client-side state is managed through TanStack Query for server state and React hooks for local component state. The query client is configured with custom fetch functions that handle authentication and error responses uniformly across the application. The authentication context (AuthContext) manages user and nutritionist data with support for manual refresh via the `checkAuth()` method, which is utilized by the auto-refresh system in subscription management.
 
 ## Development Tools
 The project uses modern development tooling including TypeScript for type safety, ESLint for code quality, Tailwind CSS for styling, and PostCSS for CSS processing. The build process supports both development and production environments with proper asset optimization.

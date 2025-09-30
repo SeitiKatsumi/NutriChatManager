@@ -1,15 +1,16 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Check, Crown, Zap, CreditCard, AlertTriangle } from "lucide-react";
+import { Check, Crown, Zap, CreditCard, AlertTriangle, RefreshCw } from "lucide-react";
 import EmbeddedPayment from "@/components/embedded-payment";
 
 export default function DashboardAssinatura() {
-  const { nutritionist } = useAuth();
+  const { nutritionist, checkAuth } = useAuth();
   const [selectedPlan, setSelectedPlan] = useState<'pro' | 'enterprise' | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const plans = [
     {
@@ -65,9 +66,31 @@ export default function DashboardAssinatura() {
 
   const handlePlanSelect = (planId: 'pro' | 'enterprise') => {
     setSelectedPlan(planId);
-    // TODO: Implement embedded Stripe payment
     console.log('Selected plan:', planId);
   };
+
+  const handleRefreshStatus = async () => {
+    setIsRefreshing(true);
+    try {
+      await checkAuth();
+    } catch (error) {
+      console.error('Error refreshing status:', error);
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 500);
+    }
+  };
+
+  // Auto-refresh when status is pending (every 10 seconds)
+  useEffect(() => {
+    if (currentStatus === 'pendente') {
+      const intervalId = setInterval(() => {
+        console.log('[Auto-refresh] Checking subscription status...');
+        checkAuth();
+      }, 10000); // 10 seconds
+
+      return () => clearInterval(intervalId);
+    }
+  }, [currentStatus, checkAuth]);
 
   return (
     <div className="container mx-auto p-6 max-w-6xl" data-testid="dashboard-assinatura">
@@ -102,9 +125,37 @@ export default function DashboardAssinatura() {
                   </span>
                 </div>
               </div>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefreshStatus}
+                disabled={isRefreshing}
+                data-testid="button-refresh-status"
+                className="flex items-center gap-2"
+              >
+                <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                {isRefreshing ? 'Atualizando...' : 'Atualizar Status'}
+              </Button>
             </div>
 
-            {currentStatus !== 'ativo' && (
+            {currentStatus === 'pendente' && (
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                <div className="flex items-start gap-2 text-blue-700 dark:text-blue-300">
+                  <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm space-y-1">
+                    <p className="font-medium">
+                      Após o pagamento, sua assinatura pode levar até 10 minutos para ser validada.
+                    </p>
+                    <p className="text-xs opacity-90">
+                      Esta página está verificando automaticamente a cada 10 segundos. Você também pode usar o botão "Atualizar Status" para forçar a atualização.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {currentStatus !== 'ativo' && currentStatus !== 'pendente' && (
               <div className="bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
                 <div className="flex items-center gap-2 text-yellow-800 dark:text-yellow-200">
                   <AlertTriangle className="w-4 h-4" />
