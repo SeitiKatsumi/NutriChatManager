@@ -12,7 +12,7 @@ interface Nutritionist {
   id: string;
   fullName: string;
   email: string;
-  crn: string;
+  cpfCnpj: string;
   phone: string | null;
   specialization: string | null;
   whatsappNumber: string | null;

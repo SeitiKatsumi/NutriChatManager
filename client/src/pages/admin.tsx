@@ -15,7 +15,7 @@ interface Nutritionist {
   id: string;
   fullName: string;
   email: string;
-  crn: string;
+  cpfCnpj: string;
   phone: string;
   address: string;
   specialization: string;
@@ -200,7 +200,7 @@ export default function Admin() {
                 <TableRow>
                   <TableHead>Nome</TableHead>
                   <TableHead>Email</TableHead>
-                  <TableHead>CRN</TableHead>
+                  <TableHead>CPF/CNPJ</TableHead>
                   <TableHead>WhatsApp</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Último Acesso</TableHead>
@@ -219,7 +219,7 @@ export default function Admin() {
                         {nutritionist.email}
                       </div>
                     </TableCell>
-                    <TableCell>{nutritionist.crn || "Não informado"}</TableCell>
+                    <TableCell>{nutritionist.cpfCnpj || "Não informado"}</TableCell>
                     <TableCell>
                       <div className="flex items-center">
                         <Phone className="w-4 h-4 mr-2 text-muted-foreground" />
@@ -264,7 +264,7 @@ export default function Admin() {
                                 <div className="space-y-2 text-sm">
                                   <p><strong>Nome:</strong> {selectedNutritionist.fullName}</p>
                                   <p><strong>Email:</strong> {selectedNutritionist.email}</p>
-                                  <p><strong>CRN:</strong> {selectedNutritionist.crn || "Não informado"}</p>
+                                  <p><strong>CPF/CNPJ:</strong> {selectedNutritionist.cpfCnpj || "Não informado"}</p>
                                   <p><strong>Telefone:</strong> {selectedNutritionist.phone || "Não informado"}</p>
                                   <p><strong>WhatsApp:</strong> {selectedNutritionist.whatsappNumber || "Não informado"}</p>
                                 </div>

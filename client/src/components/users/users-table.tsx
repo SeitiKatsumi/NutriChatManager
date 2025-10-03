@@ -196,7 +196,7 @@ export default function UsersTable({
                         </div>
                         <div>
                           <p className="font-medium text-foreground">{nutritionist.fullName}</p>
-                          <p className="text-sm text-muted-foreground">{nutritionist.crn}</p>
+                          <p className="text-sm text-muted-foreground">{nutritionist.cpfCnpj}</p>
                         </div>
                       </div>
                     </td>

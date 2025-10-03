@@ -18,7 +18,7 @@ const step1Schema = z.object({
   fullName: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
   email: z.string().email("Email inválido"),
   password: z.string().min(8, "Senha deve ter pelo menos 8 caracteres"),
-  crn: z.string().min(5, "CRN deve ter pelo menos 5 caracteres"),
+  cpfCnpj: z.string().min(11, "CPF/CNPJ deve ter pelo menos 11 caracteres"),
 });
 
 const step2Schema = z.object({
@@ -51,7 +51,7 @@ export default function StepForm({ currentStep, onStepChange, onComplete }: Step
       fullName: "",
       email: "",
       password: "",
-      crn: "",
+      cpfCnpj: "",
     },
   });
 
@@ -202,18 +202,18 @@ export default function StepForm({ currentStep, onStepChange, onComplete }: Step
         </div>
 
         <div>
-          <Label htmlFor="crn" className="block text-sm font-medium text-foreground mb-2">
-            CRN (Registro Profissional)
+          <Label htmlFor="cpfCnpj" className="block text-sm font-medium text-foreground mb-2">
+            CPF ou CNPJ
           </Label>
           <Input
-            id="crn"
-            placeholder="Ex: CRN-3 12345"
-            {...step1Form.register("crn")}
-            data-testid="input-crn"
+            id="cpfCnpj"
+            placeholder="Ex: 123.456.789-00 ou 12.345.678/0001-90"
+            {...step1Form.register("cpfCnpj")}
+            data-testid="input-cpfcnpj"
           />
-          {step1Form.formState.errors.crn && (
+          {step1Form.formState.errors.cpfCnpj && (
             <p className="text-sm text-destructive mt-1">
-              {step1Form.formState.errors.crn.message}
+              {step1Form.formState.errors.cpfCnpj.message}
             </p>
           )}
         </div>

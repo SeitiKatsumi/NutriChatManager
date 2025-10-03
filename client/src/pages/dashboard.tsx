@@ -42,7 +42,7 @@ export default function Dashboard() {
                 </Badge>
               </div>
               <p className="text-sm text-muted-foreground">
-                CRN: {dashboardData?.nutritionist?.crn || 'N/A'}
+                CPF/CNPJ: {dashboardData?.nutritionist?.cpfCnpj || 'N/A'}
               </p>
             </div>
           </div>

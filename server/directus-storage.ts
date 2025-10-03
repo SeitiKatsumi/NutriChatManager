@@ -44,7 +44,7 @@ export interface DirectusUser {
   status?: string;
   // Additional nutritionist fields
   full_name?: string;
-  crn?: string;
+  cpf_cnpj?: string;
   phone?: string;
   address?: string;
   specialization?: string;
@@ -216,7 +216,7 @@ function transformUserToDirectus(nutritionist: any): DirectusUser {
     role: '90ce89ef-abe3-4359-9fc0-3e882127775a',
     status: nutritionist.status || 'active',
     full_name: nutritionist.fullName,
-    crn: nutritionist.crn,
+    cpf_cnpj: nutritionist.cpfCnpj,
     phone: nutritionist.phone,
     address: nutritionist.address,
     specialization: nutritionist.specialization,
@@ -245,7 +245,7 @@ function transformUserFromDirectus(directusUser: any): any {
     email: directusUser.email,
     // Note: password should not be returned from Directus
     password: '', // This will be handled separately
-    crn: directusUser.crn,
+    cpfCnpj: directusUser.cpf_cnpj,
     phone: directusUser.phone,
     address: directusUser.address,
     specialization: directusUser.specialization,

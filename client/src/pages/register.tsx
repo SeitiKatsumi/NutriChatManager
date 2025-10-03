@@ -23,9 +23,7 @@ export default function Register() {
               <div className="w-16 h-16 bg-primary rounded-xl mx-auto mb-4 flex items-center justify-center">
                 <Star className="w-8 h-8 text-primary-foreground" />
               </div>
-              <h2 className="text-2xl font-bold text-foreground mb-2">
-                Cadastro de Nutricionista
-              </h2>
+              <h2 className="text-2xl font-bold text-foreground mb-2">Cadastro Nutri Chatbot</h2>
               <p className="text-muted-foreground">
                 Configure seu agente de atendimento IA via WhatsApp
               </p>

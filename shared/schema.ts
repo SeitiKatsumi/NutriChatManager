@@ -9,7 +9,7 @@ export const nutritionistSchema = z.object({
   fullName: z.string(),
   email: z.string().email(),
   password: z.string(),
-  crn: z.string(), // Professional registration number
+  cpfCnpj: z.string(), // CPF or CNPJ
   phone: z.string().optional(),
   address: z.string().optional(),
   specialization: z.string().optional(),
@@ -147,8 +147,8 @@ export const validatePhone = (phone: string) => {
   return z.string().min(10).max(15).safeParse(phone);
 };
 
-export const validateCRN = (crn: string) => {
-  return z.string().min(4).max(20).safeParse(crn);
+export const validateCPFCNPJ = (cpfCnpj: string) => {
+  return z.string().min(11).max(18).safeParse(cpfCnpj);
 };
 
 // Extended validation schemas for forms
