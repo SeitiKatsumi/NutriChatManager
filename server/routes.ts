@@ -10,6 +10,7 @@ import { directusClient } from "./lib/directus.js";
 // Evolution API service will be imported dynamically where needed
 import { evolutionApi } from "./evolution-api";
 import { evolutionRedis } from "./evolution-redis";
+import { patientHistoryRedis } from "./patient-history-redis";
 import { openaiService } from "./openai-service";
 // Stripe integration
 import Stripe from "stripe";
@@ -1202,7 +1203,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log(`[AI Ask] Getting messages for patient ${patient.fullName} (${phoneNumber})`);
       
-      const messages = await evolutionRedis.getPatientMessages(nutritionistId, phoneNumber, 500);
+      const messages = await patientHistoryRedis.getPatientMessages(nutritionistId, phoneNumber, 500);
       
       if (messages.length === 0) {
         return res.json({
@@ -1267,7 +1268,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const phoneNumber = patient.whatsapp || patient.phone;
       const nutritionistId = req.session.user.nutritionistId;
       
-      const messages = await evolutionRedis.getPatientMessages(nutritionistId, phoneNumber, 200);
+      const messages = await patientHistoryRedis.getPatientMessages(nutritionistId, phoneNumber, 200);
       
       if (messages.length === 0) {
         return res.json({
