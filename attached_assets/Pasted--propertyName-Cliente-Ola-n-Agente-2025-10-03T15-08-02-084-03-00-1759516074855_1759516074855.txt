@@ -1,0 +1,43 @@
+[
+  {
+    "propertyName": [
+      "Cliente: Ola\n",
+      "Agente: 2025-10-03T15:08:02.084-03:00 : Oi! Que bom te ver por aqui! 😊 O que te motivou a buscar um acompanhamento nutricional?",
+      "Cliente: Ola, Estou buscando performance\n",
+      "Agente: 2025-10-03T15:08:44.308-03:00 : Legal! Aumentar a performance é um objetivo super interessante. Como tá sua rotina no geral? Alimentação, sono, treinos... pode ir contando do seu jeito mesmo!",
+      "Cliente: Estava com uma nutruloga, estou bem dedicado, treino todos os dias, mais de 2 horas por dia.. minha rotina é bem corrida\n",
+      "Agente: 2025-10-03T15:09:37.206-03:00 : Ótimo saber que você está dedicado e treinando com frequência! Isso é fundamental para alcançar seus objetivos. E me conta, como está sua alimentação nesse dia a dia corrido?",
+      "Cliente: estou comendo bem, sempre comida saudável...\n",
+      "Agente: 2025-10-03T15:10:14.769-03:00 : Isso é ótimo! Manter uma alimentação saudável é essencial. Agora, me diz uma coisa: você tem alguma meta específica em mente? Tipo emagrecer, ganhar massa, ter mais energia, controlar alguma condição?",
+      "Cliente: melhorar no ciclismo\n",
+      "Agente: 2025-10-03T15:10:33.315-03:00 : Perfeito! Melhorar no ciclismo é uma meta muito legal. Agora, só para eu entender melhor, qual é o seu nome completo?",
+      "Cliente: Vicente Costa Zippinotti\n",
+      "Agente: 2025-10-03T15:10:50.226-03:00 : Obrigado, Vicente! Agora, me conta: qual sua data de nascimento?",
+      "Cliente: 01/07/2002\n",
+      "Agente: 2025-10-03T15:11:05.983-03:00 : Ótimo! Agora, qual é o seu sexo? (Masculino / Feminino / Outro)",
+      "Cliente: Masculino\n",
+      "Agente: 2025-10-03T15:11:17.200-03:00 : Perfeito, Vicente! Agora, me diz: qual a sua altura em centímetros?",
+      "Cliente: 170\n",
+      "Agente: 2025-10-03T15:11:27.439-03:00 : Legal! Agora, me conta: qual é o seu peso em quilos?",
+      "Cliente: 60\n",
+      "Agente: 2025-10-03T15:11:38.693-03:00 : Obrigado por compartilhar, Vicente! Agora, me diz: você possui alguma condição de saúde atual ou pré-existente?",
+      "Cliente: não, tudo certo\n",
+      "Agente: 2025-10-03T15:12:01.905-03:00 : Que bom saber que está tudo certo! Agora, você faz uso de alguma medicação? Se sim, qual?",
+      "Cliente: apenas suplementação\n",
+      "Agente: 2025-10-03T15:12:18.249-03:00 : Entendi! E você tem alguma alergia ou restrição alimentar?",
+      "Cliente: não\n",
+      "Agente: 2025-10-03T15:12:29.830-03:00 : Ótimo! Agora, me conta: quantas refeições você costuma fazer por dia?",
+      "Cliente: 4\n",
+      "Agente: 2025-10-03T15:12:41.852-03:00 : Perfeito! Você costuma beliscar entre as refeições?",
+      "Cliente: apenas lanvhes da tarde\n",
+      "Agente: 2025-10-03T15:13:10.837-03:00 : Legal! E quais são os alimentos que mais fazem parte do seu dia a dia?",
+      "Cliente: acho que comida caseira. Arroz, feijão carne ou frango, etc\n",
+      "Agente: 2025-10-03T15:13:37.760-03:00 : Isso parece uma base super saudável! Agora, como é sua hidratação? Você sabe quantos litros de água costuma beber por dia?",
+      "Cliente: acho que uns 3 L mais ou menos\n",
+      "Agente: 2025-10-03T15:14:05.215-03:00 : Muito bom! Agora, você segue alguma dieta específica?",
+      "Cliente: Não\n",
+      "Agente: 2025-10-03T15:18:17.739-03:00 : Certo! Tem algum alimento que você evita ou não gosta?",
+      "Cliente: Vitaminas batidas no geral\n"
+    ]
+  }
+]
