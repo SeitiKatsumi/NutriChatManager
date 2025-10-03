@@ -91,17 +91,21 @@ export class PatientHistoryRedisService {
         else if (messageStr.startsWith('Agente: ')) {
           const content = messageStr.substring('Agente: '.length);
           
-          const timestampMatch = content.match(/^([^:]+)\s*:\s*(.+)$/);
+          // Find the FIRST occurrence of " : " to split timestamp from message
+          // Format: "Agente: {ISO timestamp} : {message text}"
+          // Using indexOf (not lastIndexOf) to handle messages with " : " inside the text
+          const separatorIndex = content.indexOf(' : ');
           
-          if (timestampMatch) {
-            const timestampStr = timestampMatch[1].trim();
-            const text = timestampMatch[2].trim();
+          if (separatorIndex > -1) {
+            const timestampStr = content.substring(0, separatorIndex).trim();
+            const text = content.substring(separatorIndex + 3).trim(); // +3 to skip " : "
             
             const timestamp = new Date(timestampStr).getTime();
             
             if (!isNaN(timestamp)) {
               lastTimestamp = timestamp;
             } else {
+              console.warn(`[Patient History Redis] Failed to parse timestamp for agent message: "${timestampStr}"`);
               lastTimestamp += 1000;
             }
             
@@ -113,6 +117,8 @@ export class PatientHistoryRedisService {
               type: 'text',
               phoneNumber
             });
+          } else {
+            console.warn('[Patient History Redis] Agent message missing " : " separator:', messageStr);
           }
         } else {
           console.warn('[Patient History Redis] Unknown message format:', messageStr);

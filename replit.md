@@ -32,6 +32,47 @@ All new WhatsApp instances are automatically configured with N8N webhook integra
 
 This automatic configuration ensures seamless integration between WhatsApp conversations and the N8N automation workflows, enabling real-time message processing and AI-powered responses without manual webhook setup.
 
+## AI Consultation & Patient History
+
+The system provides AI-powered consultation analysis using OpenAI to help nutritionists gain insights from patient conversations stored in Redis.
+
+### Patient History Redis Integration
+**Service:** `server/patient-history-redis.ts`
+
+The application connects to a dedicated Redis instance to retrieve and analyze patient conversation history:
+
+**Redis Configuration:**
+- **Host:** srv-captain--nutrichatbot-redis
+- **Port:** 6379 (standard Redis port)
+- **Authentication:** Password-based (stored in REDIS_PASSWORD secret)
+
+**Data Structure:**
+- **Chat Keys:** `{phoneNumber}@s.whatsapp.net_nutrciipppp`
+  - Example: `5511933772911@s.whatsapp.net_nutrciipppp`
+- **Storage Format:** JSON array with `propertyName` field containing conversation strings
+- **Message Format:**
+  - Client messages: `"Cliente: {text}"`
+  - Agent messages: `"Agente: {ISO timestamp} : {text}"`
+  - Example: `"Agente: 2025-10-03T15:08:02.084-03:00 : Oi! Que bom te ver por aqui!"`
+
+**Message Processing:**
+1. Fetches conversation data using patient's phone number
+2. Parses message strings to extract text and timestamps
+3. Converts to structured ProcessedMessage format
+4. Sorts chronologically (oldest first)
+5. Passes to OpenAI service for analysis
+
+**AI Capabilities:**
+- **Quick Insights** (`/api/ai/insights/:patientId`): Generates automatic summary, key topics, patient mood, and recommendations
+- **Custom Questions** (`/api/ai/ask`): Answers specific questions about patient conversations
+- **Source Attribution**: Shows which messages support each AI response
+- **Pre-defined Questions**: Common queries like "Resumo das últimas conversas" and "Principais preocupações mencionadas"
+
+**Frontend Components:**
+- `client/src/components/patients/ai-insights.tsx`: AI consultation interface in patient details dialog
+- Displays insights, allows custom questions, shows conversation sources
+- Requires active subscription to access AI features
+
 ## Stripe Payment Integration
 
 ### Webhook Processing with Directus Cache Solution
@@ -92,11 +133,10 @@ The project uses modern development tooling including TypeScript for type safety
 ### Directus CMS Integration
 - **DIRECTUS_TOKEN**: Admin token for Directus CMS integration
 
-### Optional Redis Configuration
-- **REDIS_HOST**: Redis server hostname (if using external Redis)
-- **REDIS_PASSWORD**: Redis authentication password  
-- **REDIS_PORT**: Redis server port
-- **REDIS_URL**: Complete Redis connection URL
+### Patient History Redis (Required for AI Features)
+- **REDIS_HOST**: Redis server hostname for patient conversation history
+- **REDIS_PORT**: Redis server port (default: 6379)
+- **REDIS_PASSWORD**: Redis authentication password
 
 ## Deployment Steps
 
