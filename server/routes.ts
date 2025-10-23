@@ -1244,13 +1244,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Access denied - patient not found or not your patient" });
       }
       
-      // Get messages from Evolution Redis
-      const phoneNumber = patient.phone;
-      const nutritionistId = req.session.user.nutritionistId;
+      // Get messages from Directus by patient ID
+      console.log(`[AI Ask] Getting messages for patient ${patient.fullName} (ID: ${patientId})`);
       
-      console.log(`[AI Ask] Getting messages for patient ${patient.fullName} (${phoneNumber})`);
-      
-      const messages = await patientHistoryDirectus.getPatientMessages(nutritionistId, phoneNumber, 500);
+      const messages = await patientHistoryDirectus.getPatientMessages(patientId.toString(), 500);
       
       if (messages.length === 0) {
         return res.json({
@@ -1311,11 +1308,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Access denied - patient not found or not your patient" });
       }
       
-      // Get messages from Directus
-      const phoneNumber = patient.whatsappNumber || patient.phone;
-      const nutritionistId = req.session.user.nutritionistId;
-      
-      const messages = await patientHistoryDirectus.getPatientMessages(nutritionistId, phoneNumber, 200);
+      // Get messages from Directus by patient ID
+      const messages = await patientHistoryDirectus.getPatientMessages(patientId, 200);
       
       if (messages.length === 0) {
         return res.json({

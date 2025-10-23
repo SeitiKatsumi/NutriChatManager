@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { ProcessedMessage } from './evolution-redis';
+import { ProcessedMessage } from './patient-history-directus';
 
 // Using gpt-4o-mini as a reliable and cost-effective model
 if (!process.env.OPENAI_API_KEY) {

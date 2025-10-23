@@ -1159,30 +1159,4 @@ export class DirectusStorage implements IStorage {
     }
   }
 
-  /**
-   * Get WhatsApp messages by phone number (when patient not yet identified)
-   */
-  async getPatientMessagesByPhone(phoneNumber: string, limit: number = 200): Promise<any[]> {
-    try {
-      console.log(`[DirectusStorage] Getting messages for phone ${phoneNumber}, limit: ${limit}`);
-      
-      const response = await this.client.request(
-        `/items/whatsapp_messages?filter[phone_number][_eq]=${phoneNumber}&sort=-timestamp&limit=${limit}`
-      );
-
-      const messages = response.data || [];
-      console.log(`[DirectusStorage] Found ${messages.length} messages for phone ${phoneNumber}`);
-      
-      // Transform timestamps to Date objects
-      return messages.map((msg: any) => ({
-        ...msg,
-        timestamp: new Date(msg.timestamp),
-        date_created: msg.date_created ? new Date(msg.date_created) : undefined,
-        date_updated: msg.date_updated ? new Date(msg.date_updated) : undefined,
-      }));
-    } catch (error: any) {
-      console.error('[DirectusStorage] Error getting messages by phone:', error.message);
-      throw error;
-    }
-  }
 }
