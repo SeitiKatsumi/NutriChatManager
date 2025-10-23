@@ -143,8 +143,8 @@ export default function Header() {
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem 
-                onClick={() => handleNavigation("/dashboard/assinatura")}
-                data-testid="menu-item-subscription"
+                onClick={() => handleNavigation("/settings")}
+                data-testid="menu-item-settings"
               >
                 <Settings className="w-4 h-4 mr-2" />
                 Configurações
