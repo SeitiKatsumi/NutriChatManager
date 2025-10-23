@@ -56,6 +56,9 @@ export interface DirectusUser {
   Token_Evolution?: string;
   Instancia_Evolution?: string;
   Whatsapp_IA?: string;
+  // AI Agent customization fields
+  mensagem_inicial?: string; // Initial greeting message from AI agent
+  nome_do_agente?: string; // AI agent name
   // Stripe subscription fields
   stripe_customer_id?: string;
   subscription_status?: 'trial' | 'active' | 'past_due' | 'canceled' | 'incomplete' | null;
@@ -229,6 +232,9 @@ function transformUserToDirectus(nutritionist: any): DirectusUser {
     Token_Evolution: nutritionist.evolutionToken,
     Instancia_Evolution: nutritionist.evolutionInstanceName,
     Whatsapp_IA: nutritionist.whatsappIA,
+    // AI Agent customization fields
+    mensagem_inicial: nutritionist.mensagem_inicial,
+    nome_do_agente: nutritionist.nome_do_agente,
     // Stripe subscription fields
     stripe_customer_id: nutritionist.stripeCustomerId,
     subscription_status: nutritionist.subscriptionStatus,
@@ -260,6 +266,9 @@ function transformUserFromDirectus(directusUser: any): any {
     evolutionToken: directusUser.Token_Evolution,
     evolutionInstanceName: directusUser.Instancia_Evolution,
     whatsappIA: directusUser.Whatsapp_IA,
+    // AI Agent customization fields
+    mensagem_inicial: directusUser.mensagem_inicial,
+    nome_do_agente: directusUser.nome_do_agente,
     // Stripe subscription fields
     stripeCustomerId: directusUser.stripe_customer_id,
     subscriptionStatus: directusUser.subscription_status,

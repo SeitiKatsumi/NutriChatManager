@@ -23,6 +23,9 @@ export const nutritionistSchema = z.object({
   evolutionInstanceName: z.string().optional(), // Instancia_Evolution in Directus
   evolutionToken: z.string().optional(),        // Token_Evolution in Directus  
   whatsappIA: z.string().optional(),            // Whatsapp_IA in Directus (clean format: 5511983283363)
+  // AI Agent customization fields
+  mensagem_inicial: z.string().optional(),      // Initial greeting message from AI agent
+  nome_do_agente: z.string().optional(),        // AI agent name
   createdAt: z.date(),
   updatedAt: z.date(),
 });
