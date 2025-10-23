@@ -43,11 +43,10 @@ The application stores and retrieves WhatsApp conversation history from a dedica
 
 **Directus Collection:** `whatsapp_messages`
 - **Fields:**
-  - `patient_id` (relation to Cadastro_de_Pacientes)
+  - `patient_id` (relation to Cadastro_de_Pacientes - primary lookup field)
   - `message_body` (text content)
   - `from_me` (boolean: true = AI agent, false = patient)
   - `message_type` (text, image, audio, video, document)
-  - `phone_number` (WhatsApp number in clean format)
   - `timestamp` (message datetime)
   - `date_created`, `date_updated` (auto-managed)
 
