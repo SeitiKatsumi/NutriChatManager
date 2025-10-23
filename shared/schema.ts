@@ -87,7 +87,6 @@ export const whatsappMessageSchema = z.object({
   message_body: z.string(),
   from_me: z.boolean(), // true = AI agent, false = patient
   message_type: z.enum(["text", "image", "audio", "video", "document"]).default("text"),
-  timestamp: z.coerce.date(), // Message timestamp from WhatsApp (accepts string/Date)
   date_created: z.coerce.date().optional(),
   date_updated: z.coerce.date().optional(),
 });

@@ -1119,8 +1119,6 @@ export class DirectusStorage implements IStorage {
           message_body: message.message_body,
           from_me: message.from_me,
           message_type: message.message_type || 'text',
-          phone_number: message.phone_number,
-          timestamp: message.timestamp instanceof Date ? message.timestamp.toISOString() : message.timestamp,
         }),
       });
 
@@ -1140,16 +1138,15 @@ export class DirectusStorage implements IStorage {
       console.log(`[DirectusStorage] Getting messages for patient ${patientId}, limit: ${limit}`);
       
       const response = await this.client.request(
-        `/items/whatsapp_messages?filter[patient_id][_eq]=${patientId}&sort=-timestamp&limit=${limit}`
+        `/items/whatsapp_messages?filter[patient_id][_eq]=${patientId}&sort=-date_created&limit=${limit}`
       );
 
       const messages = response.data || [];
       console.log(`[DirectusStorage] Found ${messages.length} messages for patient ${patientId}`);
       
-      // Transform timestamps to Date objects
+      // Transform date_created to Date objects
       return messages.map((msg: any) => ({
         ...msg,
-        timestamp: new Date(msg.timestamp),
         date_created: msg.date_created ? new Date(msg.date_created) : undefined,
         date_updated: msg.date_updated ? new Date(msg.date_updated) : undefined,
       }));

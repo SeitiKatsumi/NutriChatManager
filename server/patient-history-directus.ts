@@ -37,7 +37,7 @@ export class PatientHistoryDirectusService {
         return {
           id: String(msg.id || `msg_${index}`),
           text: msg.message_body || '',
-          timestamp: msg.timestamp instanceof Date ? msg.timestamp.getTime() : new Date(msg.timestamp).getTime(),
+          timestamp: msg.date_created instanceof Date ? msg.date_created.getTime() : new Date(msg.date_created).getTime(),
           fromMe: msg.from_me === true,
           type: messageType,
         };

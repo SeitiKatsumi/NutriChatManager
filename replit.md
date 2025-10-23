@@ -47,20 +47,19 @@ The application stores and retrieves WhatsApp conversation history from a dedica
   - `message_body` (text content)
   - `from_me` (boolean: true = AI agent, false = patient)
   - `message_type` (text, image, audio, video, document)
-  - `timestamp` (message datetime)
-  - `date_created`, `date_updated` (auto-managed)
+  - `date_created`, `date_updated` (auto-managed by Directus)
 
 **Storage Benefits:**
 - **Persistent**: PostgreSQL ensures messages are never lost (unlike Redis volatility)
-- **Queryable**: Supports complex filters by date, patient, phone, message type
+- **Queryable**: Supports complex filters by date, patient, message type
 - **Scalable**: Handles growing message volumes with proper indexing
 - **Integrated**: All patient data in single Directus system
 
 **Message Processing:**
 1. N8N webhook receives WhatsApp messages from Evolution API
 2. Saves to `whatsapp_messages` collection via POST /api/messages/webhook
-3. AI endpoints fetch messages via storage.getPatientMessages()
-4. Converts WhatsappMessage[] to ProcessedMessage[] format
+3. AI endpoints fetch messages via storage.getPatientMessages() - sorted by `date_created`
+4. Converts WhatsappMessage[] to ProcessedMessage[] format (using `date_created` as timestamp)
 5. Sorts chronologically and passes to OpenAI service
 
 **API Endpoints:**
