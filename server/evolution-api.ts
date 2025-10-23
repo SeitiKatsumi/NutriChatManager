@@ -79,7 +79,7 @@ export class EvolutionApiService {
       syncFullHistory: false,
       // Webhook configuration for N8N integration
       webhook: {
-        url: "https://n8n.apps.dna11.com.br/webhook/NutriChatbot02",
+        url: "https://n8n-nutrichatbot.app.11mind.com.br/webhook/nutrichatbot",
         events: [
           "MESSAGES_UPSERT"
         ],

@@ -25,7 +25,7 @@ The platform integrates with Evolution API for WhatsApp communication management
 
 ### Automatic Webhook Configuration
 All new WhatsApp instances are automatically configured with N8N webhook integration:
-- **Webhook URL**: https://n8n.apps.dna11.com.br/webhook/NutriChatbot02
+- **Webhook URL**: https://n8n-nutrichatbot.app.11mind.com.br/webhook/nutrichatbot
 - **Events**: MESSAGES_UPSERT (for real-time message processing)
 - **Base64 Enabled**: Automatic conversion of media files to Base64 format
 - **Event Filtering**: Enabled for efficient webhook processing
