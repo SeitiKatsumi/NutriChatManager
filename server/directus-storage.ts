@@ -565,7 +565,12 @@ export class DirectusStorage implements IStorage {
       });
       
       const client = this.getUserClient(userToken);
-      const response = await client.request(`/users/${id}`, {
+      
+      // Use /users/me endpoint so users can edit their own profile without admin permissions
+      // This is the recommended approach in Directus for self-service profile updates
+      const endpoint = userToken ? '/users/me' : `/users/${id}`;
+      
+      const response = await client.request(endpoint, {
         method: 'PATCH',
         body: JSON.stringify(directusUpdate),
       });
