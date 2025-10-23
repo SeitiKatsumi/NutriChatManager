@@ -11,6 +11,7 @@ export const nutritionistSchema = z.object({
   password: z.string(),
   cpfCnpj: z.string(), // CPF or CNPJ
   phone: z.string().optional(),
+  whatsapp_clinica: z.string().optional(), // WhatsApp da clínica
   address: z.string().optional(),
   specialization: z.string().optional(),
   whatsappNumber: z.string().optional(),

@@ -23,6 +23,7 @@ const step1Schema = z.object({
 
 const step2Schema = z.object({
   phone: z.string().min(10, "Telefone inválido"),
+  whatsapp_clinica: z.string().min(10, "WhatsApp da clínica inválido"),
   address: z.string().min(10, "Endereço deve ter pelo menos 10 caracteres"),
   specialization: z.string().min(1, "Selecione uma especialização"),
 });
@@ -59,6 +60,7 @@ export default function StepForm({ currentStep, onStepChange, onComplete }: Step
     resolver: zodResolver(step2Schema),
     defaultValues: {
       phone: "",
+      whatsapp_clinica: "",
       address: "",
       specialization: "",
     },
@@ -251,6 +253,27 @@ export default function StepForm({ currentStep, onStepChange, onComplete }: Step
           {step2Form.formState.errors.phone && (
             <p className="text-sm text-destructive mt-1">
               {step2Form.formState.errors.phone.message}
+            </p>
+          )}
+        </div>
+        <div>
+          <Label htmlFor="whatsapp_clinica" className="block text-sm font-medium text-foreground mb-2">WhatsApp da Clínica</Label>
+          <div className="relative">
+            <Input
+              id="whatsapp_clinica"
+              placeholder="(11) 99999-9999"
+              {...step2Form.register("whatsapp_clinica")}
+              className="pl-10"
+              data-testid="input-whatsapp-clinica"
+            />
+            <Phone className="absolute left-3 top-3.5 w-4 h-4 text-muted-foreground" />
+          </div>
+          <p className="text-sm text-muted-foreground mt-2">
+            Telefone comercial da sua clínica/consultório
+          </p>
+          {step2Form.formState.errors.whatsapp_clinica && (
+            <p className="text-sm text-destructive mt-1">
+              {step2Form.formState.errors.whatsapp_clinica.message}
             </p>
           )}
         </div>

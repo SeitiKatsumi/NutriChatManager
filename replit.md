@@ -6,6 +6,29 @@ NutriChatBot is a comprehensive management platform for nutritionists that integ
 
 Preferred communication style: Simple, everyday language.
 
+# User Registration Flow
+
+The nutritionist registration is a 3-step form (`client/src/components/register/step-form.tsx`):
+
+**Step 1: Basic Information**
+- Full Name
+- Professional Email
+- Password
+- CPF or CNPJ
+
+**Step 2: Professional Details**
+- Personal/Secretary Phone
+- **Clinic WhatsApp** (saved as `whatsapp_clinica` in Directus)
+- Office Address
+- Specialization
+
+**Step 3: AI Bot Configuration**
+- WhatsApp Number for AI Bot (Evolution API integration)
+- Welcome Message
+- Working Hours
+
+All fields are saved to the Directus `directus_users` collection with the nutritionist role. The `whatsapp_clinica` field stores the commercial phone number for the clinic/office.
+
 # System Architecture
 
 ## Frontend Architecture

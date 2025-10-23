@@ -46,6 +46,7 @@ export interface DirectusUser {
   full_name?: string;
   cpf_cnpj?: string;
   phone?: string;
+  whatsapp_clinica?: string; // WhatsApp da clínica
   address?: string;
   specialization?: string;
   whatsapp_number?: string;
@@ -218,6 +219,7 @@ function transformUserToDirectus(nutritionist: any): DirectusUser {
     full_name: nutritionist.fullName,
     cpf_cnpj: nutritionist.cpfCnpj,
     phone: nutritionist.phone,
+    whatsapp_clinica: nutritionist.whatsapp_clinica,
     address: nutritionist.address,
     specialization: nutritionist.specialization,
     whatsapp_number: nutritionist.whatsappNumber,
@@ -247,6 +249,7 @@ function transformUserFromDirectus(directusUser: any): any {
     password: '', // This will be handled separately
     cpfCnpj: directusUser.cpf_cnpj,
     phone: directusUser.phone,
+    whatsapp_clinica: directusUser.whatsapp_clinica,
     address: directusUser.address,
     specialization: directusUser.specialization,
     whatsappNumber: directusUser.whatsapp_number,
