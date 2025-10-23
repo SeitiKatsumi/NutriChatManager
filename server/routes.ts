@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import bcrypt from "bcrypt";
 import { storage, initializeStorage } from "./storage";
-import { insertNutritionistSchema, insertWhatsappInstanceSchema, insertPatientSchema } from "@shared/schema";
+import { insertNutritionistSchema, insertWhatsappInstanceSchema, insertPatientSchema, insertWhatsappMessageSchema } from "@shared/schema";
 import { z } from "zod";
 // Import real API clients (server-side versions)
 // @ts-ignore - directus.js doesn't have type declarations
@@ -10,7 +10,7 @@ import { directusClient } from "./lib/directus.js";
 // Evolution API service will be imported dynamically where needed
 import { evolutionApi } from "./evolution-api";
 import { evolutionRedis } from "./evolution-redis";
-import { patientHistoryRedis } from "./patient-history-redis";
+import { patientHistoryDirectus } from "./patient-history-directus";
 import { openaiService } from "./openai-service";
 // Stripe integration
 import Stripe from "stripe";
@@ -746,6 +746,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // WhatsApp Messages - Webhook route for N8N to save messages
+  app.post("/api/messages/webhook", async (req, res) => {
+    try {
+      console.log('[API] Received WhatsApp message webhook from N8N');
+      
+      // Validate webhook (simple token authentication)
+      const webhookToken = req.headers['x-webhook-token'];
+      if (webhookToken !== process.env.N8N_WEBHOOK_TOKEN && process.env.N8N_WEBHOOK_TOKEN) {
+        console.error('[API] Invalid webhook token');
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      // Validate message data
+      const messageData = insertWhatsappMessageSchema.parse(req.body);
+      
+      // Save message to Directus
+      const savedMessage = await storage.saveWhatsappMessage(messageData);
+      
+      console.log(`[API] Message saved successfully: ${savedMessage.id}`);
+      res.status(201).json({ success: true, messageId: savedMessage.id });
+    } catch (error) {
+      console.error('[API] Error saving WhatsApp message:', error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid message data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to save message" });
+    }
+  });
+
+  // Get patient messages by patient ID
+  app.get("/api/messages/patient/:patientId", requireAuth, requireActiveSubscription, async (req, res) => {
+    try {
+      const { patientId } = req.params;
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 200;
+      
+      console.log(`[API] Getting messages for patient ${patientId}, limit: ${limit}`);
+      
+      // Get messages from Directus
+      const messages = await storage.getPatientMessages(patientId, limit);
+      
+      res.json({ messages, count: messages.length });
+    } catch (error) {
+      console.error('[API] Error getting patient messages:', error);
+      res.status(500).json({ error: "Failed to fetch messages" });
+    }
+  });
+
   // Evolution API WhatsApp routes
   app.get("/api/whatsapp/qrcode/:nutritionistId", requireAuth, requireActiveSubscription, async (req, res) => {
     try {
@@ -1203,7 +1250,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log(`[AI Ask] Getting messages for patient ${patient.fullName} (${phoneNumber})`);
       
-      const messages = await patientHistoryRedis.getPatientMessages(nutritionistId, phoneNumber, 500);
+      const messages = await patientHistoryDirectus.getPatientMessages(nutritionistId, phoneNumber, 500);
       
       if (messages.length === 0) {
         return res.json({
@@ -1264,11 +1311,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Access denied - patient not found or not your patient" });
       }
       
-      // Get messages from Evolution Redis
-      const phoneNumber = patient.whatsapp || patient.phone;
+      // Get messages from Directus
+      const phoneNumber = patient.whatsappNumber || patient.phone;
       const nutritionistId = req.session.user.nutritionistId;
       
-      const messages = await patientHistoryRedis.getPatientMessages(nutritionistId, phoneNumber, 200);
+      const messages = await patientHistoryDirectus.getPatientMessages(nutritionistId, phoneNumber, 200);
       
       if (messages.length === 0) {
         return res.json({

@@ -80,6 +80,28 @@ export const insertMessageSchema = messageSchema.omit({
 export type Message = z.infer<typeof messageSchema>;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 
+// WhatsApp Message schema - matches Directus collection "whatsapp_messages"
+export const whatsappMessageSchema = z.object({
+  id: z.number(),
+  patient_id: z.string(), // Reference to Cadastro_de_Pacientes
+  message_body: z.string(),
+  from_me: z.boolean(), // true = AI agent, false = patient
+  message_type: z.enum(["text", "image", "audio", "video", "document"]).default("text"),
+  phone_number: z.string(), // WhatsApp number format: 5511999999999
+  timestamp: z.coerce.date(), // Message timestamp from WhatsApp (accepts string/Date)
+  date_created: z.coerce.date().optional(),
+  date_updated: z.coerce.date().optional(),
+});
+
+export const insertWhatsappMessageSchema = whatsappMessageSchema.omit({
+  id: true,
+  date_created: true,
+  date_updated: true,
+});
+
+export type WhatsappMessage = z.infer<typeof whatsappMessageSchema>;
+export type InsertWhatsappMessage = z.infer<typeof insertWhatsappMessageSchema>;
+
 // Patient schema - matches Directus collection "Cadastro_de_Pacientes"
 export const patientSchema = z.object({
   id: z.string(),

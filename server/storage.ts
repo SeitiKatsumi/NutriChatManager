@@ -1,4 +1,4 @@
-import { type Nutritionist, type InsertNutritionist, type WhatsappInstance, type InsertWhatsappInstance, type Message, type InsertMessage, type Patient, type InsertPatient, type Consultation, type InsertConsultation } from "@shared/schema";
+import { type Nutritionist, type InsertNutritionist, type WhatsappInstance, type InsertWhatsappInstance, type Message, type InsertMessage, type Patient, type InsertPatient, type Consultation, type InsertConsultation, type WhatsappMessage, type InsertWhatsappMessage } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
 
@@ -23,6 +23,11 @@ export interface IStorage {
   createMessage(message: InsertMessage): Promise<Message>;
   getMessagesByInstance(instanceId: string): Promise<Message[]>;
   getMessagesCount(): Promise<number>;
+
+  // WhatsApp Messages (Directus collection)
+  saveWhatsappMessage(message: InsertWhatsappMessage): Promise<WhatsappMessage>;
+  getPatientMessages(patientId: string, limit?: number): Promise<WhatsappMessage[]>;
+  getPatientMessagesByPhone(phoneNumber: string, limit?: number): Promise<WhatsappMessage[]>;
 
   // Patients
   getPatient(id: string): Promise<Patient | undefined>;
@@ -215,6 +220,19 @@ export class MemStorage implements IStorage {
 
   async getMessagesCount(): Promise<number> {
     return this.messages.size;
+  }
+
+  // WhatsApp Messages (Directus collection) - Not implemented in MemStorage
+  async saveWhatsappMessage(message: InsertWhatsappMessage): Promise<WhatsappMessage> {
+    throw new Error('WhatsApp messages are only supported in DirectusStorage');
+  }
+
+  async getPatientMessages(patientId: string, limit?: number): Promise<WhatsappMessage[]> {
+    throw new Error('WhatsApp messages are only supported in DirectusStorage');
+  }
+
+  async getPatientMessagesByPhone(phoneNumber: string, limit?: number): Promise<WhatsappMessage[]> {
+    throw new Error('WhatsApp messages are only supported in DirectusStorage');
   }
 
   // Patients

@@ -1104,4 +1104,85 @@ export class DirectusStorage implements IStorage {
       throw error;
     }
   }
+
+  /**
+   * Save WhatsApp message to Directus collection
+   */
+  async saveWhatsappMessage(message: any): Promise<any> {
+    try {
+      console.log('[DirectusStorage] Saving WhatsApp message:', message);
+      
+      const response = await this.client.request('/items/whatsapp_messages', {
+        method: 'POST',
+        body: JSON.stringify({
+          patient_id: message.patient_id,
+          message_body: message.message_body,
+          from_me: message.from_me,
+          message_type: message.message_type || 'text',
+          phone_number: message.phone_number,
+          timestamp: message.timestamp instanceof Date ? message.timestamp.toISOString() : message.timestamp,
+        }),
+      });
+
+      console.log('[DirectusStorage] Message saved successfully');
+      return response.data;
+    } catch (error: any) {
+      console.error('[DirectusStorage] Error saving WhatsApp message:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get WhatsApp messages for a specific patient
+   */
+  async getPatientMessages(patientId: string, limit: number = 200): Promise<any[]> {
+    try {
+      console.log(`[DirectusStorage] Getting messages for patient ${patientId}, limit: ${limit}`);
+      
+      const response = await this.client.request(
+        `/items/whatsapp_messages?filter[patient_id][_eq]=${patientId}&sort=-timestamp&limit=${limit}`
+      );
+
+      const messages = response.data || [];
+      console.log(`[DirectusStorage] Found ${messages.length} messages for patient ${patientId}`);
+      
+      // Transform timestamps to Date objects
+      return messages.map((msg: any) => ({
+        ...msg,
+        timestamp: new Date(msg.timestamp),
+        date_created: msg.date_created ? new Date(msg.date_created) : undefined,
+        date_updated: msg.date_updated ? new Date(msg.date_updated) : undefined,
+      }));
+    } catch (error: any) {
+      console.error('[DirectusStorage] Error getting patient messages:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get WhatsApp messages by phone number (when patient not yet identified)
+   */
+  async getPatientMessagesByPhone(phoneNumber: string, limit: number = 200): Promise<any[]> {
+    try {
+      console.log(`[DirectusStorage] Getting messages for phone ${phoneNumber}, limit: ${limit}`);
+      
+      const response = await this.client.request(
+        `/items/whatsapp_messages?filter[phone_number][_eq]=${phoneNumber}&sort=-timestamp&limit=${limit}`
+      );
+
+      const messages = response.data || [];
+      console.log(`[DirectusStorage] Found ${messages.length} messages for phone ${phoneNumber}`);
+      
+      // Transform timestamps to Date objects
+      return messages.map((msg: any) => ({
+        ...msg,
+        timestamp: new Date(msg.timestamp),
+        date_created: msg.date_created ? new Date(msg.date_created) : undefined,
+        date_updated: msg.date_updated ? new Date(msg.date_updated) : undefined,
+      }));
+    } catch (error: any) {
+      console.error('[DirectusStorage] Error getting messages by phone:', error.message);
+      throw error;
+    }
+  }
 }

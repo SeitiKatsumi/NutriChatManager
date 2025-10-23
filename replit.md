@@ -34,33 +34,39 @@ This automatic configuration ensures seamless integration between WhatsApp conve
 
 ## AI Consultation & Patient History
 
-The system provides AI-powered consultation analysis using OpenAI to help nutritionists gain insights from patient conversations stored in Redis.
+The system provides AI-powered consultation analysis using OpenAI to help nutritionists gain insights from patient conversations stored in Directus PostgreSQL database.
 
-### Patient History Redis Integration
-**Service:** `server/patient-history-redis.ts`
+### Patient History Directus Integration
+**Service:** `server/patient-history-directus.ts`
 
-The application connects to a dedicated Redis instance to retrieve and analyze patient conversation history:
+The application stores and retrieves WhatsApp conversation history from a dedicated Directus collection for reliable, queryable patient history:
 
-**Redis Configuration:**
-- **Host:** srv-captain--nutrichatbot-redis
-- **Port:** 6379 (standard Redis port)
-- **Authentication:** Password-based (stored in REDIS_PASSWORD secret)
+**Directus Collection:** `whatsapp_messages`
+- **Fields:**
+  - `patient_id` (relation to Cadastro_de_Pacientes)
+  - `message_body` (text content)
+  - `from_me` (boolean: true = AI agent, false = patient)
+  - `message_type` (text, image, audio, video, document)
+  - `phone_number` (WhatsApp number in clean format)
+  - `timestamp` (message datetime)
+  - `date_created`, `date_updated` (auto-managed)
 
-**Data Structure:**
-- **Chat Keys:** `{phoneNumber}@s.whatsapp.net_nutrciipppp`
-  - Example: `5511933772911@s.whatsapp.net_nutrciipppp`
-- **Storage Format:** JSON array with `propertyName` field containing conversation strings
-- **Message Format:**
-  - Client messages: `"Cliente: {text}"`
-  - Agent messages: `"Agente: {ISO timestamp} : {text}"`
-  - Example: `"Agente: 2025-10-03T15:08:02.084-03:00 : Oi! Que bom te ver por aqui!"`
+**Storage Benefits:**
+- **Persistent**: PostgreSQL ensures messages are never lost (unlike Redis volatility)
+- **Queryable**: Supports complex filters by date, patient, phone, message type
+- **Scalable**: Handles growing message volumes with proper indexing
+- **Integrated**: All patient data in single Directus system
 
 **Message Processing:**
-1. Fetches conversation data using patient's phone number
-2. Parses message strings to extract text and timestamps
-3. Converts to structured ProcessedMessage format
-4. Sorts chronologically (oldest first)
-5. Passes to OpenAI service for analysis
+1. N8N webhook receives WhatsApp messages from Evolution API
+2. Saves to `whatsapp_messages` collection via POST /api/messages/webhook
+3. AI endpoints fetch messages via storage.getPatientMessages()
+4. Converts WhatsappMessage[] to ProcessedMessage[] format
+5. Sorts chronologically and passes to OpenAI service
+
+**API Endpoints:**
+- **POST /api/messages/webhook**: N8N saves incoming WhatsApp messages (token-protected)
+- **GET /api/messages/patient/:patientId**: Retrieve patient message history (auth required)
 
 **AI Capabilities:**
 - **Quick Insights** (`/api/ai/insights/:patientId`): Generates automatic summary, key topics, patient mood, and recommendations
@@ -72,6 +78,12 @@ The application connects to a dedicated Redis instance to retrieve and analyze p
 - `client/src/components/patients/ai-insights.tsx`: AI consultation interface in patient details dialog
 - Displays insights, allows custom questions, shows conversation sources
 - Requires active subscription to access AI features
+
+**N8N Integration:**
+Configure N8N workflow to POST each WhatsApp message to:
+- **URL**: `https://your-app.replit.app/api/messages/webhook`
+- **Headers**: `x-webhook-token: [N8N_WEBHOOK_TOKEN]`
+- **Body**: JSON with fields matching `insertWhatsappMessageSchema`
 
 ## Stripe Payment Integration
 
