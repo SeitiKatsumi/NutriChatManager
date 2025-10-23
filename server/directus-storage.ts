@@ -211,13 +211,22 @@ function transformPatientFromDirectus(directusPatient: any): any {
 }
 
 function transformUserToDirectus(nutritionist: any): DirectusUser {
-  const nameParts = nutritionist.fullName.split(' ');
+  // Only split fullName if it exists (for partial updates like password change)
+  let firstName = '';
+  let lastName = '';
+  
+  if (nutritionist.fullName) {
+    const nameParts = nutritionist.fullName.split(' ');
+    firstName = nameParts[0] || '';
+    lastName = nameParts.slice(1).join(' ') || '';
+  }
+  
   return {
     email: nutritionist.email,
     password: nutritionist.password,
-    first_name: nameParts[0] || '',
-    last_name: nameParts.slice(1).join(' ') || '',
-    role: '90ce89ef-abe3-4359-9fc0-3e882127775a',
+    first_name: firstName || undefined,
+    last_name: lastName || undefined,
+    role: nutritionist.role || '90ce89ef-abe3-4359-9fc0-3e882127775a',
     status: nutritionist.status || 'active',
     full_name: nutritionist.fullName,
     cpf_cnpj: nutritionist.cpfCnpj,
@@ -625,6 +634,13 @@ export class DirectusStorage implements IStorage {
       // Use /users/me endpoint so users can edit their own profile without admin permissions
       // This is the recommended approach in Directus for self-service profile updates
       const endpoint = userToken ? '/users/me' : `/users/${id}`;
+      
+      // When using /users/me, users cannot edit role and status fields
+      // Remove these restricted fields to avoid 403 Forbidden errors
+      if (userToken) {
+        delete directusUpdate.role;
+        delete directusUpdate.status;
+      }
       
       const response = await client.request(endpoint, {
         method: 'PATCH',
