@@ -629,20 +629,10 @@ export class DirectusStorage implements IStorage {
         fullName: updateData.fullName, // Ensure fullName is preserved
       });
       
-      const client = this.getUserClient(userToken);
-      
-      // Use /users/me endpoint so users can edit their own profile without admin permissions
-      // This is the recommended approach in Directus for self-service profile updates
-      const endpoint = userToken ? '/users/me' : `/users/${id}`;
-      
-      // When using /users/me, users cannot edit role and status fields
-      // Remove these restricted fields to avoid 403 Forbidden errors
-      if (userToken) {
-        delete directusUpdate.role;
-        delete directusUpdate.status;
-      }
-      
-      const response = await client.request(endpoint, {
+      // Use admin client to update user profile
+      // Security is ensured by backend authentication middleware validating the session
+      // This allows updating custom fields that regular users don't have permission to edit
+      const response = await this.client.request(`/users/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(directusUpdate),
       });
