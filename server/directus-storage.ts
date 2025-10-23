@@ -336,6 +336,26 @@ export class DirectusStorage implements IStorage {
         }
       }
 
+      // Check profile fields
+      const profileFields = [
+        { name: 'full_name', type: 'string', note: 'Nome completo do nutricionista' },
+        { name: 'phone', type: 'string', note: 'Telefone pessoal' },
+        { name: 'whatsapp_clinica', type: 'string', note: 'WhatsApp da clínica' },
+        { name: 'address', type: 'string', note: 'Endereço do consultório' },
+        { name: 'specialization', type: 'string', note: 'Especialização' },
+        { name: 'mensagem_inicial', type: 'text', note: 'Mensagem inicial do agente de IA' },
+        { name: 'nome_do_agente', type: 'string', note: 'Nome do agente de IA' },
+      ];
+      
+      for (const field of profileFields) {
+        if (!existingFields.includes(field.name)) {
+          console.log(`[Directus] Creating missing field: ${field.name}`);
+          await this.createProfileField(field.name, field.type, field.note);
+        } else {
+          console.log(`[Directus] ✓ ${field.name} field already exists`);
+        }
+      }
+
     } catch (error: any) {
       console.warn('[Directus] Error checking/creating fields:', error.message);
     }
@@ -393,6 +413,42 @@ export class DirectusStorage implements IStorage {
     } catch (error: any) {
       console.error('[Directus] Error creating status_pagamento field:', error.message);
       throw error;
+    }
+  }
+
+  private async createProfileField(fieldName: string, fieldType: string, note: string): Promise<void> {
+    try {
+      const fieldConfig: any = {
+        field: fieldName,
+        type: fieldType,
+        meta: {
+          width: fieldType === 'text' ? 'full' : 'half',
+          interface: fieldType === 'text' ? 'input-multiline' : 'input',
+          note: note
+        },
+        schema: {
+          is_nullable: true
+        }
+      };
+
+      const response = await fetch(`${this.baseUrl}/fields/directus_users`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(fieldConfig)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.warn(`[Directus] Warning creating ${fieldName}: ${errorText}`);
+        return;
+      }
+
+      console.log(`[Directus] ✓ ${fieldName} field created successfully`);
+    } catch (error: any) {
+      console.warn(`[Directus] Error creating ${fieldName} field:`, error.message);
     }
   }
 
