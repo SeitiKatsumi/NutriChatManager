@@ -22,10 +22,10 @@ export interface DirectusPatient {
   Whatsapp?: string;
   Data_de_nascimento?: string; // Date as string format "YYYY-MM-DD"
   Sexo?: string; // Masculino, Feminino, Outros
-  Peso?: number;
-  Altura?: number;
-  IMC?: number; // Body Mass Index
-  Idade?: number; // Age
+  Peso?: number | string;
+  Altura?: number | string;
+  IMC?: number | string; // Body Mass Index - can be number or descriptive text
+  Idade?: number | string; // Age - can be number or string
   Anamise_inicial?: string;
   Suplementos_e_medicamentos?: string;
   Metas_e_objetivos?: string;
@@ -696,7 +696,7 @@ export class DirectusStorage implements IStorage {
       const client = this.client; // Using admin client temporarily
       
       // Explicit field list using only available Directus collection fields
-      const fields = 'id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,Suplementos_e_medicamentos,Etapas,date_created,date_updated';
+      const fields = 'id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,IMC,Idade,Anamise_inicial,Suplementos_e_medicamentos,Metas_e_objetivos,Etapas,Ultima_consulta,Observacoes,Feedbacks,Cafe_da_manha,Almoco,Lanche_da_manha,Lanche_da_tarde,Janta,Ceia,date_created,date_updated';
       
       console.log(`[Directus] Getting patient: ${id}`);
       const response = await client.request(`/items/${PATIENTS_COLLECTION}/${id}?fields=${fields}`);
@@ -716,7 +716,7 @@ export class DirectusStorage implements IStorage {
       const encodedId = encodeURIComponent(nutritionistId);
       
       // Explicit field list using only available Directus collection fields
-      const fields = 'id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,Suplementos_e_medicamentos,Etapas,date_created,date_updated';
+      const fields = 'id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,IMC,Idade,Anamise_inicial,Suplementos_e_medicamentos,Metas_e_objetivos,Etapas,Ultima_consulta,Observacoes,Feedbacks,Cafe_da_manha,Almoco,Lanche_da_manha,Lanche_da_tarde,Janta,Ceia,date_created,date_updated';
       
       console.log(`[Directus] Getting patients for nutritionist: ${nutritionistId}`);
       // Using correct Directus field name for nutritionist filter
