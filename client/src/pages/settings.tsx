@@ -145,8 +145,20 @@ export default function Settings() {
     },
   });
 
+  // Helper function to clean phone numbers (remove formatting)
+  const cleanPhoneNumber = (phone: string | undefined): string => {
+    if (!phone) return "";
+    return phone.replace(/\D/g, ""); // Remove all non-digit characters
+  };
+
   const onProfileSubmit = (data: ProfileFormData) => {
-    updateProfileMutation.mutate(data);
+    // Clean phone numbers before sending to API
+    const cleanedData = {
+      ...data,
+      phone: cleanPhoneNumber(data.phone),
+      whatsapp_clinica: cleanPhoneNumber(data.whatsapp_clinica),
+    };
+    updateProfileMutation.mutate(cleanedData);
   };
 
   const onAIAgentSubmit = (data: AIAgentFormData) => {
