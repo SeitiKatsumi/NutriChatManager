@@ -116,8 +116,8 @@ export const patientSchema = z.object({
   gender: z.string().optional().nullable(),
   weight: z.string().optional().nullable(),
   height: z.string().optional().nullable(),
-  bmi: z.union([z.number(), z.string()]).optional().nullable(), // Body Mass Index (IMC) - can be number or descriptive string
-  age: z.union([z.number(), z.string()]).optional().nullable(), // Age (Idade) - can be number or string
+  bmi: z.number().optional().nullable(), // Body Mass Index (IMC)
+  age: z.number().optional().nullable(), // Age (Idade)
   medicalHistory: z.string().optional().nullable(),
   dietaryRestrictions: z.string().optional().nullable(),
   goals: z.string().optional().nullable(),
