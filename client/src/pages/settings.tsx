@@ -46,14 +46,58 @@ export default function Settings() {
   const { nutritionist } = useAuth();
   const { toast } = useToast();
 
+  // Helper function to format phone number for display
+  const formatPhoneNumber = (phone: string): string => {
+    const cleaned = phone.replace(/\D/g, "");
+    
+    if (cleaned.length === 0) return "";
+    
+    // Format with country code mobile (13 digits): +55 (11) 98765-4321
+    if (cleaned.length === 13 && cleaned.startsWith("55")) {
+      return `+55 (${cleaned.slice(2, 4)}) ${cleaned.slice(4, 9)}-${cleaned.slice(9)}`;
+    }
+    
+    // Format with country code landline (12 digits): +55 (11) 3456-7890
+    if (cleaned.length === 12 && cleaned.startsWith("55")) {
+      return `+55 (${cleaned.slice(2, 4)}) ${cleaned.slice(4, 8)}-${cleaned.slice(8)}`;
+    }
+    
+    // Format mobile with DDD (11 digits): (11) 98765-4321
+    if (cleaned.length === 11) {
+      return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 7)}-${cleaned.slice(7)}`;
+    }
+    
+    // Format landline with DDD (10 digits): (11) 3456-7890
+    if (cleaned.length === 10) {
+      return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 6)}-${cleaned.slice(6)}`;
+    }
+    
+    // Partial formatting while typing
+    if (cleaned.length > 2) {
+      if (cleaned.length <= 6) {
+        return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2)}`;
+      } else if (cleaned.length <= 10) {
+        return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 6)}-${cleaned.slice(6)}`;
+      } else if (cleaned.length === 11) {
+        return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 7)}-${cleaned.slice(7)}`;
+      } else if (cleaned.length === 12 && cleaned.startsWith("55")) {
+        return `+55 (${cleaned.slice(2, 4)}) ${cleaned.slice(4, 8)}-${cleaned.slice(8)}`;
+      } else {
+        return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 7)}-${cleaned.slice(7)}`;
+      }
+    }
+    
+    return cleaned;
+  };
+
   // Profile form
   const profileForm = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
       fullName: nutritionist?.fullName || "",
       email: nutritionist?.email || "",
-      phone: nutritionist?.phone || "",
-      whatsapp_clinica: (nutritionist as any)?.whatsapp_clinica || "",
+      phone: formatPhoneNumber(nutritionist?.phone || ""),
+      whatsapp_clinica: formatPhoneNumber((nutritionist as any)?.whatsapp_clinica || ""),
       address: (nutritionist as any)?.address || "",
       specialization: nutritionist?.specialization || "",
     },
@@ -151,6 +195,14 @@ export default function Settings() {
     return phone.replace(/\D/g, ""); // Remove all non-digit characters
   };
 
+  // Handler for phone input changes (applies formatting)
+  const handlePhoneChange = (fieldName: "phone" | "whatsapp_clinica") => (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const formatted = formatPhoneNumber(e.target.value);
+    profileForm.setValue(fieldName, formatted);
+  };
+
   const onProfileSubmit = (data: ProfileFormData) => {
     // Clean phone numbers before sending to API
     const cleanedData = {
@@ -234,7 +286,8 @@ export default function Settings() {
                   <Label htmlFor="phone">Telefone Pessoal</Label>
                   <Input
                     id="phone"
-                    {...profileForm.register("phone")}
+                    value={profileForm.watch("phone") || ""}
+                    onChange={handlePhoneChange("phone")}
                     placeholder="(11) 99999-9999"
                     data-testid="input-phone"
                   />
@@ -244,7 +297,8 @@ export default function Settings() {
                   <Label htmlFor="whatsapp_clinica">WhatsApp da Clínica</Label>
                   <Input
                     id="whatsapp_clinica"
-                    {...profileForm.register("whatsapp_clinica")}
+                    value={profileForm.watch("whatsapp_clinica") || ""}
+                    onChange={handlePhoneChange("whatsapp_clinica")}
                     placeholder="(11) 99999-9999"
                     data-testid="input-whatsapp-clinica"
                   />
