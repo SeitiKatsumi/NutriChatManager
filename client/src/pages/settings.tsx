@@ -189,10 +189,26 @@ export default function Settings() {
     },
   });
 
-  // Helper function to clean phone numbers (remove formatting)
+  // Helper function to clean and normalize phone numbers for saving
+  // Always adds country code 55 if not present
   const cleanPhoneNumber = (phone: string | undefined): string => {
     if (!phone) return "";
-    return phone.replace(/\D/g, ""); // Remove all non-digit characters
+    
+    // Remove all non-digit characters
+    const cleaned = phone.replace(/\D/g, "");
+    
+    // If already has country code (12 or 13 digits starting with 55), return as is
+    if ((cleaned.length === 12 || cleaned.length === 13) && cleaned.startsWith("55")) {
+      return cleaned;
+    }
+    
+    // If doesn't have country code (10 or 11 digits), add 55 prefix
+    if (cleaned.length === 10 || cleaned.length === 11) {
+      return "55" + cleaned;
+    }
+    
+    // For any other case, return cleaned digits
+    return cleaned;
   };
 
   // Handler for phone input changes (applies formatting)
