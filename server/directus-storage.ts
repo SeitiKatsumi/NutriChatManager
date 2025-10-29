@@ -24,12 +24,22 @@ export interface DirectusPatient {
   Sexo?: string; // Masculino, Feminino, Outros
   Peso?: number;
   Altura?: number;
+  IMC?: number; // Body Mass Index
+  Idade?: number; // Age
   Anamise_inicial?: string;
   Suplementos_e_medicamentos?: string;
   Metas_e_objetivos?: string;
   Etapas?: string;
   Ultima_consulta?: string;
   Observacoes?: string;
+  Feedbacks?: string;
+  // Meal planning fields
+  Cafe_da_manha?: string;
+  Almoco?: string;
+  Lanche_da_manha?: string;
+  Lanche_da_tarde?: string;
+  Janta?: string;
+  Ceia?: string;
   date_created?: Date;
   date_updated?: Date;
 }
@@ -194,17 +204,26 @@ function transformPatientFromDirectus(directusPatient: any): any {
     gender: directusPatient.Sexo,
     weight: directusPatient.Peso,
     height: directusPatient.Altura,
+    bmi: directusPatient.IMC,
+    age: directusPatient.Idade,
     medicalHistory: directusPatient.Anamise_inicial, // Mantém para compatibilidade
     dietaryRestrictions: directusPatient.Suplementos_e_medicamentos, // Mantém para compatibilidade
-    goals: null, // Field not available in collection
+    goals: directusPatient.Metas_e_objetivos,
     status: directusPatient.Etapas,
-    lastConsultation: null, // Field not available in collection
-    notes: null, // Field not available in collection
+    lastConsultation: directusPatient.Ultima_consulta,
+    notes: directusPatient.Observacoes,
     // Novos campos da IA
     anamnese_inicial: directusPatient.Anamise_inicial,
     suplementos_medicamentos: directusPatient.Suplementos_e_medicamentos,
     feedbacks: directusPatient.Feedbacks,
     recordatorio_24h: recordatorio || null,
+    // Campos individuais de refeições
+    cafe_da_manha: directusPatient.Cafe_da_manha,
+    lanche_da_manha: directusPatient.Lanche_da_manha,
+    almoco: directusPatient.Almoco,
+    lanche_da_tarde: directusPatient.Lanche_da_tarde,
+    janta: directusPatient.Janta,
+    ceia: directusPatient.Ceia,
     createdAt: directusPatient.date_created,
     updatedAt: directusPatient.date_updated,
   };
@@ -224,8 +243,8 @@ function transformUserToDirectus(nutritionist: any): DirectusUser {
   return {
     email: nutritionist.email,
     password: nutritionist.password,
-    first_name: firstName || undefined,
-    last_name: lastName || undefined,
+    first_name: firstName || '',
+    last_name: lastName || '',
     role: nutritionist.role || '90ce89ef-abe3-4359-9fc0-3e882127775a',
     status: nutritionist.status || 'active',
     full_name: nutritionist.fullName,

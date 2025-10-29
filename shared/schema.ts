@@ -116,6 +116,8 @@ export const patientSchema = z.object({
   gender: z.string().optional().nullable(),
   weight: z.string().optional().nullable(),
   height: z.string().optional().nullable(),
+  bmi: z.number().optional().nullable(), // Body Mass Index (IMC)
+  age: z.number().optional().nullable(), // Age (Idade)
   medicalHistory: z.string().optional().nullable(),
   dietaryRestrictions: z.string().optional().nullable(),
   goals: z.string().optional().nullable(),
@@ -127,6 +129,13 @@ export const patientSchema = z.object({
   suplementos_medicamentos: z.string().optional().nullable(), // Informações sobre suplementos e medicamentos
   feedbacks: z.string().optional().nullable(), // Resumo completo dos últimos dias e histórico
   recordatorio_24h: z.string().optional().nullable(), // Recordatório 24 horas com campos de cada hora
+  // Campos individuais de refeições
+  cafe_da_manha: z.string().optional().nullable(),
+  lanche_da_manha: z.string().optional().nullable(),
+  almoco: z.string().optional().nullable(),
+  lanche_da_tarde: z.string().optional().nullable(),
+  janta: z.string().optional().nullable(),
+  ceia: z.string().optional().nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });

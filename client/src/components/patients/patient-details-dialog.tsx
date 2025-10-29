@@ -123,6 +123,14 @@ export default function PatientDetailsDialog({
                     </div>
                   )}
                   
+                  {patient.age && (
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-muted-foreground" />
+                      <span className="font-medium">Idade:</span>
+                      <span>{patient.age} anos</span>
+                    </div>
+                  )}
+                  
                   {patient.weight && (
                     <div className="flex items-center gap-2">
                       <Scale className="w-4 h-4 text-muted-foreground" />
@@ -136,6 +144,14 @@ export default function PatientDetailsDialog({
                       <Ruler className="w-4 h-4 text-muted-foreground" />
                       <span className="font-medium">Altura:</span>
                       <span>{patient.height} cm</span>
+                    </div>
+                  )}
+                  
+                  {patient.bmi && (
+                    <div className="flex items-center gap-2">
+                      <Activity className="w-4 h-4 text-muted-foreground" />
+                      <span className="font-medium">IMC:</span>
+                      <span>{patient.bmi}</span>
                     </div>
                   )}
                   

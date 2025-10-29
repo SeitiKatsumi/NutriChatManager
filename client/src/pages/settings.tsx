@@ -17,8 +17,16 @@ import { Loader2, User, Bot, Lock } from "lucide-react";
 const profileSchema = z.object({
   fullName: z.string().min(3, "Nome deve ter no mínimo 3 caracteres"),
   email: z.string().email("Email inválido"),
-  phone: z.string().optional(),
-  whatsapp_clinica: z.string().optional(),
+  phone: z.string().optional().refine((val) => {
+    if (!val) return true;
+    const cleaned = val.replace(/\D/g, "");
+    return cleaned.length >= 10;
+  }, "Telefone deve ter no mínimo 10 dígitos (DDD + número)"),
+  whatsapp_clinica: z.string().optional().refine((val) => {
+    if (!val) return true;
+    const cleaned = val.replace(/\D/g, "");
+    return cleaned.length >= 10;
+  }, "WhatsApp deve ter no mínimo 10 dígitos (DDD + número)"),
   address: z.string().optional(),
   specialization: z.string().optional(),
 });
@@ -197,13 +205,17 @@ export default function Settings() {
     // Remove all non-digit characters
     const cleaned = phone.replace(/\D/g, "");
     
+    // Empty after cleaning
+    if (cleaned.length === 0) return "";
+    
     // If already has country code (12 or 13 digits starting with 55), return as is
     if ((cleaned.length === 12 || cleaned.length === 13) && cleaned.startsWith("55")) {
       return cleaned;
     }
     
-    // If doesn't have country code (10 or 11 digits), add 55 prefix
-    if (cleaned.length === 10 || cleaned.length === 11) {
+    // If doesn't have country code (8-11 digits), add 55 prefix
+    // This covers: 8-9 digits (no DDD), 10 digits (landline), 11 digits (mobile)
+    if (cleaned.length >= 8 && cleaned.length <= 11) {
       return "55" + cleaned;
     }
     
