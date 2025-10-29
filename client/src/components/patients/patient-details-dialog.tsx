@@ -241,7 +241,7 @@ export default function PatientDetailsDialog({
               <CardContent className="space-y-4">
                 {patient.medicalHistory && (
                   <div>
-                    <h4 className="font-medium mb-2">Histórico Médico:</h4>
+                    <h4 className="font-medium mb-2">Histórico:</h4>
                     <p className="text-sm text-muted-foreground bg-muted/30 p-3 rounded">
                       {patient.medicalHistory}
                     </p>
