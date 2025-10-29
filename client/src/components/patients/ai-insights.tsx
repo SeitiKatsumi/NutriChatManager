@@ -15,7 +15,8 @@ import {
   RefreshCw,
   ChevronDown,
   ChevronUp,
-  AlertTriangle
+  AlertTriangle,
+  UtensilsCrossed
 } from "lucide-react";
 import { Patient } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -43,9 +44,20 @@ interface QuickInsights {
   recommendations: string[];
 }
 
+interface MealPlan {
+  breakfast: string;
+  morningSnack: string;
+  lunch: string;
+  afternoonSnack: string;
+  dinner: string;
+  eveningSnack: string;
+  generalNotes: string;
+}
+
 export default function AIInsights({ patient }: AIInsightsProps) {
   const [question, setQuestion] = useState("");
   const [showSources, setShowSources] = useState<string | null>(null);
+  const [showMealPlan, setShowMealPlan] = useState(false);
   const { toast } = useToast();
 
   // Consultas rápidas pré-definidas
@@ -82,6 +94,28 @@ export default function AIInsights({ patient }: AIInsightsProps) {
       toast({
         title: "Erro",
         description: error instanceof Error ? error.message : "Erro ao processar pergunta",
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Mutation para gerar sugestão de recordatório alimentar
+  const mealPlanMutation = useMutation({
+    mutationFn: async (): Promise<MealPlan> => {
+      const response = await apiRequest('POST', `/api/ai/meal-plan/${patient.id}`, {});
+      return await response.json();
+    },
+    onSuccess: () => {
+      setShowMealPlan(true);
+      toast({
+        title: "Sucesso",
+        description: "Sugestão de recordatório alimentar gerada com sucesso!",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Erro",
+        description: error instanceof Error ? error.message : "Erro ao gerar sugestão de recordatório",
         variant: "destructive"
       });
     }
@@ -246,6 +280,170 @@ export default function AIInsights({ patient }: AIInsightsProps) {
             <p>Nenhuma conversa encontrada para análise</p>
           </div>
         )}
+
+        <Separator />
+
+        {/* Gerador de Recordatório Alimentar */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-medium flex items-center gap-2">
+              <UtensilsCrossed className="w-4 h-4" />
+              Sugestão de Recordatório Alimentar
+            </h3>
+            <Button
+              onClick={() => mealPlanMutation.mutate()}
+              disabled={mealPlanMutation.isPending}
+              size="sm"
+              data-testid="generate-meal-plan-button"
+            >
+              {mealPlanMutation.isPending ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  Gerando...
+                </>
+              ) : (
+                <>
+                  <UtensilsCrossed className="w-4 h-4 mr-2" />
+                  Gerar Sugestão
+                </>
+              )}
+            </Button>
+          </div>
+
+          {/* Exibir Plano Alimentar Gerado */}
+          {mealPlanMutation.data && showMealPlan && (
+            <Card className="bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800" data-testid="meal-plan-result">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <UtensilsCrossed className="w-4 h-4 text-green-600" />
+                    Recordatório 24 Horas - Sugestão Personalizada
+                  </CardTitle>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowMealPlan(false)}
+                    data-testid="close-meal-plan"
+                  >
+                    <ChevronUp className="w-4 h-4" />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Café da Manhã */}
+                <div>
+                  <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                    <span className="w-2 h-2 bg-green-600 rounded-full" />
+                    Café da Manhã
+                  </h4>
+                  <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300" data-testid="meal-breakfast">
+                    {mealPlanMutation.data.breakfast}
+                  </p>
+                </div>
+
+                {/* Lanche da Manhã */}
+                {mealPlanMutation.data.morningSnack && mealPlanMutation.data.morningSnack !== 'Não necessário' && (
+                  <div>
+                    <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                      <span className="w-2 h-2 bg-green-600 rounded-full" />
+                      Lanche da Manhã
+                    </h4>
+                    <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300" data-testid="meal-morning-snack">
+                      {mealPlanMutation.data.morningSnack}
+                    </p>
+                  </div>
+                )}
+
+                {/* Almoço */}
+                <div>
+                  <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                    <span className="w-2 h-2 bg-green-600 rounded-full" />
+                    Almoço
+                  </h4>
+                  <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300" data-testid="meal-lunch">
+                    {mealPlanMutation.data.lunch}
+                  </p>
+                </div>
+
+                {/* Lanche da Tarde */}
+                {mealPlanMutation.data.afternoonSnack && mealPlanMutation.data.afternoonSnack !== 'Não necessário' && (
+                  <div>
+                    <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                      <span className="w-2 h-2 bg-green-600 rounded-full" />
+                      Lanche da Tarde
+                    </h4>
+                    <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300" data-testid="meal-afternoon-snack">
+                      {mealPlanMutation.data.afternoonSnack}
+                    </p>
+                  </div>
+                )}
+
+                {/* Jantar */}
+                <div>
+                  <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                    <span className="w-2 h-2 bg-green-600 rounded-full" />
+                    Jantar
+                  </h4>
+                  <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300" data-testid="meal-dinner">
+                    {mealPlanMutation.data.dinner}
+                  </p>
+                </div>
+
+                {/* Ceia */}
+                {mealPlanMutation.data.eveningSnack && mealPlanMutation.data.eveningSnack !== 'Não necessário' && (
+                  <div>
+                    <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                      <span className="w-2 h-2 bg-green-600 rounded-full" />
+                      Ceia
+                    </h4>
+                    <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300" data-testid="meal-evening-snack">
+                      {mealPlanMutation.data.eveningSnack}
+                    </p>
+                  </div>
+                )}
+
+                {/* Observações Gerais */}
+                {mealPlanMutation.data.generalNotes && (
+                  <div className="pt-3 border-t border-green-200 dark:border-green-800">
+                    <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                      <Lightbulb className="w-4 h-4 text-green-600" />
+                      Observações e Recomendações
+                    </h4>
+                    <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300" data-testid="meal-general-notes">
+                      {mealPlanMutation.data.generalNotes}
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Estado de Loading */}
+          {mealPlanMutation.isPending && (
+            <Card className="bg-muted/30" data-testid="meal-plan-loading">
+              <CardContent className="py-8">
+                <div className="flex items-center justify-center">
+                  <RefreshCw className="w-5 h-5 animate-spin mr-3" />
+                  <span className="text-sm">Analisando informações do paciente e gerando sugestão personalizada...</span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Erro */}
+          {mealPlanMutation.error && (
+            <Card className="bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800" data-testid="meal-plan-error">
+              <CardContent className="py-4">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-red-600" />
+                  <p className="text-sm text-red-700 dark:text-red-300">
+                    {mealPlanMutation.error instanceof Error ? mealPlanMutation.error.message : "Erro ao gerar sugestão"}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
 
         <Separator />
 

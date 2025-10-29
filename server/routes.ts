@@ -1334,6 +1334,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Generate AI meal plan suggestion for patient
+  app.post("/api/ai/meal-plan/:patientId", requireAuth, requireActiveSubscription, async (req, res) => {
+    try {
+      const patientId = req.params.patientId;
+      
+      // Security: Verify patient belongs to this nutritionist
+      const userToken = req.session.user.accessToken;
+      const patient = await storage.getPatient(patientId, userToken);
+      
+      if (!patient || patient.nutritionistId !== req.session.user.nutritionistId) {
+        return res.status(403).json({ error: "Access denied - patient not found or not your patient" });
+      }
+      
+      // Get messages from Directus by patient ID
+      const messages = await patientHistoryDirectus.getPatientMessages(patientId, 200);
+      
+      // Prepare patient data for meal plan generation
+      const patientData = {
+        name: patient.fullName,
+        age: patient.age,
+        gender: patient.gender,
+        weight: patient.weight,
+        height: patient.height,
+        bmi: patient.bmi,
+        goals: patient.goals,
+        anamnese: patient.anamnese,
+        supplements: patient.supplements,
+        messages,
+        currentMeals: {
+          breakfast: patient.breakfast,
+          morningSnack: patient.morningSnack,
+          lunch: patient.lunch,
+          afternoonSnack: patient.afternoonSnack,
+          dinner: patient.dinner,
+          eveningSnack: patient.eveningSnack
+        }
+      };
+      
+      // Generate meal plan with OpenAI
+      const mealPlan = await openaiService.generateMealPlan(patientData);
+      
+      res.json(mealPlan);
+      
+    } catch (error) {
+      console.error('[AI Meal Plan] Error generating meal plan:', error);
+      res.status(500).json({ 
+        error: "Erro ao gerar sugestão de recordatório",
+        message: error instanceof Error ? error.message : "Erro desconhecido"
+      });
+    }
+  });
+
   // Test endpoint to check Evolution Redis connection
   app.get("/api/ai/test-connection/:nutritionistId", requireAuth, async (req, res) => {
     try {

@@ -173,6 +173,125 @@ Responda em JSON com:
       };
     }
   }
+
+  async generateMealPlan(patientData: {
+    name: string;
+    age?: number;
+    gender?: string;
+    weight?: string;
+    height?: string;
+    bmi?: string;
+    goals?: string;
+    anamnese?: string;
+    supplements?: string;
+    messages: ProcessedMessage[];
+    currentMeals?: {
+      breakfast?: string;
+      morningSnack?: string;
+      lunch?: string;
+      afternoonSnack?: string;
+      dinner?: string;
+      eveningSnack?: string;
+    };
+  }): Promise<{
+    breakfast: string;
+    morningSnack: string;
+    lunch: string;
+    afternoonSnack: string;
+    dinner: string;
+    eveningSnack: string;
+    generalNotes: string;
+  }> {
+    try {
+      // Build patient context from messages and data
+      const conversationContext = patientData.messages
+        .sort((a, b) => a.timestamp - b.timestamp)
+        .slice(-30) // Last 30 messages for context
+        .map(msg => {
+          const sender = msg.fromMe ? 'Nutricionista/IA' : 'Paciente';
+          return `${sender}: ${msg.text}`;
+        })
+        .join('\n');
+
+      const patientInfo = `
+INFORMAÇÕES DO PACIENTE:
+- Nome: ${patientData.name}
+${patientData.age ? `- Idade: ${patientData.age} anos` : ''}
+${patientData.gender ? `- Sexo: ${patientData.gender}` : ''}
+${patientData.weight ? `- Peso: ${patientData.weight} kg` : ''}
+${patientData.height ? `- Altura: ${patientData.height} cm` : ''}
+${patientData.bmi ? `- IMC: ${patientData.bmi}` : ''}
+${patientData.goals ? `- Objetivos: ${patientData.goals}` : ''}
+${patientData.anamnese ? `\nANAMNESE:\n${patientData.anamnese}` : ''}
+${patientData.supplements ? `\nSUPLEMENTOS/MEDICAMENTOS:\n${patientData.supplements}` : ''}
+
+${conversationContext ? `CONTEXTO DAS CONVERSAS:\n${conversationContext}` : ''}
+      `.trim();
+
+      const currentMealsInfo = patientData.currentMeals ? `
+REFEIÇÕES ATUAIS DO PACIENTE:
+${patientData.currentMeals.breakfast ? `- Café da manhã: ${patientData.currentMeals.breakfast}` : ''}
+${patientData.currentMeals.morningSnack ? `- Lanche da manhã: ${patientData.currentMeals.morningSnack}` : ''}
+${patientData.currentMeals.lunch ? `- Almoço: ${patientData.currentMeals.lunch}` : ''}
+${patientData.currentMeals.afternoonSnack ? `- Lanche da tarde: ${patientData.currentMeals.afternoonSnack}` : ''}
+${patientData.currentMeals.dinner ? `- Jantar: ${patientData.currentMeals.dinner}` : ''}
+${patientData.currentMeals.eveningSnack ? `- Ceia: ${patientData.currentMeals.eveningSnack}` : ''}
+      `.trim() : '';
+
+      const systemPrompt = `Você é um nutricionista experiente especializado em criar planos alimentares personalizados.
+
+INSTRUÇÕES:
+1. Analise todas as informações do paciente (anamnese, conversas, objetivos, restrições)
+2. Crie um recordatório alimentar de 24 horas REALISTA e PERSONALIZADO
+3. Considere: preferências alimentares, restrições, alergias, rotina, objetivos nutricionais
+4. Forneça porções aproximadas e horários sugeridos
+5. Seja específico nas preparações e alimentos
+6. Inclua variedade nutricional adequada
+
+FORMATO DE RESPOSTA (JSON):
+{
+  "breakfast": "Descrição detalhada do café da manhã com porções",
+  "morningSnack": "Descrição do lanche da manhã",
+  "lunch": "Descrição detalhada do almoço",
+  "afternoonSnack": "Descrição do lanche da tarde",
+  "dinner": "Descrição detalhada do jantar",
+  "eveningSnack": "Descrição da ceia (ou 'Não necessário' se aplicável)",
+  "generalNotes": "Observações gerais, dicas de hidratação e suplementação"
+}`;
+
+      const userPrompt = `${patientInfo}
+
+${currentMealsInfo}
+
+Por favor, crie uma sugestão de recordatório alimentar de 24 horas personalizado para este paciente, considerando todas as informações fornecidas.`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.7,
+        max_tokens: 1500
+      });
+
+      const result = JSON.parse(response.choices[0].message.content || '{}');
+      
+      return {
+        breakfast: result.breakfast || 'Não foi possível gerar sugestão',
+        morningSnack: result.morningSnack || 'Não necessário',
+        lunch: result.lunch || 'Não foi possível gerar sugestão',
+        afternoonSnack: result.afternoonSnack || 'Não necessário',
+        dinner: result.dinner || 'Não foi possível gerar sugestão',
+        eveningSnack: result.eveningSnack || 'Não necessário',
+        generalNotes: result.generalNotes || ''
+      };
+    } catch (error) {
+      console.error('[OpenAI Service] Error generating meal plan:', error);
+      throw new Error(`Erro ao gerar plano alimentar: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+    }
+  }
 }
 
 export const openaiService = new OpenAIService();
