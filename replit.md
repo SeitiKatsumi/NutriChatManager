@@ -6,6 +6,12 @@ NutriChatBot is a comprehensive management platform for nutritionists that integ
 
 Preferred communication style: Simple, everyday language.
 
+## Phone Number Storage Requirements
+All phone numbers must be stored in Directus with Brazil country code "55" prefix:
+- Format in database: `5511983283363` (digits only, including country code)
+- Display format in UI: `+55 (11) 98328-3363` (Brazilian mask)
+- Automatic normalization: 10-11 digit numbers get "55" prepended before saving
+
 # User Registration Flow
 
 The nutritionist registration is a 3-step form (`client/src/components/register/step-form.tsx`):
