@@ -40,6 +40,29 @@ Client-side state is managed using TanStack Query for server state and React hoo
 ## User Registration Flow
 Nutritionist registration is a 3-step form covering basic information, professional details (including clinic WhatsApp), and AI bot configuration (WhatsApp number for bot, welcome message, working hours). All data is saved to Directus `directus_users` collection with the nutritionist role.
 
+## Settings & Profile Management
+The Settings page (`/settings`) allows nutritionists to edit their profile information and customize AI agent behavior through two main sections:
+
+**Personal Information:**
+- Full name, email (read-only), CPF/CNPJ
+- **Three distinct phone numbers:**
+  - **Telefone:** Personal/secretary contact number
+  - **WhatsApp da Clínica:** Clinic commercial WhatsApp
+  - **WhatsApp do Bot IA:** Number used by the Evolution API bot for automated responses
+- Address and specialization
+
+**AI Agent Configuration:**
+- Agent name and initial greeting message customization
+
+**WhatsApp Bot Number Synchronization:**
+- The bot WhatsApp number is stored in TWO Directus fields for consistency:
+  - `Whatsapp_IA`: Primary bot number field
+  - `whatsapp_number`: Legacy field (kept in sync)
+- Backend `transformUserToDirectus` ensures both fields update simultaneously
+- Frontend displays with fallback: shows `whatsappIA` first, falls back to `whatsappNumber` for existing users
+- Visual warning alerts users that changing the bot number may impact WhatsApp operations
+- All phone numbers stored with Brazilian country code prefix (55) as clean digits
+
 # External Dependencies
 
 ## Core Frameworks
