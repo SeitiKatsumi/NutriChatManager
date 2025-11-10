@@ -240,6 +240,9 @@ function transformUserToDirectus(nutritionist: any): DirectusUser {
     lastName = nameParts.slice(1).join(' ') || '';
   }
   
+  // When whatsappIA is provided (from settings update), sync it to both fields
+  const whatsappValue = nutritionist.whatsappIA || nutritionist.whatsappNumber;
+  
   return {
     email: nutritionist.email,
     password: nutritionist.password,
@@ -253,13 +256,13 @@ function transformUserToDirectus(nutritionist: any): DirectusUser {
     whatsapp_clinica: nutritionist.whatsapp_clinica,
     address: nutritionist.address,
     specialization: nutritionist.specialization,
-    whatsapp_number: nutritionist.whatsappNumber,
+    whatsapp_number: whatsappValue, // Keep both in sync
     welcome_message: nutritionist.welcomeMessage,
     working_hours: nutritionist.workingHours,
     // Evolution API fields
     Token_Evolution: nutritionist.evolutionToken,
     Instancia_Evolution: nutritionist.evolutionInstanceName,
-    Whatsapp_IA: nutritionist.whatsappIA,
+    Whatsapp_IA: whatsappValue, // Keep both in sync
     // AI Agent customization fields
     mensagem_inicial: nutritionist.mensagem_inicial,
     nome_do_agente: nutritionist.nome_do_agente,
