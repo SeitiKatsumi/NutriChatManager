@@ -249,21 +249,12 @@ export default function PatientDetailsDialog({
           )}
 
           {/* Informações Médicas */}
-          {(patient.medicalHistory || patient.dietaryRestrictions || patient.goals) && (
+          {(patient.dietaryRestrictions || patient.goals) && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Informações e Objetivos</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {patient.medicalHistory && (
-                  <div>
-                    <h4 className="font-medium mb-2">Histórico:</h4>
-                    <p className="text-sm text-muted-foreground bg-muted/30 p-3 rounded">
-                      {patient.medicalHistory}
-                    </p>
-                  </div>
-                )}
-                
                 {patient.dietaryRestrictions && (
                   <div>
                     <h4 className="font-medium mb-2">Restrições Alimentares:</h4>
