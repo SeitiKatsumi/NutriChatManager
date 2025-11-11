@@ -28,6 +28,7 @@ export interface DirectusPatient {
   Idade?: number; // Age
   Anamise_inicial?: string;
   Suplementos_e_medicamentos?: string;
+  Restricoes_alimentares?: string; // Dietary restrictions field
   Metas_e_objetivos?: string;
   Etapas?: string;
   Ultima_consulta?: string;
