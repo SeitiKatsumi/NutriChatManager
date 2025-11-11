@@ -63,6 +63,24 @@ The Settings page (`/settings`) allows nutritionists to edit their profile infor
 - Visual warning alerts users that changing the bot number may impact WhatsApp operations
 - All phone numbers stored with Brazilian country code prefix (55) as clean digits
 
+## Patient Data Management
+The system properly handles patient information with separated fields for dietary data:
+
+**Field Separation:**
+- **`Restricoes_alimentares`** (Directus) → `dietaryRestrictions` (app): Stores dietary restrictions only
+- **`Suplementos_e_medicamentos`** (Directus) → `suplementos_medicamentos` (app): Stores supplements and medications only
+- Fields are completely independent, preventing data duplication in the UI
+
+**Data Mapping Strategy:**
+- **Read (Directus → App):** Each field maps directly without fallbacks
+- **Write (App → Directus):** Preserves legacy data when `suplementos_medicamentos` is undefined
+- **Auto-Field Creation:** `ensureRequiredFields` creates `Restricoes_alimentares` if missing at startup
+
+**Patient Card Display:**
+- Mobile patient cards show WhatsApp number with dedicated icon and test ID
+- Contact information displayed in order: WhatsApp, Phone, Email
+- All fields properly formatted and responsive
+
 # External Dependencies
 
 ## Core Frameworks
