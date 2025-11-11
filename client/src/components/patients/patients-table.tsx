@@ -161,6 +161,12 @@ export default function PatientsTable({
         <div className="mt-3 space-y-2">
           {/* Contact Information */}
           <div className="flex flex-col space-y-1">
+            {patient.whatsappNumber && (
+              <div className="flex items-center text-sm text-muted-foreground" data-testid={`patient-whatsapp-${patient.id}`}>
+                <Phone className="w-3 h-3 mr-2" />
+                {patient.whatsappNumber}
+              </div>
+            )}
             {patient.phone && (
               <div className="flex items-center text-sm text-muted-foreground" data-testid={`patient-phone-${patient.id}`}>
                 <Phone className="w-3 h-3 mr-2" />

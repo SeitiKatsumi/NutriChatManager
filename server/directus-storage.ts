@@ -171,8 +171,12 @@ function transformPatientToDirectus(patient: any): DirectusPatient {
     Sexo: patient.gender,
     Peso: patient.weight ? parseInt(patient.weight, 10) : undefined,
     Altura: patient.height ? parseInt(patient.height, 10) : undefined,
-    Anamise_inicial: patient.medicalHistory,
-    Suplementos_e_medicamentos: patient.dietaryRestrictions,
+    Anamise_inicial: patient.medicalHistory || patient.anamnese_inicial,
+    // Preserve legacy data: if suplementos_medicamentos is not provided, keep legacy value in Suplementos_e_medicamentos
+    Suplementos_e_medicamentos: patient.suplementos_medicamentos !== undefined 
+      ? patient.suplementos_medicamentos 
+      : (patient.dietaryRestrictions || undefined),
+    Restricoes_alimentares: patient.dietaryRestrictions,
     Metas_e_objetivos: patient.goals,
     Etapas: patient.status || 'Aguardando agendamento',
     Ultima_consulta: patient.lastConsultation,
@@ -207,8 +211,9 @@ function transformPatientFromDirectus(directusPatient: any): any {
     height: directusPatient.Altura,
     bmi: directusPatient.IMC,
     age: directusPatient.Idade,
-    medicalHistory: directusPatient.Anamise_inicial, // Mantém para compatibilidade
-    dietaryRestrictions: directusPatient.Suplementos_e_medicamentos, // Mantém para compatibilidade
+    medicalHistory: directusPatient.Anamise_inicial,
+    // Use Restricoes_alimentares only (separate from supplements)
+    dietaryRestrictions: directusPatient.Restricoes_alimentares,
     goals: directusPatient.Metas_e_objetivos,
     status: directusPatient.Etapas,
     lastConsultation: directusPatient.Ultima_consulta,
@@ -388,6 +393,32 @@ export class DirectusStorage implements IStorage {
         }
       }
 
+      // Check and create required fields for Cadastro_de_Pacientes collection
+      console.log('[Directus] Checking required fields in Cadastro_de_Pacientes collection...');
+      const patientsFieldsResponse = await fetch(`${this.baseUrl}/fields/Cadastro_de_Pacientes`, {
+        headers: {
+          'Authorization': `Bearer ${this.token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (patientsFieldsResponse.ok) {
+        const patientsFieldsData = await patientsFieldsResponse.json();
+        const existingPatientsFields = patientsFieldsData.data?.map((field: any) => field.field) || [];
+        
+        console.log('[Directus] Existing patient fields count:', existingPatientsFields.length);
+
+        // Check if Restricoes_alimentares field exists
+        if (!existingPatientsFields.includes('Restricoes_alimentares')) {
+          console.log('[Directus] Creating Restricoes_alimentares field in Cadastro_de_Pacientes...');
+          await this.createPatientDietaryRestrictionsField();
+        } else {
+          console.log('[Directus] ✓ Restricoes_alimentares field already exists in Cadastro_de_Pacientes');
+        }
+      } else {
+        console.warn(`[Directus] Could not fetch Cadastro_de_Pacientes fields (${patientsFieldsResponse.status})`);
+      }
+
     } catch (error: any) {
       console.warn('[Directus] Error checking/creating fields:', error.message);
     }
@@ -535,6 +566,42 @@ export class DirectusStorage implements IStorage {
       console.log(`[Directus] ✓ ${fieldName} field created successfully`);
     } catch (error: any) {
       console.warn(`[Directus] Error creating ${fieldName} field:`, error.message);
+    }
+  }
+
+  private async createPatientDietaryRestrictionsField(): Promise<void> {
+    try {
+      const fieldConfig = {
+        field: 'Restricoes_alimentares',
+        type: 'text',
+        meta: {
+          width: 'full',
+          interface: 'input-multiline',
+          note: 'Restrições alimentares, alergias e intolerâncias do paciente'
+        },
+        schema: {
+          is_nullable: true
+        }
+      };
+
+      const response = await fetch(`${this.baseUrl}/fields/Cadastro_de_Pacientes`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(fieldConfig)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.warn(`[Directus] Warning creating Restricoes_alimentares: ${errorText}`);
+        return;
+      }
+
+      console.log('[Directus] ✓ Restricoes_alimentares field created successfully');
+    } catch (error: any) {
+      console.warn('[Directus] Error creating Restricoes_alimentares field:', error.message);
     }
   }
 
@@ -823,9 +890,16 @@ export class DirectusStorage implements IStorage {
         method: 'DELETE',
       });
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting patient:', error);
-      return false;
+      
+      // Check if it's a permissions error
+      if (error.message && error.message.includes('403')) {
+        console.error('[Directus] Permission denied to delete patient. The nutritionist role needs DELETE permissions in Cadastro_de_Pacientes collection.');
+        console.error('[Directus] Please configure permissions in Directus admin panel: Settings > Roles & Permissions > Nutritionist Role > Cadastro_de_Pacientes > Enable DELETE');
+      }
+      
+      throw error; // Throw to let the route handler provide appropriate error message
     }
   }
 
