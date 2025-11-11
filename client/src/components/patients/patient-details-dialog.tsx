@@ -90,19 +90,27 @@ export default function PatientDetailsDialog({
                     <span>{patient.fullName}</span>
                   </div>
                   
-                  {patient.email && (
-                    <div className="flex items-center gap-2">
-                      <Mail className="w-4 h-4 text-muted-foreground" />
-                      <span className="font-medium">Email:</span>
-                      <span>{patient.email}</span>
+                  {patient.whatsappNumber && (
+                    <div className="flex items-center gap-2" data-testid="patient-detail-whatsapp">
+                      <Phone className="w-4 h-4 text-muted-foreground" />
+                      <span className="font-medium">WhatsApp:</span>
+                      <span>{patient.whatsappNumber}</span>
                     </div>
                   )}
                   
                   {patient.phone && (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2" data-testid="patient-detail-phone">
                       <Phone className="w-4 h-4 text-muted-foreground" />
                       <span className="font-medium">Telefone:</span>
                       <span>{patient.phone}</span>
+                    </div>
+                  )}
+                  
+                  {patient.email && (
+                    <div className="flex items-center gap-2" data-testid="patient-detail-email">
+                      <Mail className="w-4 h-4 text-muted-foreground" />
+                      <span className="font-medium">Email:</span>
+                      <span>{patient.email}</span>
                     </div>
                   )}
                   
