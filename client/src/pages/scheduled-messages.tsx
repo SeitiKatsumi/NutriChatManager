@@ -148,10 +148,10 @@ export default function ScheduledMessages() {
           <div>
             <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
               <MessageCircle className="h-7 w-7 text-primary" />
-              Mensagens Programadas
+              Automações de WhatsApp
             </h1>
             <p className="text-muted-foreground mt-1">
-              Visualize e gerencie todos os agendamentos de mensagens WhatsApp
+              Visualize e gerencie todas as automações de mensagens
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -213,10 +213,10 @@ export default function ScheduledMessages() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Send className="h-5 w-5" />
-            Agendamentos
+            Automações
           </CardTitle>
           <CardDescription>
-            {filteredSchedules.length} agendamento(s) encontrado(s)
+            {filteredSchedules.length} automação(ões) encontrada(s)
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -228,12 +228,12 @@ export default function ScheduledMessages() {
             <div className="text-center py-12">
               <MessageCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-medium text-foreground mb-2">
-                Nenhum agendamento encontrado
+                Nenhuma automação encontrada
               </h3>
               <p className="text-muted-foreground">
                 {searchTerm || typeFilter !== "all" || statusFilter !== "all" 
                   ? "Tente ajustar os filtros de busca"
-                  : "Configure agendamentos nos perfis dos pacientes"}
+                  : "Configure automações nos perfis dos pacientes"}
               </p>
             </div>
           ) : (

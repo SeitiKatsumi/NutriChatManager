@@ -87,7 +87,7 @@ export default function PatientDetailsDialog({
             </TabsTrigger>
             <TabsTrigger value="schedules" className="gap-2">
               <CalendarClock className="h-4 w-4" />
-              Agendamentos
+              Automações
             </TabsTrigger>
             <TabsTrigger value="ai" className="gap-2">
               <Sparkles className="h-4 w-4" />

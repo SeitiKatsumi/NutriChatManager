@@ -108,11 +108,11 @@ export default function PatientSchedules({ patient }: PatientSchedulesProps) {
           return [...oldData, newSchedule];
         }
       );
-      toast({ title: "Agendamento criado com sucesso!" });
+      toast({ title: "Automação criada com sucesso!" });
     },
     onError: (error: any) => {
       toast({ 
-        title: "Erro ao criar agendamento", 
+        title: "Erro ao criar automação", 
         description: error.message,
         variant: "destructive" 
       });
@@ -132,11 +132,11 @@ export default function PatientSchedules({ patient }: PatientSchedulesProps) {
           return oldData.map(s => s.id === updatedSchedule.id ? updatedSchedule : s);
         }
       );
-      toast({ title: "Agendamento atualizado!" });
+      toast({ title: "Automação atualizada!" });
     },
     onError: (error: any) => {
       toast({ 
-        title: "Erro ao atualizar agendamento", 
+        title: "Erro ao atualizar automação", 
         description: error.message,
         variant: "destructive" 
       });
@@ -272,7 +272,7 @@ export default function PatientSchedules({ patient }: PatientSchedulesProps) {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Clock className="w-5 h-5" />
-            Agendamentos Automáticos
+            Automações de Mensagens
           </CardTitle>
         </CardHeader>
         <CardContent className="flex items-center justify-center py-8">
@@ -555,11 +555,11 @@ export default function PatientSchedules({ patient }: PatientSchedulesProps) {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Clock className="w-5 h-5" />
-          Agendamentos Automáticos
+          Automações de Mensagens
         </CardTitle>
         <CardDescription>
-          Configure mensagens automáticas para este paciente. Todos os agendamentos 
-          são desativados por padrão.
+          Configure mensagens automáticas para este paciente. Todas as automações 
+          são desativadas por padrão.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

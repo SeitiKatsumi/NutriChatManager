@@ -115,7 +115,7 @@ export default function Dashboard() {
           <Card className="border-l-4 border-l-green-500">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
-                Agendamentos Ativos
+                Automações Ativas
               </CardTitle>
               <CalendarClock className="h-4 w-4 text-green-500" />
             </CardHeader>
@@ -194,7 +194,7 @@ export default function Dashboard() {
                     Pacientes Recentes
                   </CardTitle>
                   <CardDescription>
-                    Últimos pacientes e status de agendamento
+                    Últimos pacientes e status de automações
                   </CardDescription>
                 </div>
                 <Link href="/patients">
@@ -348,7 +348,7 @@ export default function Dashboard() {
               <div>
                 <CardTitle className="flex items-center gap-2">
                   <CalendarClock className="h-5 w-5" />
-                  Tipos de Agendamento
+                  Tipos de Automação
                 </CardTitle>
                 <CardDescription>
                   Configure mensagens automáticas para seus pacientes
@@ -463,13 +463,13 @@ export default function Dashboard() {
                     Como funciona?
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Os agendamentos são configurados individualmente na página de cada paciente. 
+                    As automações são configuradas individualmente na página de cada paciente. 
                     Acesse a ficha do paciente para ativar e personalizar cada tipo de mensagem automática.
                   </p>
                 </div>
                 <Link href="/patients">
                   <Button variant="outline" size="sm" data-testid="btn-configure-schedules">
-                    Configurar agendamentos
+                    Configurar automações
                   </Button>
                 </Link>
               </div>
