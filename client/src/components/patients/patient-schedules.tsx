@@ -82,6 +82,8 @@ export default function PatientSchedules({ patient }: PatientSchedulesProps) {
   const { toast } = useToast();
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
   const [editingSchedules, setEditingSchedules] = useState<Record<string, any>>({});
+  const [optimisticStates, setOptimisticStates] = useState<Record<string, boolean>>({});
+  const [loadingStates, setLoadingStates] = useState<Record<string, boolean>>({});
 
   const patientId = parseInt(patient.id);
 
@@ -156,20 +158,41 @@ export default function PatientSchedules({ patient }: PatientSchedulesProps) {
   const handleToggleSchedule = async (type: string, enabled: boolean) => {
     const existingSchedule = getScheduleByType(type);
     
-    if (existingSchedule) {
-      await updateScheduleMutation.mutateAsync({
-        id: existingSchedule.id,
-        updates: { status: enabled ? "enabled" : "disabled" },
-      });
-    } else if (enabled) {
-      const defaultConfig = getDefaultConfig(type);
-      await createScheduleMutation.mutateAsync({
-        patient_id: patientId,
-        type,
-        status: "enabled",
-        config: defaultConfig,
+    setOptimisticStates(prev => ({ ...prev, [type]: enabled }));
+    setLoadingStates(prev => ({ ...prev, [type]: true }));
+    
+    try {
+      if (existingSchedule) {
+        await updateScheduleMutation.mutateAsync({
+          id: existingSchedule.id,
+          updates: { status: enabled ? "enabled" : "disabled" },
+        });
+      } else if (enabled) {
+        const defaultConfig = getDefaultConfig(type);
+        await createScheduleMutation.mutateAsync({
+          patient_id: patientId,
+          type,
+          status: "enabled",
+          config: defaultConfig,
+        });
+      }
+    } catch (error) {
+      setOptimisticStates(prev => ({ ...prev, [type]: !enabled }));
+    } finally {
+      setLoadingStates(prev => ({ ...prev, [type]: false }));
+      setOptimisticStates(prev => {
+        const newState = { ...prev };
+        delete newState[type];
+        return newState;
       });
     }
+  };
+
+  const isScheduleEnabled = (type: string) => {
+    if (type in optimisticStates) {
+      return optimisticStates[type];
+    }
+    return getScheduleByType(type)?.status === "enabled";
   };
 
   const getDefaultConfig = (type: string) => {
@@ -257,7 +280,8 @@ export default function PatientSchedules({ patient }: PatientSchedulesProps) {
 
   const renderScheduleConfig = (type: "reactivation" | "meal_feedback" | "post_consultation") => {
     const schedule = getScheduleByType(type);
-    const isEnabled = schedule?.status === "enabled";
+    const isEnabled = isScheduleEnabled(type);
+    const isToggling = loadingStates[type];
     const editData = editingSchedules[type];
     const isEditing = !!editData;
     const typeInfo = scheduleTypeLabels[type];
@@ -269,7 +293,7 @@ export default function PatientSchedules({ patient }: PatientSchedulesProps) {
         open={openSections[type]} 
         onOpenChange={() => toggleSection(type)}
       >
-        <div className={`p-4 rounded-lg border ${isEnabled ? 'border-primary/30' : ''}`}>
+        <div className={`p-4 rounded-lg border transition-colors ${isEnabled ? 'border-primary/30 bg-primary/5' : ''}`}>
           <CollapsibleTrigger className="w-full">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -284,12 +308,21 @@ export default function PatientSchedules({ patient }: PatientSchedulesProps) {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <Switch
-                  checked={isEnabled}
-                  onCheckedChange={(checked) => handleToggleSchedule(type, checked)}
-                  onClick={(e) => e.stopPropagation()}
-                  data-testid={`switch-schedule-${type}`}
-                />
+                <div className="relative">
+                  {isToggling && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    </div>
+                  )}
+                  <Switch
+                    checked={isEnabled}
+                    onCheckedChange={(checked) => handleToggleSchedule(type, checked)}
+                    onClick={(e) => e.stopPropagation()}
+                    disabled={isToggling}
+                    className={isToggling ? 'opacity-50' : ''}
+                    data-testid={`switch-schedule-${type}`}
+                  />
+                </div>
                 <ChevronDown className={`h-4 w-4 transition-transform ${openSections[type] ? 'rotate-180' : ''}`} />
               </div>
             </div>
@@ -299,7 +332,7 @@ export default function PatientSchedules({ patient }: PatientSchedulesProps) {
             <Separator className="mb-4" />
             
             {schedule && (
-              <div className="flex items-center gap-2 mb-4">
+              <div className="flex items-center gap-2 mb-4 flex-wrap">
                 <Badge variant={isEnabled ? "default" : "secondary"}>
                   {isEnabled ? "Ativo" : "Desativado"}
                 </Badge>

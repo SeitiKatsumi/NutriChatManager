@@ -392,8 +392,54 @@ export class ScheduleService {
     }
   }
 
+  calculateNextRunAt(type: string, config: any, status: string): string | null {
+    if (status !== "enabled") return null;
+    
+    const now = new Date();
+    
+    switch (type) {
+      case "reactivation":
+        if (config?.send_at) {
+          return config.send_at;
+        }
+        const tomorrow = new Date(now);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        tomorrow.setHours(10, 0, 0, 0);
+        return tomorrow.toISOString();
+        
+      case "meal_feedback":
+        const intervalDays = parseInt(config?.interval_days || "7");
+        const startDate = config?.start_date ? new Date(config.start_date) : now;
+        const nextFeedback = new Date(startDate);
+        nextFeedback.setDate(nextFeedback.getDate() + intervalDays);
+        if (nextFeedback <= now) {
+          nextFeedback.setTime(now.getTime());
+          nextFeedback.setDate(nextFeedback.getDate() + intervalDays);
+        }
+        nextFeedback.setHours(10, 0, 0, 0);
+        return nextFeedback.toISOString();
+        
+      case "post_consultation":
+        const daysAfter = parseInt(config?.days_after || "3");
+        const consultationDate = config?.consultation_date ? new Date(config.consultation_date) : now;
+        const nextPostConsultation = new Date(consultationDate);
+        nextPostConsultation.setDate(nextPostConsultation.getDate() + daysAfter);
+        nextPostConsultation.setHours(10, 0, 0, 0);
+        return nextPostConsultation.toISOString();
+        
+      default:
+        return null;
+    }
+  }
+
   async createSchedule(schedule: InsertWhatsappSchedule): Promise<WhatsappSchedule> {
     await this.ensureCollectionsExist();
+    
+    const nextRunAt = this.calculateNextRunAt(
+      schedule.type, 
+      schedule.config, 
+      schedule.status || "disabled"
+    );
     
     const directusSchedule: Partial<DirectusSchedule> = {
       patient_id: schedule.patient_id,
@@ -402,7 +448,7 @@ export class ScheduleService {
       status: schedule.status || "disabled",
       message_template: schedule.message_template || undefined,
       config: schedule.config,
-      next_run_at: schedule.next_run_at || undefined,
+      next_run_at: nextRunAt || undefined,
       failure_count: 0,
     };
 
@@ -418,6 +464,21 @@ export class ScheduleService {
   async updateSchedule(id: number, updates: Partial<WhatsappSchedule>): Promise<WhatsappSchedule | null> {
     try {
       await this.ensureCollectionsExist();
+      
+      if (updates.status || updates.config) {
+        const existingSchedule = await this.getSchedule(id);
+        if (existingSchedule) {
+          const newStatus = updates.status || existingSchedule.status;
+          const newConfig = updates.config || existingSchedule.config;
+          const newNextRunAt = this.calculateNextRunAt(
+            existingSchedule.type,
+            newConfig,
+            newStatus
+          );
+          updates.next_run_at = newNextRunAt;
+        }
+      }
+      
       const result = await this.request(`/items/${SCHEDULES_COLLECTION}/${id}`, {
         method: "PATCH",
         body: JSON.stringify(updates),
@@ -595,6 +656,177 @@ export class ScheduleService {
       
       default:
         return `Olá ${firstName}!`;
+    }
+  }
+
+  private schedulerInterval: NodeJS.Timeout | null = null;
+  private isProcessing = false;
+
+  startScheduler(intervalMs: number = 60000): void {
+    if (this.schedulerInterval) {
+      console.log("[Scheduler] Already running, skipping start");
+      return;
+    }
+
+    console.log(`[Scheduler] Starting automatic scheduler (interval: ${intervalMs / 1000}s)`);
+    
+    this.schedulerInterval = setInterval(() => {
+      this.processSchedules().catch(err => {
+        console.error("[Scheduler] Error processing schedules:", err);
+      });
+    }, intervalMs);
+
+    this.processSchedules().catch(err => {
+      console.error("[Scheduler] Error on initial processing:", err);
+    });
+  }
+
+  stopScheduler(): void {
+    if (this.schedulerInterval) {
+      clearInterval(this.schedulerInterval);
+      this.schedulerInterval = null;
+      console.log("[Scheduler] Stopped");
+    }
+  }
+
+  async processSchedules(): Promise<{ processed: number; success: number; failed: number }> {
+    if (this.isProcessing) {
+      console.log("[Scheduler] Already processing, skipping...");
+      return { processed: 0, success: 0, failed: 0 };
+    }
+
+    this.isProcessing = true;
+    let processed = 0;
+    let success = 0;
+    let failed = 0;
+
+    try {
+      console.log("[Scheduler] Checking for pending schedules...");
+      
+      const allSchedules = await this.request(`/items/${SCHEDULES_COLLECTION}?filter[status][_eq]=enabled`);
+      const schedules = (allSchedules.data || []) as WhatsappSchedule[];
+      
+      const now = new Date();
+      const pendingSchedules = schedules.filter(s => {
+        if (!s.next_run_at) return false;
+        const nextRun = new Date(s.next_run_at);
+        return nextRun <= now;
+      });
+
+      console.log(`[Scheduler] Found ${pendingSchedules.length} pending schedules`);
+
+      for (const schedule of pendingSchedules) {
+        try {
+          processed++;
+          
+          const nutritionist = await this.getNutritionistForSchedule(schedule.nutritionist_id);
+          if (!nutritionist?.evolutionInstanceName) {
+            console.warn(`[Scheduler] Nutritionist ${schedule.nutritionist_id} has no WhatsApp instance, skipping`);
+            continue;
+          }
+
+          const patient = await this.getPatientForSchedule(schedule.patient_id);
+          if (!patient?.whatsappNumber) {
+            console.warn(`[Scheduler] Patient ${schedule.patient_id} has no WhatsApp, skipping`);
+            continue;
+          }
+
+          const message = schedule.message_template || 
+            this.getDefaultMessage(schedule.type as any, patient.fullName || "Paciente");
+
+          console.log(`[Scheduler] Sending ${schedule.type} message to patient ${schedule.patient_id}`);
+
+          const result = await this.sendScheduledMessage(
+            nutritionist.evolutionInstanceName,
+            patient.whatsappNumber,
+            message,
+            schedule.id,
+            schedule.patient_id
+          );
+
+          if (result.success) {
+            success++;
+            
+            const newNextRunAt = this.calculateNextRunAtAfterSend(schedule);
+            
+            await this.updateSchedule(schedule.id, {
+              last_run_at: new Date().toISOString(),
+              next_run_at: newNextRunAt,
+              failure_count: 0,
+              last_error: null,
+              status: schedule.type === "reactivation" ? "completed" : "enabled",
+            });
+            
+            console.log(`[Scheduler] Successfully sent to patient ${schedule.patient_id}, next run: ${newNextRunAt || 'none'}`);
+          } else {
+            failed++;
+            await this.updateSchedule(schedule.id, {
+              failure_count: (schedule.failure_count || 0) + 1,
+              last_error: result.error,
+            });
+            console.error(`[Scheduler] Failed to send to patient ${schedule.patient_id}: ${result.error}`);
+          }
+        } catch (error: any) {
+          failed++;
+          console.error(`[Scheduler] Error processing schedule ${schedule.id}:`, error);
+        }
+      }
+
+      console.log(`[Scheduler] Completed - processed: ${processed}, success: ${success}, failed: ${failed}`);
+    } catch (error) {
+      console.error("[Scheduler] Error in processSchedules:", error);
+    } finally {
+      this.isProcessing = false;
+    }
+
+    return { processed, success, failed };
+  }
+
+  private calculateNextRunAtAfterSend(schedule: WhatsappSchedule): string | null {
+    switch (schedule.type) {
+      case "reactivation":
+        return null;
+        
+      case "meal_feedback":
+        const intervalDays = parseInt(schedule.config?.interval_days || "7");
+        const nextFeedback = new Date();
+        nextFeedback.setDate(nextFeedback.getDate() + intervalDays);
+        nextFeedback.setHours(10, 0, 0, 0);
+        return nextFeedback.toISOString();
+        
+      case "post_consultation":
+        return null;
+        
+      default:
+        return null;
+    }
+  }
+
+  private async getNutritionistForSchedule(nutritionistId: string): Promise<any> {
+    try {
+      const result = await this.request(`/users/${nutritionistId}?fields=id,first_name,last_name,evolutionInstanceName`);
+      return {
+        id: result.data?.id,
+        fullName: `${result.data?.first_name || ''} ${result.data?.last_name || ''}`.trim(),
+        evolutionInstanceName: result.data?.evolutionInstanceName,
+      };
+    } catch (error) {
+      console.error(`[Scheduler] Error fetching nutritionist ${nutritionistId}:`, error);
+      return null;
+    }
+  }
+
+  private async getPatientForSchedule(patientId: number): Promise<any> {
+    try {
+      const result = await this.request(`/items/Cadastro_de_Pacientes/${patientId}?fields=id,Nome_Completo,Whatsapp`);
+      return {
+        id: result.data?.id,
+        fullName: result.data?.Nome_Completo,
+        whatsappNumber: result.data?.Whatsapp,
+      };
+    } catch (error) {
+      console.error(`[Scheduler] Error fetching patient ${patientId}:`, error);
+      return null;
     }
   }
 }

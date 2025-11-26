@@ -3117,6 +3117,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Start the automatic schedule processor (runs every 60 seconds)
+  scheduleService.startScheduler(60000);
+  console.log("[Server] Automatic WhatsApp scheduler started");
+
   const httpServer = createServer(app);
   return httpServer;
 }
