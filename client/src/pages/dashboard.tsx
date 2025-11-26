@@ -93,31 +93,31 @@ export default function Dashboard() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          <Card className="border-l-4 border-l-blue-500">
+          <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Total de Pacientes
               </CardTitle>
-              <Users className="h-4 w-4 text-blue-500" />
+              <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold" data-testid="stat-total-patients">
                 {statsLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : stats?.totalPatients || 0}
               </div>
               <Link href="/patients">
-                <span className="text-xs text-blue-500 hover:underline cursor-pointer">
+                <span className="text-xs text-primary hover:underline cursor-pointer">
                   Ver todos →
                 </span>
               </Link>
             </CardContent>
           </Card>
 
-          <Card className="border-l-4 border-l-green-500">
+          <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Automações Ativas
               </CardTitle>
-              <CalendarClock className="h-4 w-4 text-green-500" />
+              <CalendarClock className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold" data-testid="stat-active-schedules">
@@ -129,12 +129,12 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card className="border-l-4 border-l-purple-500">
+          <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Mensagens Hoje
               </CardTitle>
-              <Send className="h-4 w-4 text-purple-500" />
+              <Send className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold" data-testid="stat-messages-today">
@@ -146,12 +146,12 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card className="border-l-4 border-l-orange-500">
+          <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Mensagens na Semana
               </CardTitle>
-              <BarChart3 className="h-4 w-4 text-orange-500" />
+              <BarChart3 className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold" data-testid="stat-messages-week">
@@ -163,24 +163,24 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Link href="/scheduled-messages">
-            <Card className="border-l-4 border-l-yellow-500 cursor-pointer hover:bg-accent/50 transition-colors" data-testid="card-pending-messages">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Pendentes
-                </CardTitle>
-                <Clock className="h-4 w-4 text-yellow-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold" data-testid="stat-pending">
-                  {statsLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : stats?.pendingSchedules || 0}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Próximos envios
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
+          <Card data-testid="card-pending-messages">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Pendentes
+              </CardTitle>
+              <Clock className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold" data-testid="stat-pending">
+                {statsLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : stats?.pendingSchedules || 0}
+              </div>
+              <Link href="/scheduled-messages">
+                <span className="text-xs text-primary hover:underline cursor-pointer">
+                  Ver todos →
+                </span>
+              </Link>
+            </CardContent>
+          </Card>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
