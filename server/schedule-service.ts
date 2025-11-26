@@ -469,12 +469,42 @@ export class ScheduleService {
         const existingSchedule = await this.getSchedule(id);
         if (existingSchedule) {
           const newStatus = updates.status || existingSchedule.status;
-          const newConfig = updates.config || existingSchedule.config;
+          
+          // Parse config if it's a string (Directus may return JSON as string)
+          let existingConfig = existingSchedule.config;
+          if (typeof existingConfig === 'string') {
+            try {
+              existingConfig = JSON.parse(existingConfig);
+            } catch (e) {
+              existingConfig = {};
+            }
+          }
+          
+          let updatesConfig = updates.config;
+          if (typeof updatesConfig === 'string') {
+            try {
+              updatesConfig = JSON.parse(updatesConfig);
+            } catch (e) {
+              updatesConfig = undefined;
+            }
+          }
+          
+          const newConfig = updatesConfig || existingConfig;
+          
+          console.log("[Schedule] Calculating next_run_at:", {
+            type: existingSchedule.type,
+            newConfig,
+            newStatus,
+            configSendAt: newConfig?.send_at
+          });
+          
           const newNextRunAt = this.calculateNextRunAt(
             existingSchedule.type,
             newConfig,
             newStatus
           );
+          
+          console.log("[Schedule] Calculated next_run_at:", newNextRunAt);
           updates.next_run_at = newNextRunAt;
         }
       }
