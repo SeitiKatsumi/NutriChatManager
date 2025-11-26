@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Link } from "wouter";
-import { useState } from "react";
 import { useAuth } from "@/contexts/auth-context";
 
 interface DashboardStats {
@@ -37,14 +36,13 @@ interface PatientWithSchedules {
 
 export default function Dashboard() {
   const { user, nutritionist } = useAuth();
-  const [refreshKey, setRefreshKey] = useState(0);
 
   const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useQuery<DashboardStats>({
-    queryKey: ["/api/dashboard/stats", refreshKey],
+    queryKey: ["/api/dashboard/stats"],
     refetchInterval: 60000,
   });
 
-  const { data: patients, isLoading: patientsLoading } = useQuery<PatientWithSchedules[]>({
+  const { data: patients, isLoading: patientsLoading, refetch: refetchPatients } = useQuery<PatientWithSchedules[]>({
     queryKey: ["/api/patients"],
     select: (data: any[]) => data.slice(0, 10),
   });
@@ -54,8 +52,8 @@ export default function Dashboard() {
   });
 
   const handleRefresh = () => {
-    setRefreshKey(prev => prev + 1);
     refetchStats();
+    refetchPatients();
   };
 
   const getGreeting = () => {

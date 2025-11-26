@@ -16,6 +16,9 @@ interface Nutritionist {
   phone: string | null;
   specialization: string | null;
   whatsappNumber: string | null;
+  whatsappIA: string | null;
+  evolutionInstanceName: string | null;
+  evolutionToken: string | null;
   status: string | null;
   status_pagamento: "pendente" | "ativo" | "cancelado" | "expirado";
 }

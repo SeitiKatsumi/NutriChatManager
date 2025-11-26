@@ -1143,6 +1143,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       console.log('Session user verified, returning user data');
+      console.log('[Auth] Nutritionist data:', {
+        id: nutritionist.id,
+        fullName: nutritionist.fullName,
+        evolutionInstanceName: nutritionist.evolutionInstanceName,
+        whatsappIA: nutritionist.whatsappIA,
+      });
+      
       res.json({
         user: {
           id: req.session.user.id,
@@ -3068,16 +3075,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const nutritionistId = req.session.user.nutritionistId;
       const userToken = req.session.user.accessToken;
       
-      const patients = await storage.getPatientsByNutritionist(nutritionistId, userToken);
-      const scheduleStats = await scheduleService.getDashboardStats(nutritionistId);
+      console.log("[Dashboard] Getting stats for nutritionist:", nutritionistId);
       
-      res.json({
+      const patients = await storage.getPatientsByNutritionist(nutritionistId, userToken);
+      console.log("[Dashboard] Found patients:", patients.length);
+      
+      const scheduleStats = await scheduleService.getDashboardStats(nutritionistId);
+      console.log("[Dashboard] Schedule stats:", scheduleStats);
+      
+      const response = {
         totalPatients: patients.length,
         activeSchedules: scheduleStats.activeSchedules,
         messagesSentToday: scheduleStats.messagesSentToday,
         messagesSentThisWeek: scheduleStats.messagesSentThisWeek,
         pendingSchedules: scheduleStats.pendingSchedules,
-      });
+      };
+      
+      console.log("[Dashboard] Returning stats:", response);
+      res.json(response);
     } catch (error: any) {
       console.error("[Dashboard] Error getting stats:", error);
       res.status(500).json({ error: "Failed to get dashboard stats" });
