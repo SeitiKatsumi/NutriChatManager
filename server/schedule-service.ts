@@ -834,11 +834,11 @@ export class ScheduleService {
 
   private async getNutritionistForSchedule(nutritionistId: string): Promise<any> {
     try {
-      const result = await this.request(`/users/${nutritionistId}?fields=id,first_name,last_name,evolutionInstanceName`);
+      const result = await this.request(`/users/${nutritionistId}?fields=id,first_name,last_name,Instancia_Evolution`);
       return {
         id: result.data?.id,
         fullName: `${result.data?.first_name || ''} ${result.data?.last_name || ''}`.trim(),
-        evolutionInstanceName: result.data?.evolutionInstanceName,
+        evolutionInstanceName: result.data?.Instancia_Evolution,
       };
     } catch (error) {
       console.error(`[Scheduler] Error fetching nutritionist ${nutritionistId}:`, error);
