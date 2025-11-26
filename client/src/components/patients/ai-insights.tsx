@@ -209,7 +209,7 @@ export default function AIInsights({ patient }: AIInsightsProps) {
           {insights && !loadingInsights && (
             <div className="flex items-center gap-2">
               {insights.cached && (
-                <Badge variant="outline" className="text-xs bg-blue-50 dark:bg-blue-950" data-testid="cache-indicator">
+                <Badge variant="outline" className="text-xs bg-blue-50 dark:bg-blue-950 text-[#595959] dark:text-blue-200" data-testid="cache-indicator">
                   <Clock className="w-3 h-3 mr-1" />
                   Cache ({insights.cacheAge || 0} min)
                 </Badge>

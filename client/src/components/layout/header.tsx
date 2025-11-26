@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Star, Menu, X, User, Settings, LogOut, ChevronDown } from "lucide-react";
+import { Menu, X, User, Settings, LogOut, ChevronDown } from "lucide-react";
+import logoImage from "@assets/Logo Nutrichatbot_1764185926955.png";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import {
@@ -41,9 +42,12 @@ export default function Header() {
     <header className="bg-card border-b border-border px-4 md:px-6 py-4" data-testid="header-main">
       <div className="flex items-center justify-between max-w-7xl mx-auto">
         <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-            <Star className="w-5 h-5 text-primary-foreground" />
-          </div>
+          <img 
+            src={logoImage} 
+            alt="NutriChatBot Logo" 
+            className="w-10 h-10 rounded-lg object-cover"
+            data-testid="app-logo"
+          />
           <div>
             <h1 className="text-lg md:text-xl font-semibold text-foreground">NutriChatBot</h1>
             <p className="text-xs md:text-sm text-muted-foreground">Painel de Gestão</p>
@@ -85,9 +89,11 @@ export default function Header() {
               <div className="flex flex-col h-full">
                 <div className="p-4 border-b border-border">
                   <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                      <Star className="w-5 h-5 text-primary-foreground" />
-                    </div>
+                    <img 
+                      src={logoImage} 
+                      alt="NutriChatBot Logo" 
+                      className="w-10 h-10 rounded-lg object-cover"
+                    />
                     <div>
                       <h2 className="font-semibold text-foreground">NutriChatBot</h2>
                       <p className="text-sm text-muted-foreground">Painel de Gestão</p>
