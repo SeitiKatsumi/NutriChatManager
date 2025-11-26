@@ -36,6 +36,22 @@ import { Patient } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
+function utcToLocalDatetimeString(utcIsoString: string | null | undefined): string {
+  if (!utcIsoString) return "";
+  const date = new Date(utcIsoString);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+function localDatetimeStringToUtc(localDatetimeString: string): string {
+  const date = new Date(localDatetimeString);
+  return date.toISOString();
+}
+
 interface PatientSchedulesProps {
   patient: Patient;
 }
@@ -368,8 +384,8 @@ export default function PatientSchedules({ patient }: PatientSchedulesProps) {
                     type="datetime-local"
                     value={
                       isEditing 
-                        ? (editData.config?.send_at?.slice(0, 16) || "") 
-                        : (schedule?.config?.send_at?.slice(0, 16) || "")
+                        ? utcToLocalDatetimeString(editData.config?.send_at)
+                        : utcToLocalDatetimeString(schedule?.config?.send_at)
                     }
                     onChange={(e) => {
                       if (!isEditing) initEditState(type);
@@ -377,7 +393,7 @@ export default function PatientSchedules({ patient }: PatientSchedulesProps) {
                         ...prev,
                         [type]: {
                           ...prev[type],
-                          config: { send_at: new Date(e.target.value).toISOString() },
+                          config: { send_at: localDatetimeStringToUtc(e.target.value) },
                         },
                       }));
                     }}
