@@ -1299,6 +1299,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/ai/insights/:patientId", requireAuth, requireActiveSubscription, async (req, res) => {
     try {
       const patientId = req.params.patientId;
+      const forceRefresh = req.query.forceRefresh === 'true';
       
       // Security: Verify patient belongs to this nutritionist
       const userToken = req.session.user.accessToken;
@@ -1306,6 +1307,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!patient || patient.nutritionistId !== req.session.user.nutritionistId) {
         return res.status(403).json({ error: "Access denied - patient not found or not your patient" });
+      }
+      
+      // Check cache unless force refresh is requested
+      if (!forceRefresh && patient.ultimaAnaliseIA && patient.dataUltimaAnalise) {
+        const cacheAge = Date.now() - new Date(patient.dataUltimaAnalise).getTime();
+        const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+        
+        if (cacheAge < CACHE_TTL) {
+          console.log(`[AI Insights] Returning cached analysis for patient ${patientId} (age: ${Math.round(cacheAge / 60000)} min)`);
+          try {
+            const cachedInsights = JSON.parse(patient.ultimaAnaliseIA);
+            return res.json({ ...cachedInsights, cached: true, cacheAge: Math.round(cacheAge / 60000) });
+          } catch (parseError) {
+            console.warn('[AI Insights] Failed to parse cached insights, regenerating...');
+          }
+        }
       }
       
       // Get messages from Directus by patient ID
@@ -1316,14 +1333,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
           summary: "Sem mensagens disponíveis",
           keyTopics: [],
           patientMood: "neutral",
-          recommendations: []
+          recommendations: [],
+          cached: false
         });
       }
+      
+      console.log(`[AI Insights] Generating new analysis for patient ${patientId} with ${messages.length} messages`);
       
       // Generate insights with OpenAI
       const insights = await openaiService.generateQuickInsights(messages);
       
-      res.json(insights);
+      // Save to cache (async, don't wait)
+      storage.updatePatientAICache(patientId, insights).catch(err => {
+        console.error('[AI Insights] Failed to update cache:', err);
+      });
+      
+      res.json({ ...insights, cached: false });
       
     } catch (error) {
       console.error('[AI Insights] Error generating insights:', error);

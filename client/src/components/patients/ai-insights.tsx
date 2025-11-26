@@ -42,6 +42,8 @@ interface QuickInsights {
   keyTopics: string[];
   patientMood: 'positive' | 'neutral' | 'negative' | 'mixed';
   recommendations: string[];
+  cached?: boolean;
+  cacheAge?: number; // in minutes
 }
 
 interface MealPlan {
@@ -70,12 +72,37 @@ export default function AIInsights({ patient }: AIInsightsProps) {
   ];
 
   // Buscar insights rápidos do paciente
-  const { data: insights, isLoading: loadingInsights, error: insightsError } = useQuery({
+  const { data: insights, isLoading: loadingInsights, error: insightsError, refetch: refetchInsights, isFetching: isRefetching } = useQuery<QuickInsights>({
     queryKey: ['/api/ai/insights', patient.id],
     enabled: !!patient.id,
     retry: 1,
-    staleTime: 5 * 60 * 1000 // 5 minutes
+    staleTime: 30 * 60 * 1000 // 30 minutes - increased for better caching
   });
+
+  // Handler para forçar refresh da análise (bypass cache)
+  const handleForceRefresh = async () => {
+    try {
+      const response = await fetch(`/api/ai/insights/${patient.id}?forceRefresh=true`, {
+        credentials: 'include'
+      });
+      if (response.ok) {
+        const newInsights = await response.json();
+        queryClient.setQueryData(['/api/ai/insights', patient.id], newInsights);
+        toast({
+          title: "Análise atualizada",
+          description: "Nova análise de IA gerada com sucesso!",
+        });
+      } else {
+        throw new Error('Falha ao atualizar análise');
+      }
+    } catch (error) {
+      toast({
+        title: "Erro",
+        description: "Não foi possível atualizar a análise",
+        variant: "destructive"
+      });
+    }
+  };
 
   // Mutation para fazer perguntas à IA
   const askMutation = useMutation({
@@ -162,13 +189,44 @@ export default function AIInsights({ patient }: AIInsightsProps) {
     });
   };
 
+  // State para controlar loading do refresh manual
+  const [isRefreshingManually, setIsRefreshingManually] = useState(false);
+
+  const handleForceRefreshWithLoading = async () => {
+    setIsRefreshingManually(true);
+    await handleForceRefresh();
+    setIsRefreshingManually(false);
+  };
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <Brain className="w-5 h-5 text-blue-600" />
-          Insights de IA
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Brain className="w-5 h-5 text-blue-600" />
+            Insights de IA
+          </CardTitle>
+          {insights && !loadingInsights && (
+            <div className="flex items-center gap-2">
+              {insights.cached && (
+                <Badge variant="outline" className="text-xs bg-blue-50 dark:bg-blue-950" data-testid="cache-indicator">
+                  <Clock className="w-3 h-3 mr-1" />
+                  Cache ({insights.cacheAge || 0} min)
+                </Badge>
+              )}
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={handleForceRefreshWithLoading}
+                disabled={isRefreshingManually}
+                data-testid="refresh-analysis-button"
+                title="Gerar nova análise com IA"
+              >
+                <RefreshCw className={`w-4 h-4 ${isRefreshingManually ? 'animate-spin' : ''}`} />
+              </Button>
+            </div>
+          )}
+        </div>
         <p className="text-sm text-muted-foreground">
           Análise inteligente das conversas do paciente via WhatsApp
         </p>

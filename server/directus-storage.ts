@@ -41,6 +41,9 @@ export interface DirectusPatient {
   Lanche_da_tarde?: string;
   Janta?: string;
   Ceia?: string;
+  // AI Analysis cache fields
+  ultima_analise_ia?: string; // JSON stringified AI insights
+  data_ultima_analise?: string; // ISO timestamp of last analysis
   date_created?: Date;
   date_updated?: Date;
 }
@@ -230,6 +233,9 @@ function transformPatientFromDirectus(directusPatient: any): any {
     lanche_da_tarde: directusPatient.Lanche_da_tarde,
     janta: directusPatient.Janta,
     ceia: directusPatient.Ceia,
+    // Campos de cache de análise IA
+    ultimaAnaliseIA: directusPatient.ultima_analise_ia,
+    dataUltimaAnalise: directusPatient.data_ultima_analise,
     createdAt: directusPatient.date_created,
     updatedAt: directusPatient.date_updated,
   };
@@ -414,6 +420,21 @@ export class DirectusStorage implements IStorage {
           await this.createPatientDietaryRestrictionsField();
         } else {
           console.log('[Directus] ✓ Restricoes_alimentares field already exists in Cadastro_de_Pacientes');
+        }
+
+        // Check and create AI analysis cache fields
+        if (!existingPatientsFields.includes('ultima_analise_ia')) {
+          console.log('[Directus] Creating ultima_analise_ia field in Cadastro_de_Pacientes...');
+          await this.createPatientAICacheField('ultima_analise_ia', 'text', 'Cache da última análise de IA (JSON)');
+        } else {
+          console.log('[Directus] ✓ ultima_analise_ia field already exists in Cadastro_de_Pacientes');
+        }
+
+        if (!existingPatientsFields.includes('data_ultima_analise')) {
+          console.log('[Directus] Creating data_ultima_analise field in Cadastro_de_Pacientes...');
+          await this.createPatientAICacheField('data_ultima_analise', 'timestamp', 'Data/hora da última análise de IA');
+        } else {
+          console.log('[Directus] ✓ data_ultima_analise field already exists in Cadastro_de_Pacientes');
         }
       } else {
         console.warn(`[Directus] Could not fetch Cadastro_de_Pacientes fields (${patientsFieldsResponse.status})`);
@@ -605,6 +626,74 @@ export class DirectusStorage implements IStorage {
     }
   }
 
+  private async createPatientAICacheField(fieldName: string, fieldType: string, note: string): Promise<void> {
+    try {
+      const fieldConfig: any = {
+        field: fieldName,
+        type: fieldType,
+        meta: {
+          width: 'full',
+          interface: fieldType === 'text' ? 'input-code' : 'datetime',
+          note: note,
+          hidden: true,
+          group: 'Oculto'
+        },
+        schema: {
+          is_nullable: true
+        }
+      };
+
+      const response = await fetch(`${this.baseUrl}/fields/Cadastro_de_Pacientes`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(fieldConfig)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.warn(`[Directus] Warning creating ${fieldName}: ${errorText}`);
+        return;
+      }
+
+      console.log(`[Directus] ✓ ${fieldName} field created successfully in Cadastro_de_Pacientes`);
+    } catch (error: any) {
+      console.warn(`[Directus] Error creating ${fieldName} field:`, error.message);
+    }
+  }
+
+  // Method to update AI analysis cache for a patient
+  async updatePatientAICache(patientId: string, insights: any): Promise<boolean> {
+    try {
+      const updateData = {
+        ultima_analise_ia: JSON.stringify(insights),
+        data_ultima_analise: new Date().toISOString()
+      };
+
+      const response = await fetch(`${this.baseUrl}/items/Cadastro_de_Pacientes/${patientId}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${this.token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updateData)
+      });
+
+      if (!response.ok) {
+        console.error(`[Directus] Failed to update AI cache for patient ${patientId}`);
+        return false;
+      }
+
+      console.log(`[Directus] ✓ AI cache updated for patient ${patientId}`);
+      return true;
+    } catch (error: any) {
+      console.error('[Directus] Error updating AI cache:', error.message);
+      return false;
+    }
+  }
+
   // Create a client instance with user token
   private getUserClient(userToken?: string) {
     if (userToken) {
@@ -766,8 +855,8 @@ export class DirectusStorage implements IStorage {
       // Backend validates ownership through session, providing security without Directus field permissions
       const client = this.client; // Using admin client temporarily
       
-      // Explicit field list using all available Directus collection fields (including meal fields and dietary restrictions)
-      const fields = 'id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,Suplementos_e_medicamentos,Restricoes_alimentares,Etapas,IMC,Idade,Feedbacks,Cafe_da_manha,Lanche_da_manha,Almoco,Lanche_da_tarde,Janta,Ceia,date_created,date_updated';
+      // Explicit field list using all available Directus collection fields (including meal fields, dietary restrictions, and AI cache)
+      const fields = 'id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,Suplementos_e_medicamentos,Restricoes_alimentares,Etapas,IMC,Idade,Feedbacks,Cafe_da_manha,Lanche_da_manha,Almoco,Lanche_da_tarde,Janta,Ceia,ultima_analise_ia,data_ultima_analise,date_created,date_updated';
       
       console.log(`[Directus] Getting patient: ${id}`);
       const response = await client.request(`/items/${PATIENTS_COLLECTION}/${id}?fields=${fields}`);
@@ -786,8 +875,8 @@ export class DirectusStorage implements IStorage {
       const client = this.client; // Using admin client temporarily
       const encodedId = encodeURIComponent(nutritionistId);
       
-      // Explicit field list using all available Directus collection fields (including meal fields and dietary restrictions)
-      const fields = 'id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,Suplementos_e_medicamentos,Restricoes_alimentares,Etapas,IMC,Idade,Feedbacks,Cafe_da_manha,Lanche_da_manha,Almoco,Lanche_da_tarde,Janta,Ceia,date_created,date_updated';
+      // Explicit field list using all available Directus collection fields (including meal fields, dietary restrictions, and AI cache)
+      const fields = 'id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,Suplementos_e_medicamentos,Restricoes_alimentares,Etapas,IMC,Idade,Feedbacks,Cafe_da_manha,Lanche_da_manha,Almoco,Lanche_da_tarde,Janta,Ceia,ultima_analise_ia,data_ultima_analise,date_created,date_updated';
       
       console.log(`[Directus] Getting patients for nutritionist: ${nutritionistId}`);
       // Using correct Directus field name for nutritionist filter

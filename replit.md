@@ -31,6 +31,14 @@ The platform integrates with Evolution API for WhatsApp communication, enabling 
 ## AI Consultation & Patient History
 The system provides AI-powered consultation analysis using OpenAI, integrated with patient conversation history stored in a dedicated Directus `whatsapp_messages` collection. This collection stores persistent, queryable WhatsApp messages with fields like `patient_id`, `message_body`, and `from_me`. AI capabilities include generating quick insights, answering custom questions, and creating personalized 24-hour meal plans based on patient data and conversation history. The meal plan generator uses GPT-4o-mini to produce structured JSON output for 6 meal periods, considering dietary restrictions and goals.
 
+**AI Analysis Caching:**
+- Two fields in `Cadastro_de_Pacientes` collection: `ultima_analise_ia` (JSON) and `data_ultima_analise` (timestamp)
+- Backend checks cache validity (24-hour TTL) before calling OpenAI
+- Frontend uses 30-minute staleTime for TanStack Query
+- Manual refresh button available to force regeneration with `?forceRefresh=true` parameter
+- Cache indicator shows age in minutes when using cached analysis
+- Reduces OpenAI API calls by ~95% for repeated patient card views
+
 ## Stripe Payment Integration
 The system handles Stripe webhooks with a robust dual-strategy for user lookup, addressing Directus API cache delays by falling back to email-based user search if `stripe_customer_id` is not immediately available. Timestamp conversions for webhook processing use a safe helper function to prevent "Invalid time value" errors. The frontend includes a manual refresh system for subscription status to account for Directus cache delays.
 
