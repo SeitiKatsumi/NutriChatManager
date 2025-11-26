@@ -82,7 +82,6 @@ export default function PatientSchedules({ patient }: PatientSchedulesProps) {
   const { toast } = useToast();
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
   const [editingSchedules, setEditingSchedules] = useState<Record<string, any>>({});
-  const [optimisticStates, setOptimisticStates] = useState<Record<string, boolean>>({});
   const [loadingStates, setLoadingStates] = useState<Record<string, boolean>>({});
 
   const patientId = parseInt(patient.id);
@@ -98,10 +97,17 @@ export default function PatientSchedules({ patient }: PatientSchedulesProps) {
 
   const createScheduleMutation = useMutation({
     mutationFn: async (data: any) => {
-      return apiRequest("POST", "/api/schedules", data);
+      const response = await apiRequest("POST", "/api/schedules", data);
+      return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/schedules/patient", patientId] });
+    onSuccess: (newSchedule: Schedule) => {
+      queryClient.setQueryData(
+        ["/api/schedules/patient", patientId],
+        (oldData: Schedule[] | undefined) => {
+          if (!oldData) return [newSchedule];
+          return [...oldData, newSchedule];
+        }
+      );
       toast({ title: "Agendamento criado com sucesso!" });
     },
     onError: (error: any) => {
@@ -115,10 +121,17 @@ export default function PatientSchedules({ patient }: PatientSchedulesProps) {
 
   const updateScheduleMutation = useMutation({
     mutationFn: async ({ id, updates }: { id: number; updates: any }) => {
-      return apiRequest("PATCH", `/api/schedules/${id}`, updates);
+      const response = await apiRequest("PATCH", `/api/schedules/${id}`, updates);
+      return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/schedules/patient", patientId] });
+    onSuccess: (updatedSchedule: Schedule) => {
+      queryClient.setQueryData(
+        ["/api/schedules/patient", patientId],
+        (oldData: Schedule[] | undefined) => {
+          if (!oldData) return [updatedSchedule];
+          return oldData.map(s => s.id === updatedSchedule.id ? updatedSchedule : s);
+        }
+      );
       toast({ title: "Agendamento atualizado!" });
     },
     onError: (error: any) => {
@@ -158,7 +171,6 @@ export default function PatientSchedules({ patient }: PatientSchedulesProps) {
   const handleToggleSchedule = async (type: string, enabled: boolean) => {
     const existingSchedule = getScheduleByType(type);
     
-    setOptimisticStates(prev => ({ ...prev, [type]: enabled }));
     setLoadingStates(prev => ({ ...prev, [type]: true }));
     
     try {
@@ -177,21 +189,13 @@ export default function PatientSchedules({ patient }: PatientSchedulesProps) {
         });
       }
     } catch (error) {
-      setOptimisticStates(prev => ({ ...prev, [type]: !enabled }));
+      console.error("Error toggling schedule:", error);
     } finally {
       setLoadingStates(prev => ({ ...prev, [type]: false }));
-      setOptimisticStates(prev => {
-        const newState = { ...prev };
-        delete newState[type];
-        return newState;
-      });
     }
   };
 
   const isScheduleEnabled = (type: string) => {
-    if (type in optimisticStates) {
-      return optimisticStates[type];
-    }
     return getScheduleByType(type)?.status === "enabled";
   };
 
