@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "@/contexts/auth-context";
 import { LogIn, Mail, Lock } from "lucide-react";
+import logoImage from "@assets/Logo Nutrichatbot_1764185926955.png";
 
 export default function LoginPage() {
   const [, navigate] = useLocation();
@@ -50,8 +51,8 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mx-auto mb-4">
-            <LogIn className="w-6 h-6 text-primary" />
+          <div className="mx-auto mb-4">
+            <img src={logoImage} alt="NutriChatBot Logo" className="w-20 h-20 object-contain" />
           </div>
           <CardTitle className="text-2xl font-bold">Fazer Login</CardTitle>
           <CardDescription>
