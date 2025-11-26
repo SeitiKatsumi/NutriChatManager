@@ -507,7 +507,7 @@ export default function AIInsights({ patient }: AIInsightsProps) {
 
         {/* Perguntas Rápidas */}
         <div>
-          <h3 className="font-medium mb-3 text-gray-800 dark:text-gray-200">Perguntas Rápidas</h3>
+          <h3 className="font-medium mb-3 dark:text-gray-200 text-[#fdffff]">Perguntas Rápidas</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {quickQuestions.map((quickQ, index) => (
               <Button
@@ -529,7 +529,7 @@ export default function AIInsights({ patient }: AIInsightsProps) {
 
         {/* Campo de Pergunta */}
         <div>
-          <h3 className="font-medium mb-3 text-gray-800 dark:text-gray-200">Faça uma Pergunta Específica</h3>
+          <h3 className="font-medium mb-3 dark:text-gray-200 text-[#fafbfd]">Faça uma Pergunta Específica</h3>
           <div className="flex gap-2">
             <Input
               placeholder="Ex: Como o paciente reagiu às últimas orientações?"
