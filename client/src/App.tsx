@@ -18,6 +18,7 @@ import SubscriptionPlans from "@/pages/subscription-plans";
 import SubscriptionSuccess from "@/pages/subscription-success";
 import DashboardAssinatura from "@/pages/dashboard-assinatura";
 import Settings from "@/pages/settings";
+import ScheduledMessages from "@/pages/scheduled-messages";
 import Header from "@/components/layout/header";
 import { useEffect } from "react";
 
@@ -141,6 +142,10 @@ function Router() {
           <Route path="/settings">
             <Header />
             <Settings />
+          </Route>
+          <Route path="/scheduled-messages">
+            <Header />
+            <ScheduledMessages />
           </Route>
           
           <Route component={NotFound} />
