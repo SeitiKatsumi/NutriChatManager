@@ -1,63 +1,7 @@
 import { z } from "zod";
-import { pgTable, serial, text, integer, timestamp, boolean, json, varchar } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
 
-// ============================================
-// Drizzle PostgreSQL Tables (Local Database)
-// ============================================
-
-// WhatsApp Schedules table - stores automated message configurations
-export const whatsappSchedules = pgTable("whatsapp_schedules", {
-  id: serial("id").primaryKey(),
-  patientId: integer("patient_id").notNull(),
-  nutritionistId: varchar("nutritionist_id", { length: 255 }).notNull(),
-  type: varchar("type", { length: 50 }).notNull(), // 'reactivation', 'meal_feedback', 'post_consultation'
-  status: varchar("status", { length: 50 }).notNull().default("disabled"), // 'disabled', 'enabled', 'paused', 'completed'
-  messageTemplate: text("message_template"),
-  config: json("config").$type<Record<string, any>>().notNull(),
-  nextRunAt: timestamp("next_run_at"),
-  lastRunAt: timestamp("last_run_at"),
-  failureCount: integer("failure_count").notNull().default(0),
-  lastError: text("last_error"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-
-// WhatsApp Schedule Logs table - tracks sent messages
-export const whatsappScheduleLogs = pgTable("whatsapp_schedule_logs", {
-  id: serial("id").primaryKey(),
-  scheduleId: integer("schedule_id").notNull(),
-  patientId: integer("patient_id").notNull(),
-  sentAt: timestamp("sent_at").notNull(),
-  status: varchar("status", { length: 20 }).notNull(), // 'success', 'failed'
-  evolutionMessageId: varchar("evolution_message_id", { length: 255 }),
-  errorMessage: text("error_message"),
-  messageSent: text("message_sent"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
-
-// Drizzle insert schemas
-export const insertWhatsappScheduleDbSchema = createInsertSchema(whatsappSchedules).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const insertWhatsappScheduleLogDbSchema = createInsertSchema(whatsappScheduleLogs).omit({
-  id: true,
-  createdAt: true,
-});
-
-// Drizzle types
-export type WhatsappScheduleDb = typeof whatsappSchedules.$inferSelect;
-export type InsertWhatsappScheduleDb = typeof whatsappSchedules.$inferInsert;
-export type WhatsappScheduleLogDb = typeof whatsappScheduleLogs.$inferSelect;
-export type InsertWhatsappScheduleLogDb = typeof whatsappScheduleLogs.$inferInsert;
-
-// ============================================
 // Base Zod schemas for validation and type inference
 // These schemas define the data models for our Directus-based storage
-// ============================================
 
 // Nutritionist schema
 export const nutritionistSchema = z.object({

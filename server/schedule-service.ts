@@ -23,7 +23,21 @@ interface DirectusSchedule {
   date_updated?: string;
 }
 
+interface DirectusScheduleLog {
+  id?: number;
+  schedule_id: number;
+  patient_id: number;
+  sent_at: string;
+  status: "success" | "failed";
+  evolution_message_id?: string;
+  error_message?: string;
+  message_sent?: string;
+  date_created?: string;
+}
+
 export class ScheduleService {
+  private collectionsInitialized = false;
+
   private async request(endpoint: string, options: RequestInit = {}): Promise<any> {
     const url = `${DIRECTUS_URL}${endpoint}`;
     
@@ -50,8 +64,300 @@ export class ScheduleService {
     return null;
   }
 
+  async ensureCollectionsExist(): Promise<void> {
+    if (this.collectionsInitialized) {
+      return;
+    }
+
+    console.log("[Schedule] Checking if schedule collections exist...");
+
+    try {
+      // Check if whatsapp_schedules collection exists
+      const schedulesExists = await this.collectionExists(SCHEDULES_COLLECTION);
+      if (!schedulesExists) {
+        console.log("[Schedule] Creating whatsapp_schedules collection...");
+        await this.createSchedulesCollection();
+      } else {
+        console.log("[Schedule] ✓ whatsapp_schedules collection exists");
+      }
+
+      // Check if whatsapp_schedule_logs collection exists
+      const logsExists = await this.collectionExists(SCHEDULE_LOGS_COLLECTION);
+      if (!logsExists) {
+        console.log("[Schedule] Creating whatsapp_schedule_logs collection...");
+        await this.createScheduleLogsCollection();
+      } else {
+        console.log("[Schedule] ✓ whatsapp_schedule_logs collection exists");
+      }
+
+      this.collectionsInitialized = true;
+      console.log("[Schedule] ✓ All schedule collections ready");
+    } catch (error) {
+      console.error("[Schedule] Error ensuring collections exist:", error);
+      // Don't throw - allow the service to continue with errors being handled per-request
+    }
+  }
+
+  private async collectionExists(collectionName: string): Promise<boolean> {
+    try {
+      await this.request(`/collections/${collectionName}`);
+      return true;
+    } catch (error: any) {
+      if (error.message?.includes("403") || error.message?.includes("404")) {
+        return false;
+      }
+      throw error;
+    }
+  }
+
+  private async createSchedulesCollection(): Promise<void> {
+    // Create the collection
+    await this.request("/collections", {
+      method: "POST",
+      body: JSON.stringify({
+        collection: SCHEDULES_COLLECTION,
+        meta: {
+          collection: SCHEDULES_COLLECTION,
+          icon: "schedule_send",
+          note: "Automated WhatsApp message schedules",
+          hidden: false,
+          singleton: false,
+          accountability: "all"
+        },
+        schema: {
+          name: SCHEDULES_COLLECTION
+        }
+      }),
+    });
+
+    // Create fields
+    const fields = [
+      {
+        field: "id",
+        type: "integer",
+        meta: { hidden: true, readonly: true, interface: "input" },
+        schema: { is_primary_key: true, has_auto_increment: true }
+      },
+      {
+        field: "patient_id",
+        type: "integer",
+        meta: { interface: "input", required: true, note: "Reference to Cadastro_de_Pacientes" },
+        schema: { is_nullable: false }
+      },
+      {
+        field: "nutritionist_id",
+        type: "string",
+        meta: { interface: "input", required: true, note: "Reference to directus_users" },
+        schema: { is_nullable: false }
+      },
+      {
+        field: "type",
+        type: "string",
+        meta: {
+          interface: "select-dropdown",
+          required: true,
+          options: {
+            choices: [
+              { text: "Reativação", value: "reactivation" },
+              { text: "Feedback de Plano", value: "meal_feedback" },
+              { text: "Pós-Consulta", value: "post_consultation" }
+            ]
+          }
+        },
+        schema: { is_nullable: false }
+      },
+      {
+        field: "status",
+        type: "string",
+        meta: {
+          interface: "select-dropdown",
+          required: true,
+          options: {
+            choices: [
+              { text: "Desabilitado", value: "disabled" },
+              { text: "Habilitado", value: "enabled" },
+              { text: "Pausado", value: "paused" },
+              { text: "Concluído", value: "completed" }
+            ]
+          }
+        },
+        schema: { is_nullable: false, default_value: "disabled" }
+      },
+      {
+        field: "message_template",
+        type: "text",
+        meta: { interface: "input-multiline", note: "Custom message template" },
+        schema: { is_nullable: true }
+      },
+      {
+        field: "config",
+        type: "json",
+        meta: { interface: "input-code", required: true, note: "Schedule configuration" },
+        schema: { is_nullable: false }
+      },
+      {
+        field: "next_run_at",
+        type: "timestamp",
+        meta: { interface: "datetime", note: "Next scheduled run time" },
+        schema: { is_nullable: true }
+      },
+      {
+        field: "last_run_at",
+        type: "timestamp",
+        meta: { interface: "datetime", note: "Last run time" },
+        schema: { is_nullable: true }
+      },
+      {
+        field: "failure_count",
+        type: "integer",
+        meta: { interface: "input", note: "Number of consecutive failures" },
+        schema: { is_nullable: false, default_value: 0 }
+      },
+      {
+        field: "last_error",
+        type: "text",
+        meta: { interface: "input-multiline", note: "Last error message" },
+        schema: { is_nullable: true }
+      },
+      {
+        field: "date_created",
+        type: "timestamp",
+        meta: { interface: "datetime", readonly: true, special: ["date-created"] },
+        schema: { is_nullable: true }
+      },
+      {
+        field: "date_updated",
+        type: "timestamp",
+        meta: { interface: "datetime", readonly: true, special: ["date-updated"] },
+        schema: { is_nullable: true }
+      }
+    ];
+
+    for (const field of fields) {
+      try {
+        await this.request(`/fields/${SCHEDULES_COLLECTION}`, {
+          method: "POST",
+          body: JSON.stringify(field),
+        });
+        console.log(`[Schedule] ✓ Created field: ${field.field}`);
+      } catch (error: any) {
+        // Field might already exist
+        if (!error.message?.includes("already exists")) {
+          console.warn(`[Schedule] Warning creating field ${field.field}:`, error.message);
+        }
+      }
+    }
+
+    console.log("[Schedule] ✓ whatsapp_schedules collection created successfully");
+  }
+
+  private async createScheduleLogsCollection(): Promise<void> {
+    // Create the collection
+    await this.request("/collections", {
+      method: "POST",
+      body: JSON.stringify({
+        collection: SCHEDULE_LOGS_COLLECTION,
+        meta: {
+          collection: SCHEDULE_LOGS_COLLECTION,
+          icon: "history",
+          note: "Log of sent scheduled messages",
+          hidden: false,
+          singleton: false,
+          accountability: "all"
+        },
+        schema: {
+          name: SCHEDULE_LOGS_COLLECTION
+        }
+      }),
+    });
+
+    // Create fields
+    const fields = [
+      {
+        field: "id",
+        type: "integer",
+        meta: { hidden: true, readonly: true, interface: "input" },
+        schema: { is_primary_key: true, has_auto_increment: true }
+      },
+      {
+        field: "schedule_id",
+        type: "integer",
+        meta: { interface: "input", required: true, note: "Reference to whatsapp_schedules" },
+        schema: { is_nullable: false }
+      },
+      {
+        field: "patient_id",
+        type: "integer",
+        meta: { interface: "input", required: true, note: "Reference to Cadastro_de_Pacientes" },
+        schema: { is_nullable: false }
+      },
+      {
+        field: "sent_at",
+        type: "timestamp",
+        meta: { interface: "datetime", required: true, note: "When the message was sent" },
+        schema: { is_nullable: false }
+      },
+      {
+        field: "status",
+        type: "string",
+        meta: {
+          interface: "select-dropdown",
+          required: true,
+          options: {
+            choices: [
+              { text: "Sucesso", value: "success" },
+              { text: "Falhou", value: "failed" }
+            ]
+          }
+        },
+        schema: { is_nullable: false }
+      },
+      {
+        field: "evolution_message_id",
+        type: "string",
+        meta: { interface: "input", note: "Evolution API message ID" },
+        schema: { is_nullable: true }
+      },
+      {
+        field: "error_message",
+        type: "text",
+        meta: { interface: "input-multiline", note: "Error message if failed" },
+        schema: { is_nullable: true }
+      },
+      {
+        field: "message_sent",
+        type: "text",
+        meta: { interface: "input-multiline", note: "The actual message content sent" },
+        schema: { is_nullable: true }
+      },
+      {
+        field: "date_created",
+        type: "timestamp",
+        meta: { interface: "datetime", readonly: true, special: ["date-created"] },
+        schema: { is_nullable: true }
+      }
+    ];
+
+    for (const field of fields) {
+      try {
+        await this.request(`/fields/${SCHEDULE_LOGS_COLLECTION}`, {
+          method: "POST",
+          body: JSON.stringify(field),
+        });
+        console.log(`[Schedule] ✓ Created field: ${field.field}`);
+      } catch (error: any) {
+        if (!error.message?.includes("already exists")) {
+          console.warn(`[Schedule] Warning creating field ${field.field}:`, error.message);
+        }
+      }
+    }
+
+    console.log("[Schedule] ✓ whatsapp_schedule_logs collection created successfully");
+  }
+
   async getSchedulesByPatient(patientId: number): Promise<WhatsappSchedule[]> {
     try {
+      await this.ensureCollectionsExist();
       const result = await this.request(
         `/items/${SCHEDULES_COLLECTION}?filter[patient_id][_eq]=${patientId}`
       );
@@ -64,8 +370,10 @@ export class ScheduleService {
 
   async getSchedulesByNutritionist(nutritionistId: string): Promise<WhatsappSchedule[]> {
     try {
+      await this.ensureCollectionsExist();
+      // Use _contains filter as workaround for Directus UUID matching issues
       const result = await this.request(
-        `/items/${SCHEDULES_COLLECTION}?filter[nutritionist_id][_eq]=${nutritionistId}`
+        `/items/${SCHEDULES_COLLECTION}?filter[nutritionist_id][_contains]=${nutritionistId}`
       );
       return result.data || [];
     } catch (error) {
@@ -76,6 +384,7 @@ export class ScheduleService {
 
   async getSchedule(id: number): Promise<WhatsappSchedule | null> {
     try {
+      await this.ensureCollectionsExist();
       const result = await this.request(`/items/${SCHEDULES_COLLECTION}/${id}`);
       return result.data || null;
     } catch (error) {
@@ -85,6 +394,8 @@ export class ScheduleService {
   }
 
   async createSchedule(schedule: InsertWhatsappSchedule): Promise<WhatsappSchedule> {
+    await this.ensureCollectionsExist();
+    
     const directusSchedule: Partial<DirectusSchedule> = {
       patient_id: schedule.patient_id,
       nutritionist_id: schedule.nutritionist_id,
@@ -107,6 +418,7 @@ export class ScheduleService {
 
   async updateSchedule(id: number, updates: Partial<WhatsappSchedule>): Promise<WhatsappSchedule | null> {
     try {
+      await this.ensureCollectionsExist();
       const result = await this.request(`/items/${SCHEDULES_COLLECTION}/${id}`, {
         method: "PATCH",
         body: JSON.stringify(updates),
@@ -121,6 +433,7 @@ export class ScheduleService {
 
   async deleteSchedule(id: number): Promise<boolean> {
     try {
+      await this.ensureCollectionsExist();
       await this.request(`/items/${SCHEDULES_COLLECTION}/${id}`, {
         method: "DELETE",
       });
@@ -134,6 +447,7 @@ export class ScheduleService {
 
   async getScheduleLogs(scheduleId: number, limit: number = 50): Promise<WhatsappScheduleLog[]> {
     try {
+      await this.ensureCollectionsExist();
       const result = await this.request(
         `/items/${SCHEDULE_LOGS_COLLECTION}?filter[schedule_id][_eq]=${scheduleId}&limit=${limit}&sort=-date_created`
       );
@@ -145,6 +459,7 @@ export class ScheduleService {
   }
 
   async createScheduleLog(log: Omit<WhatsappScheduleLog, "id" | "date_created">): Promise<WhatsappScheduleLog> {
+    await this.ensureCollectionsExist();
     const result = await this.request(`/items/${SCHEDULE_LOGS_COLLECTION}`, {
       method: "POST",
       body: JSON.stringify(log),
@@ -154,6 +469,7 @@ export class ScheduleService {
 
   async getPendingSchedules(): Promise<WhatsappSchedule[]> {
     try {
+      await this.ensureCollectionsExist();
       const now = new Date().toISOString();
       const result = await this.request(
         `/items/${SCHEDULES_COLLECTION}?filter[status][_eq]=enabled&filter[next_run_at][_lte]=${now}`
@@ -191,15 +507,19 @@ export class ScheduleService {
     } catch (error: any) {
       console.error("[Schedule] Error sending message:", error);
       
-      await this.createScheduleLog({
-        schedule_id: scheduleId,
-        patient_id: patientId,
-        sent_at: new Date().toISOString(),
-        status: "failed",
-        evolution_message_id: null,
-        message_sent: message,
-        error_message: error.message || "Unknown error",
-      });
+      try {
+        await this.createScheduleLog({
+          schedule_id: scheduleId,
+          patient_id: patientId,
+          sent_at: new Date().toISOString(),
+          status: "failed",
+          evolution_message_id: null,
+          message_sent: message,
+          error_message: error.message || "Unknown error",
+        });
+      } catch (logError) {
+        console.error("[Schedule] Error creating log:", logError);
+      }
 
       return { success: false, error: error.message };
     }
@@ -213,6 +533,7 @@ export class ScheduleService {
     pendingSchedules: number;
   }> {
     try {
+      await this.ensureCollectionsExist();
       const schedules = await this.getSchedulesByNutritionist(nutritionistId);
       
       const today = new Date();
