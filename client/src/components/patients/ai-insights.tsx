@@ -390,7 +390,7 @@ export default function AIInsights({ patient }: AIInsightsProps) {
               <CardContent className="space-y-4">
                 {/* Café da Manhã */}
                 <div>
-                  <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                  <h4 className="font-semibold text-sm mb-2 flex items-center gap-2 text-gray-700 dark:text-gray-600">
                     <span className="w-2 h-2 bg-green-600 rounded-full" />
                     Café da Manhã
                   </h4>
@@ -402,7 +402,7 @@ export default function AIInsights({ patient }: AIInsightsProps) {
                 {/* Lanche da Manhã */}
                 {mealPlanMutation.data.morningSnack && mealPlanMutation.data.morningSnack !== 'Não necessário' && (
                   <div>
-                    <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                    <h4 className="font-semibold text-sm mb-2 flex items-center gap-2 text-gray-700 dark:text-gray-600">
                       <span className="w-2 h-2 bg-green-600 rounded-full" />
                       Lanche da Manhã
                     </h4>
@@ -414,7 +414,7 @@ export default function AIInsights({ patient }: AIInsightsProps) {
 
                 {/* Almoço */}
                 <div>
-                  <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                  <h4 className="font-semibold text-sm mb-2 flex items-center gap-2 text-gray-700 dark:text-gray-600">
                     <span className="w-2 h-2 bg-green-600 rounded-full" />
                     Almoço
                   </h4>
@@ -426,7 +426,7 @@ export default function AIInsights({ patient }: AIInsightsProps) {
                 {/* Lanche da Tarde */}
                 {mealPlanMutation.data.afternoonSnack && mealPlanMutation.data.afternoonSnack !== 'Não necessário' && (
                   <div>
-                    <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                    <h4 className="font-semibold text-sm mb-2 flex items-center gap-2 text-gray-700 dark:text-gray-600">
                       <span className="w-2 h-2 bg-green-600 rounded-full" />
                       Lanche da Tarde
                     </h4>
@@ -438,7 +438,7 @@ export default function AIInsights({ patient }: AIInsightsProps) {
 
                 {/* Jantar */}
                 <div>
-                  <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                  <h4 className="font-semibold text-sm mb-2 flex items-center gap-2 text-gray-700 dark:text-gray-600">
                     <span className="w-2 h-2 bg-green-600 rounded-full" />
                     Jantar
                   </h4>
@@ -450,7 +450,7 @@ export default function AIInsights({ patient }: AIInsightsProps) {
                 {/* Ceia */}
                 {mealPlanMutation.data.eveningSnack && mealPlanMutation.data.eveningSnack !== 'Não necessário' && (
                   <div>
-                    <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                    <h4 className="font-semibold text-sm mb-2 flex items-center gap-2 text-gray-700 dark:text-gray-600">
                       <span className="w-2 h-2 bg-green-600 rounded-full" />
                       Ceia
                     </h4>
@@ -463,7 +463,7 @@ export default function AIInsights({ patient }: AIInsightsProps) {
                 {/* Observações Gerais */}
                 {mealPlanMutation.data.generalNotes && (
                   <div className="pt-3 border-t border-green-200 dark:border-green-800">
-                    <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                    <h4 className="font-semibold text-sm mb-2 flex items-center gap-2 text-gray-700 dark:text-gray-600">
                       <Lightbulb className="w-4 h-4 text-green-600" />
                       Observações e Recomendações
                     </h4>
