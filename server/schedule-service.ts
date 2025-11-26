@@ -27,13 +27,15 @@ export class ScheduleService {
   private async request(endpoint: string, options: RequestInit = {}): Promise<any> {
     const url = `${DIRECTUS_URL}${endpoint}`;
     
+    const { headers: optionHeaders, ...restOptions } = options;
+    
     const response = await fetch(url, {
+      ...restOptions,
       headers: {
         "Authorization": `Bearer ${DIRECTUS_TOKEN}`,
         "Content-Type": "application/json",
-        ...options.headers,
+        ...(optionHeaders as Record<string, string> || {}),
       },
-      ...options,
     });
 
     if (!response.ok) {

@@ -2,6 +2,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   UserCheck, 
   Mail, 
@@ -13,10 +14,13 @@ import {
   Clock,
   Pill,
   MessageSquare,
-  Activity
+  Activity,
+  CalendarClock,
+  Sparkles
 } from "lucide-react";
 import { Patient } from "@shared/schema";
 import AIInsights from "./ai-insights";
+import PatientSchedules from "./patient-schedules";
 
 interface PatientDetailsDialogProps {
   isOpen: boolean;
@@ -75,7 +79,23 @@ export default function PatientDetailsDialog({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-6">
+        <Tabs defaultValue="info" className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="info" className="gap-2">
+              <UserCheck className="h-4 w-4" />
+              Informações
+            </TabsTrigger>
+            <TabsTrigger value="schedules" className="gap-2">
+              <CalendarClock className="h-4 w-4" />
+              Agendamentos
+            </TabsTrigger>
+            <TabsTrigger value="ai" className="gap-2">
+              <Sparkles className="h-4 w-4" />
+              IA
+            </TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="info" className="space-y-6 mt-6">
           {/* Informações Básicas */}
           <Card>
             <CardHeader>
@@ -298,9 +318,6 @@ export default function PatientDetailsDialog({
             </Card>
           )}
 
-          {/* Insights de IA */}
-          <AIInsights patient={patient} />
-
           {/* Última Consulta */}
           {patient.lastConsultation && (
             <div className="text-center text-sm text-muted-foreground">
@@ -308,7 +325,16 @@ export default function PatientDetailsDialog({
               Última consulta: {formatDate(patient.lastConsultation)}
             </div>
           )}
-        </div>
+          </TabsContent>
+
+          <TabsContent value="schedules" className="mt-6">
+            <PatientSchedules patient={patient} />
+          </TabsContent>
+
+          <TabsContent value="ai" className="mt-6">
+            <AIInsights patient={patient} />
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );
