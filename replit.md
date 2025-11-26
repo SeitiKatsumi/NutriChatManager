@@ -71,6 +71,32 @@ The Settings page (`/settings`) allows nutritionists to edit their profile infor
 - Visual warning alerts users that changing the bot number may impact WhatsApp operations
 - All phone numbers stored with Brazilian country code prefix (55) as clean digits
 
+## WhatsApp Schedule System
+The platform includes automated WhatsApp message scheduling with three dispatch types:
+
+**Schedule Types:**
+- **Reactivation**: Single reminder for inactive patients
+- **Meal Feedback**: Recurring feedback requests at 7 or 15 day intervals
+- **Post-Consultation**: Follow-up after consultations
+
+**Directus Collections:**
+- `whatsapp_schedules`: Stores schedule configurations (type, status, message_template, config, next_run_at, failure tracking)
+- `whatsapp_schedule_logs`: Audit log for sent messages (schedule_id, patient_id, sent_at, status, error)
+
+**Technical Implementation:**
+- `ScheduleService` in `server/schedule-service.ts` handles CRUD operations via Directus API
+- Auto-creates collections if missing on first use
+- **Directus UUID Filter Workaround**: Due to Directus filter issues with UUID strings, `getSchedulesByNutritionist` fetches all schedules and filters in code (O(n) - pagination recommended for scale)
+- Frontend uses `PatientSchedules` component with toggle, edit, and send-now actions
+- All schedules disabled by default, activated per patient by nutritionist
+
+**API Endpoints:**
+- `GET /api/schedules` - Get all schedules for authenticated nutritionist
+- `GET /api/schedules/patient/:patientId` - Get schedules for specific patient
+- `POST /api/schedules` - Create new schedule
+- `PATCH /api/schedules/:id` - Update schedule (toggle status, edit config)
+- `POST /api/schedules/:id/send` - Trigger immediate send
+
 ## Patient Data Management
 The system properly handles patient information with separated fields for dietary data:
 
