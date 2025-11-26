@@ -89,13 +89,6 @@ export default function Dashboard() {
               <RefreshCw className="h-4 w-4" />
               Atualizar
             </Button>
-            <Badge 
-              variant={nutritionist?.evolutionInstanceName ? "default" : "secondary"}
-              className="h-8 px-3"
-            >
-              <Phone className="w-3 h-3 mr-1.5" />
-              {nutritionist?.evolutionInstanceName ? "WhatsApp Conectado" : "WhatsApp Desconectado"}
-            </Badge>
           </div>
         </div>
 
