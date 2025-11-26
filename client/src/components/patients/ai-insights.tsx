@@ -507,7 +507,7 @@ export default function AIInsights({ patient }: AIInsightsProps) {
 
         {/* Perguntas Rápidas */}
         <div>
-          <h3 className="font-medium mb-3">Perguntas Rápidas</h3>
+          <h3 className="font-medium mb-3 text-gray-800 dark:text-gray-200">Perguntas Rápidas</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {quickQuestions.map((quickQ, index) => (
               <Button
@@ -529,7 +529,7 @@ export default function AIInsights({ patient }: AIInsightsProps) {
 
         {/* Campo de Pergunta */}
         <div>
-          <h3 className="font-medium mb-3">Faça uma Pergunta Específica</h3>
+          <h3 className="font-medium mb-3 text-gray-800 dark:text-gray-200">Faça uma Pergunta Específica</h3>
           <div className="flex gap-2">
             <Input
               placeholder="Ex: Como o paciente reagiu às últimas orientações?"
@@ -557,7 +557,7 @@ export default function AIInsights({ patient }: AIInsightsProps) {
         {askMutation.data && (
           <Card className="bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800" data-testid="ai-response-card">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
+              <CardTitle className="text-base flex items-center gap-2 text-blue-900 dark:text-blue-100">
                 <Brain className="w-4 h-4 text-blue-600" />
                 Resposta da IA
                 <Badge variant="outline" className="text-xs ml-auto" data-testid="confidence-badge">
