@@ -210,3 +210,91 @@ export type LoginForm = z.infer<typeof loginSchema>;
 export type RegisterForm = z.infer<typeof registerSchema>;
 export type PatientForm = z.infer<typeof patientFormSchema>;
 export type ConsultationForm = z.infer<typeof consultationFormSchema>;
+
+// WhatsApp Schedule Types
+export const scheduleTypeEnum = z.enum(['reactivation', 'meal_feedback', 'post_consultation']);
+export const scheduleStatusEnum = z.enum(['disabled', 'enabled', 'paused', 'completed']);
+
+// Config schemas for each schedule type
+export const reactivationConfigSchema = z.object({
+  send_at: z.string(), // ISO datetime for one-shot send
+});
+
+export const mealFeedbackConfigSchema = z.object({
+  interval_days: z.enum(['7', '15']), // Every 7 or 15 days
+  start_date: z.string().optional(), // ISO date when to start
+});
+
+export const postConsultationConfigSchema = z.object({
+  days_after: z.number().min(1).max(30), // Days after consultation to send
+  last_consultation_sent: z.string().optional(), // Track which consultation was already sent
+});
+
+export const scheduleConfigSchema = z.union([
+  reactivationConfigSchema,
+  mealFeedbackConfigSchema,
+  postConsultationConfigSchema,
+]);
+
+// WhatsApp Schedule schema - for Directus collection "whatsapp_schedules"
+export const whatsappScheduleSchema = z.object({
+  id: z.number(),
+  patient_id: z.number(), // Reference to Cadastro_de_Pacientes
+  nutritionist_id: z.string(), // Reference to directus_users
+  type: scheduleTypeEnum,
+  status: scheduleStatusEnum.default('disabled'),
+  message_template: z.string().optional().nullable(),
+  config: z.any(), // JSON config based on type
+  next_run_at: z.string().optional().nullable(), // ISO datetime
+  last_run_at: z.string().optional().nullable(), // ISO datetime
+  failure_count: z.number().default(0),
+  last_error: z.string().optional().nullable(),
+  date_created: z.coerce.date().optional(),
+  date_updated: z.coerce.date().optional(),
+});
+
+export const insertWhatsappScheduleSchema = whatsappScheduleSchema.omit({
+  id: true,
+  date_created: true,
+  date_updated: true,
+  failure_count: true,
+  last_run_at: true,
+  last_error: true,
+});
+
+export type WhatsappSchedule = z.infer<typeof whatsappScheduleSchema>;
+export type InsertWhatsappSchedule = z.infer<typeof insertWhatsappScheduleSchema>;
+export type ScheduleType = z.infer<typeof scheduleTypeEnum>;
+export type ScheduleStatus = z.infer<typeof scheduleStatusEnum>;
+
+// WhatsApp Schedule Log schema - for tracking sent messages
+export const whatsappScheduleLogSchema = z.object({
+  id: z.number(),
+  schedule_id: z.number(), // Reference to whatsapp_schedules
+  patient_id: z.number(), // Reference to Cadastro_de_Pacientes
+  sent_at: z.string(), // ISO datetime
+  status: z.enum(['success', 'failed']),
+  evolution_message_id: z.string().optional().nullable(),
+  error_message: z.string().optional().nullable(),
+  message_sent: z.string().optional().nullable(), // The actual message that was sent
+  date_created: z.coerce.date().optional(),
+});
+
+export const insertWhatsappScheduleLogSchema = whatsappScheduleLogSchema.omit({
+  id: true,
+  date_created: true,
+});
+
+export type WhatsappScheduleLog = z.infer<typeof whatsappScheduleLogSchema>;
+export type InsertWhatsappScheduleLog = z.infer<typeof insertWhatsappScheduleLogSchema>;
+
+// Dashboard statistics schema
+export const dashboardStatsSchema = z.object({
+  totalPatients: z.number(),
+  activeSchedules: z.number(),
+  messagesSentToday: z.number(),
+  messagesSentThisWeek: z.number(),
+  pendingSchedules: z.number(),
+});
+
+export type DashboardStats = z.infer<typeof dashboardStatsSchema>;

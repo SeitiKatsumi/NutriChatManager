@@ -126,18 +126,57 @@ export class EvolutionApiService {
     });
   }
 
+  // Send text message via WhatsApp
+  async sendText(instanceName: string, to: string, message: string): Promise<EvolutionSendTextResponse> {
+    // Ensure phone number is in correct format (Brazil country code)
+    const cleanedNumber = EvolutionApiService.cleanWhatsAppNumber(to);
+    
+    console.log(`[Evolution API] Sending text message to ${cleanedNumber} via instance ${instanceName}`);
+    
+    const payload = {
+      number: cleanedNumber,
+      text: message,
+    };
+
+    const response = await this.request(`/message/sendText/${instanceName}`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+
+    console.log(`[Evolution API] Message sent successfully:`, response);
+    return response;
+  }
+
   // Utility function to clean WhatsApp number format
   static cleanWhatsAppNumber(whatsappNumber: string): string {
     // Remove all non-numeric characters
     const cleaned = whatsappNumber.replace(/\D/g, '');
     
     // Ensure it starts with country code (55 for Brazil)
-    if (cleaned.length === 11 && !cleaned.startsWith('55')) {
-      return '55' + cleaned;
+    if (cleaned.length === 10 || cleaned.length === 11) {
+      if (!cleaned.startsWith('55')) {
+        return '55' + cleaned;
+      }
     }
     
     return cleaned;
   }
+}
+
+export interface EvolutionSendTextResponse {
+  key: {
+    remoteJid: string;
+    fromMe: boolean;
+    id: string;
+  };
+  message: {
+    extendedTextMessage?: {
+      text: string;
+    };
+    conversation?: string;
+  };
+  messageTimestamp: string;
+  status: string;
 }
 
 // Create singleton instance
