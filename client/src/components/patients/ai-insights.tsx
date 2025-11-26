@@ -373,7 +373,7 @@ export default function AIInsights({ patient }: AIInsightsProps) {
             <Card className="bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800" data-testid="meal-plan-result">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-base flex items-center gap-2">
+                  <CardTitle className="font-semibold tracking-tight text-base flex items-center gap-2 text-[#000000]">
                     <UtensilsCrossed className="w-4 h-4 text-green-600" />
                     Recordatório 24 Horas - Sugestão Personalizada
                   </CardTitle>
