@@ -2,17 +2,15 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import bcrypt from "bcrypt";
 import { storage, initializeStorage } from "./storage";
-import { insertNutritionistSchema, insertWhatsappInstanceSchema, insertPatientSchema, insertWhatsappMessageSchema } from "@shared/schema";
+import { insertNutritionistSchema, insertWhatsappInstanceSchema, insertPatientSchema, insertWhatsappMessageSchema, insertWhatsappScheduleSchema, scheduleTypeEnum, scheduleStatusEnum } from "@shared/schema";
 import { z } from "zod";
-// Import real API clients (server-side versions)
 // @ts-ignore - directus.js doesn't have type declarations
 import { directusClient } from "./lib/directus.js";
-// Evolution API service will be imported dynamically where needed
 import { evolutionApi } from "./evolution-api";
 import { evolutionRedis } from "./evolution-redis";
 import { patientHistoryDirectus } from "./patient-history-directus";
 import { openaiService } from "./openai-service";
-// Stripe integration
+import { scheduleService } from "./schedule-service";
 import Stripe from "stripe";
 
 // Extend session type to include user
@@ -2858,6 +2856,249 @@ export async function registerRoutes(app: Express): Promise<Server> {
         error: "Failed to verify checkout session",
         message: error.message 
       });
+    }
+  });
+
+  // ============ WhatsApp Schedule Routes ============
+
+  // Get all schedules for a patient
+  app.get("/api/schedules/patient/:patientId", requireAuth, async (req, res) => {
+    try {
+      const patientId = parseInt(req.params.patientId);
+      
+      if (isNaN(patientId)) {
+        return res.status(400).json({ error: "Invalid patient ID" });
+      }
+
+      const userToken = req.session.user.accessToken;
+      const patient = await storage.getPatient(patientId.toString(), userToken);
+      
+      if (!patient || patient.nutritionistId !== req.session.user.nutritionistId) {
+        return res.status(403).json({ error: "Access denied - patient not found or not your patient" });
+      }
+
+      const schedules = await scheduleService.getSchedulesByPatient(patientId);
+      res.json(schedules);
+    } catch (error: any) {
+      console.error("[Schedule Route] Error getting schedules:", error);
+      res.status(500).json({ error: "Failed to get schedules" });
+    }
+  });
+
+  // Get all schedules for the nutritionist
+  app.get("/api/schedules", requireAuth, async (req, res) => {
+    try {
+      const nutritionistId = req.session.user.nutritionistId;
+      const schedules = await scheduleService.getSchedulesByNutritionist(nutritionistId);
+      res.json(schedules);
+    } catch (error: any) {
+      console.error("[Schedule Route] Error getting schedules:", error);
+      res.status(500).json({ error: "Failed to get schedules" });
+    }
+  });
+
+  // Create a new schedule
+  const createScheduleSchema = z.object({
+    patient_id: z.number(),
+    type: scheduleTypeEnum,
+    status: scheduleStatusEnum.optional().default("disabled"),
+    message_template: z.string().optional(),
+    config: z.any(),
+    next_run_at: z.string().optional(),
+  });
+
+  app.post("/api/schedules", requireAuth, async (req, res) => {
+    try {
+      const validatedData = createScheduleSchema.parse(req.body);
+      
+      const userToken = req.session.user.accessToken;
+      const patient = await storage.getPatient(validatedData.patient_id.toString(), userToken);
+      
+      if (!patient || patient.nutritionistId !== req.session.user.nutritionistId) {
+        return res.status(403).json({ error: "Access denied - patient not found or not your patient" });
+      }
+
+      const scheduleData = {
+        ...validatedData,
+        nutritionist_id: req.session.user.nutritionistId,
+      };
+
+      const schedule = await scheduleService.createSchedule(scheduleData);
+      res.status(201).json(schedule);
+    } catch (error: any) {
+      console.error("[Schedule Route] Error creating schedule:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to create schedule" });
+    }
+  });
+
+  // Update a schedule
+  app.patch("/api/schedules/:id", requireAuth, async (req, res) => {
+    try {
+      const scheduleId = parseInt(req.params.id);
+      
+      if (isNaN(scheduleId)) {
+        return res.status(400).json({ error: "Invalid schedule ID" });
+      }
+
+      const existingSchedule = await scheduleService.getSchedule(scheduleId);
+      if (!existingSchedule || existingSchedule.nutritionist_id !== req.session.user.nutritionistId) {
+        return res.status(403).json({ error: "Access denied - schedule not found or not yours" });
+      }
+
+      const updates = req.body;
+      delete updates.id;
+      delete updates.nutritionist_id;
+      delete updates.patient_id;
+
+      const schedule = await scheduleService.updateSchedule(scheduleId, updates);
+      res.json(schedule);
+    } catch (error: any) {
+      console.error("[Schedule Route] Error updating schedule:", error);
+      res.status(500).json({ error: "Failed to update schedule" });
+    }
+  });
+
+  // Delete a schedule
+  app.delete("/api/schedules/:id", requireAuth, async (req, res) => {
+    try {
+      const scheduleId = parseInt(req.params.id);
+      
+      if (isNaN(scheduleId)) {
+        return res.status(400).json({ error: "Invalid schedule ID" });
+      }
+
+      const existingSchedule = await scheduleService.getSchedule(scheduleId);
+      if (!existingSchedule || existingSchedule.nutritionist_id !== req.session.user.nutritionistId) {
+        return res.status(403).json({ error: "Access denied - schedule not found or not yours" });
+      }
+
+      await scheduleService.deleteSchedule(scheduleId);
+      res.status(204).send();
+    } catch (error: any) {
+      console.error("[Schedule Route] Error deleting schedule:", error);
+      res.status(500).json({ error: "Failed to delete schedule" });
+    }
+  });
+
+  // Get schedule logs
+  app.get("/api/schedules/:id/logs", requireAuth, async (req, res) => {
+    try {
+      const scheduleId = parseInt(req.params.id);
+      
+      if (isNaN(scheduleId)) {
+        return res.status(400).json({ error: "Invalid schedule ID" });
+      }
+
+      const existingSchedule = await scheduleService.getSchedule(scheduleId);
+      if (!existingSchedule || existingSchedule.nutritionist_id !== req.session.user.nutritionistId) {
+        return res.status(403).json({ error: "Access denied - schedule not found or not yours" });
+      }
+
+      const logs = await scheduleService.getScheduleLogs(scheduleId);
+      res.json(logs);
+    } catch (error: any) {
+      console.error("[Schedule Route] Error getting logs:", error);
+      res.status(500).json({ error: "Failed to get logs" });
+    }
+  });
+
+  // Manually trigger a schedule (send message now)
+  app.post("/api/schedules/:id/send-now", requireAuth, async (req, res) => {
+    try {
+      const scheduleId = parseInt(req.params.id);
+      
+      if (isNaN(scheduleId)) {
+        return res.status(400).json({ error: "Invalid schedule ID" });
+      }
+
+      const existingSchedule = await scheduleService.getSchedule(scheduleId);
+      if (!existingSchedule || existingSchedule.nutritionist_id !== req.session.user.nutritionistId) {
+        return res.status(403).json({ error: "Access denied - schedule not found or not yours" });
+      }
+
+      const userToken = req.session.user.accessToken;
+      const nutritionist = await storage.getNutritionist(req.session.user.nutritionistId, userToken);
+      
+      if (!nutritionist?.evolutionInstanceName) {
+        return res.status(400).json({ error: "WhatsApp instance not configured" });
+      }
+
+      const patient = await storage.getPatient(existingSchedule.patient_id.toString(), userToken);
+      if (!patient?.whatsappNumber) {
+        return res.status(400).json({ error: "Patient has no WhatsApp number" });
+      }
+
+      const message = existingSchedule.message_template || 
+        scheduleService.getDefaultMessage(existingSchedule.type, patient.fullName);
+
+      const result = await scheduleService.sendScheduledMessage(
+        nutritionist.evolutionInstanceName,
+        patient.whatsappNumber,
+        message,
+        scheduleId,
+        existingSchedule.patient_id
+      );
+
+      if (result.success) {
+        await scheduleService.updateSchedule(scheduleId, {
+          last_run_at: new Date().toISOString(),
+          failure_count: 0,
+          last_error: null,
+        });
+        res.json({ success: true, messageId: result.messageId });
+      } else {
+        await scheduleService.updateSchedule(scheduleId, {
+          failure_count: (existingSchedule.failure_count || 0) + 1,
+          last_error: result.error,
+        });
+        res.status(500).json({ success: false, error: result.error });
+      }
+    } catch (error: any) {
+      console.error("[Schedule Route] Error sending message:", error);
+      res.status(500).json({ error: "Failed to send message" });
+    }
+  });
+
+  // Get dashboard stats
+  app.get("/api/dashboard/stats", requireAuth, async (req, res) => {
+    try {
+      const nutritionistId = req.session.user.nutritionistId;
+      const userToken = req.session.user.accessToken;
+      
+      const patients = await storage.getPatientsByNutritionist(nutritionistId, userToken);
+      const scheduleStats = await scheduleService.getDashboardStats(nutritionistId);
+      
+      res.json({
+        totalPatients: patients.length,
+        activeSchedules: scheduleStats.activeSchedules,
+        messagesSentToday: scheduleStats.messagesSentToday,
+        messagesSentThisWeek: scheduleStats.messagesSentThisWeek,
+        pendingSchedules: scheduleStats.pendingSchedules,
+      });
+    } catch (error: any) {
+      console.error("[Dashboard] Error getting stats:", error);
+      res.status(500).json({ error: "Failed to get dashboard stats" });
+    }
+  });
+
+  // Get default message template
+  app.get("/api/schedules/default-message/:type", requireAuth, async (req, res) => {
+    try {
+      const type = req.params.type as "reactivation" | "meal_feedback" | "post_consultation";
+      const patientName = (req.query.patientName as string) || "Paciente";
+      
+      if (!["reactivation", "meal_feedback", "post_consultation"].includes(type)) {
+        return res.status(400).json({ error: "Invalid schedule type" });
+      }
+
+      const message = scheduleService.getDefaultMessage(type, patientName);
+      res.json({ message });
+    } catch (error: any) {
+      console.error("[Schedule Route] Error getting default message:", error);
+      res.status(500).json({ error: "Failed to get default message" });
     }
   });
 
