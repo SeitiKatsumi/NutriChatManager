@@ -371,11 +371,10 @@ export class ScheduleService {
   async getSchedulesByNutritionist(nutritionistId: string): Promise<WhatsappSchedule[]> {
     try {
       await this.ensureCollectionsExist();
-      // Use _contains filter as workaround for Directus UUID matching issues
-      const result = await this.request(
-        `/items/${SCHEDULES_COLLECTION}?filter[nutritionist_id][_contains]=${nutritionistId}`
-      );
-      return result.data || [];
+      // Get all schedules and filter in code due to Directus UUID filter issues
+      const result = await this.request(`/items/${SCHEDULES_COLLECTION}`);
+      const allSchedules = result.data || [];
+      return allSchedules.filter((s: WhatsappSchedule) => s.nutritionist_id === nutritionistId);
     } catch (error) {
       console.error("[Schedule] Error getting schedules:", error);
       return [];
