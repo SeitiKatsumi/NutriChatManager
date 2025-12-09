@@ -743,10 +743,28 @@ export class ScheduleService {
       const schedules = (allSchedules.data || []) as WhatsappSchedule[];
       
       const now = new Date();
+      const twoMinutesAgo = new Date(now.getTime() - 2 * 60 * 1000);
+      
       const pendingSchedules = schedules.filter(s => {
         if (!s.next_run_at) return false;
+        
         const nextRun = new Date(s.next_run_at);
-        return nextRun <= now;
+        const isPastDue = nextRun <= now;
+        
+        // Prevent duplicate sends: skip if last_run_at is within last 2 minutes
+        if (s.last_run_at) {
+          const lastRun = new Date(s.last_run_at);
+          if (lastRun >= twoMinutesAgo) {
+            console.log(`[Scheduler] Skipping schedule ${s.id} - was sent ${Math.floor((now.getTime() - lastRun.getTime()) / 1000)}s ago`);
+            return false;
+          }
+        }
+        
+        if (isPastDue) {
+          console.log(`[Scheduler] Schedule ${s.id} is due: next_run_at=${s.next_run_at}, now=${now.toISOString()}`);
+        }
+        
+        return isPastDue;
       });
 
       console.log(`[Scheduler] Found ${pendingSchedules.length} pending schedules`);
