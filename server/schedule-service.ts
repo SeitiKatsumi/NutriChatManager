@@ -465,7 +465,11 @@ export class ScheduleService {
     try {
       await this.ensureCollectionsExist();
       
-      if (updates.status || updates.config) {
+      // Only recalculate next_run_at if it wasn't explicitly provided
+      // This prevents overwriting the correct value calculated by processSchedules
+      const hasExplicitNextRunAt = updates.next_run_at !== undefined;
+      
+      if (!hasExplicitNextRunAt && (updates.status || updates.config)) {
         const existingSchedule = await this.getSchedule(id);
         if (existingSchedule) {
           const newStatus = updates.status || existingSchedule.status;
@@ -507,6 +511,8 @@ export class ScheduleService {
           console.log("[Schedule] Calculated next_run_at:", newNextRunAt);
           updates.next_run_at = newNextRunAt;
         }
+      } else if (hasExplicitNextRunAt) {
+        console.log("[Schedule] Using explicit next_run_at:", updates.next_run_at);
       }
       
       const result = await this.request(`/items/${SCHEDULES_COLLECTION}/${id}`, {
