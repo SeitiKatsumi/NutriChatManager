@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { Plus, AlertCircle, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { Link } from "wouter";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import PatientsTable from "@/components/patients/patients-table";
 import PatientFormDialog from "@/components/patients/patient-form-dialog";
 import PatientDetailsDialog from "@/components/patients/patient-details-dialog";
@@ -18,9 +20,11 @@ export default function Patients() {
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
   const [viewingPatient, setViewingPatient] = useState<any>(null);
 
-  const { data: patients = [], isLoading } = useQuery<any[]>({
+  const { data: patients = [], isLoading, error } = useQuery<any[]>({
     queryKey: ["/api/patients"],
   });
+
+  const isSubscriptionError = error && (error as any)?.status === 402;
 
   const deletePatientMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -95,11 +99,32 @@ export default function Patients() {
               Administre seus pacientes e acompanhe seus atendimentos
             </p>
           </div>
-          <Button onClick={handleAdd} data-testid="button-add-patient">
+          <Button onClick={handleAdd} data-testid="button-add-patient" disabled={!!isSubscriptionError}>
             <Plus className="w-4 h-4 mr-2" />
             Adicionar Paciente
           </Button>
         </div>
+
+        {isSubscriptionError && (
+          <Alert variant="destructive" className="mb-6 border-orange-500 bg-orange-500/10">
+            <AlertCircle className="h-5 w-5 text-orange-500" />
+            <AlertTitle className="text-orange-500 font-semibold">
+              Sua assinatura expirou
+            </AlertTitle>
+            <AlertDescription className="text-orange-400">
+              <p className="mb-3">
+                Para continuar gerenciando seus pacientes e utilizar todos os recursos da plataforma, 
+                renove sua assinatura.
+              </p>
+              <Link href="/dashboard/assinatura">
+                <Button variant="outline" className="border-orange-500 text-orange-500 hover:bg-orange-500/20">
+                  <CreditCard className="w-4 h-4 mr-2" />
+                  Renovar Assinatura
+                </Button>
+              </Link>
+            </AlertDescription>
+          </Alert>
+        )}
 
         <PatientsTable
           patients={filteredPatients}

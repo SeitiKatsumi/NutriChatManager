@@ -5,9 +5,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MessageCircle, QrCode, Settings, CheckCircle, RefreshCw, Loader2, Smartphone, AlertCircle } from "lucide-react";
+import { MessageCircle, QrCode, Settings, CheckCircle, RefreshCw, Loader2, Smartphone, AlertCircle, CreditCard } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Link } from "wouter";
 
 export default function WhatsApp() {
   const { toast } = useToast();
@@ -80,6 +82,14 @@ export default function WhatsApp() {
   const isConnected = whatsappStatus?.instance?.state === "open";
   const hasEvolutionInstance = !!currentNutritionist?.evolutionInstanceName;
 
+  const { error: statusError } = useQuery<any>({
+    queryKey: ["/api/whatsapp/status", currentNutritionist?.id],
+    enabled: false,
+  });
+
+  const isSubscriptionError = statusError && (statusError as any)?.status === 402 ||
+    (currentNutritionist?.subscriptionStatus === "canceled");
+
   return (
     <main className="p-6">
       <div className="max-w-4xl mx-auto">
@@ -92,6 +102,27 @@ export default function WhatsApp() {
             Configure e gerencie sua conexão WhatsApp com a Evolution API
           </p>
         </div>
+
+        {isSubscriptionError && (
+          <Alert variant="destructive" className="mb-6 border-orange-500 bg-orange-500/10">
+            <AlertCircle className="h-5 w-5 text-orange-500" />
+            <AlertTitle className="text-orange-500 font-semibold">
+              Sua assinatura expirou
+            </AlertTitle>
+            <AlertDescription className="text-orange-400">
+              <p className="mb-3">
+                Para continuar utilizando o WhatsApp e todos os recursos da plataforma, 
+                renove sua assinatura.
+              </p>
+              <Link href="/dashboard/assinatura">
+                <Button variant="outline" className="border-orange-500 text-orange-500 hover:bg-orange-500/20">
+                  <CreditCard className="w-4 h-4 mr-2" />
+                  Renovar Assinatura
+                </Button>
+              </Link>
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* Main QR Code and Status Section */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
