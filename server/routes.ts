@@ -1688,6 +1688,117 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // User self-service sync endpoint - allows users to sync their own subscription status with Stripe
+  app.post("/api/stripe/sync-my-subscription", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.user.id;
+      const nutritionistId = req.session.user.nutritionistId;
+      
+      console.log(`[Self Sync] Starting sync for user ${userId}`);
+      
+      // Get user's Stripe customer ID
+      const user = await storage.getNutritionist(nutritionistId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      const stripeCustomerId = user.stripeCustomerId;
+      if (!stripeCustomerId) {
+        return res.status(400).json({ 
+          error: "No Stripe customer ID found",
+          message: "You need to complete a payment first"
+        });
+      }
+      
+      console.log(`[Self Sync] Found customer ID: ${stripeCustomerId}`);
+      
+      // Fetch current subscription status from Stripe - prefer active subscriptions
+      const activeSubscriptions = await stripe.subscriptions.list({
+        customer: stripeCustomerId,
+        status: 'active',
+        limit: 1,
+        expand: ['data.default_payment_method']
+      });
+      
+      let subscription;
+      if (activeSubscriptions.data.length > 0) {
+        subscription = activeSubscriptions.data[0];
+        console.log(`[Self Sync] Found active subscription: ${subscription.id}`);
+      } else {
+        // Fallback to most recent subscription of any status
+        const allSubscriptions = await stripe.subscriptions.list({
+          customer: stripeCustomerId,
+          status: 'all',
+          limit: 1,
+          expand: ['data.default_payment_method']
+        });
+        
+        if (allSubscriptions.data.length === 0) {
+          console.log(`[Self Sync] No subscriptions found for customer ${stripeCustomerId}`);
+          return res.json({
+            success: false,
+            message: "No subscriptions found in Stripe",
+            currentStatus: user.status_pagamento
+          });
+        }
+        
+        subscription = allSubscriptions.data[0];
+        console.log(`[Self Sync] Using most recent subscription: ${subscription.id}, status: ${subscription.status}`);
+      }
+      console.log(`[Self Sync] Found subscription: ${subscription.id}, status: ${subscription.status}`);
+      
+      // Get the price ID from subscription items
+      const priceId = subscription.items.data[0]?.price?.id || null;
+      
+      // Helper to safely convert Stripe timestamps to Date
+      const safeTimestampToDate = (timestamp: number | null | undefined): Date => {
+        if (!timestamp || isNaN(timestamp)) {
+          return new Date();
+        }
+        return new Date(timestamp * 1000);
+      };
+      
+      // Update user subscription in Directus (cast to any to access Stripe fields)
+      const subData = subscription as any;
+      await storage.updateSubscriptionFromWebhook(stripeCustomerId, {
+        subscriptionId: subscription.id,
+        status: subscription.status,
+        currentPeriodStart: safeTimestampToDate(subData.current_period_start),
+        currentPeriodEnd: safeTimestampToDate(subData.current_period_end),
+        priceId: priceId
+      });
+      
+      console.log(`[Self Sync] Successfully synced subscription status: ${subscription.status}`);
+      
+      // Map Stripe status to display status
+      const statusMap: Record<string, string> = {
+        'active': 'ativo',
+        'trialing': 'ativo',
+        'past_due': 'expirado',
+        'canceled': 'cancelado',
+        'incomplete': 'pendente',
+        'incomplete_expired': 'expirado',
+        'unpaid': 'expirado'
+      };
+      
+      res.json({
+        success: true,
+        message: "Subscription status synced successfully",
+        stripeStatus: subscription.status,
+        newStatus: statusMap[subscription.status] || 'pendente',
+        subscriptionId: subscription.id,
+        currentPeriodEnd: new Date(subData.current_period_end * 1000).toISOString()
+      });
+      
+    } catch (error: any) {
+      console.error('[Self Sync] Error:', error);
+      res.status(500).json({
+        error: 'Failed to sync subscription',
+        message: error.message
+      });
+    }
+  });
+
   // Manual subscription sync endpoint for fixing missed webhooks (ADMIN ONLY)
   app.post("/api/stripe/sync-subscription", requireAuth, requireAdmin, async (req, res) => {
     try {

@@ -6,9 +6,12 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Check, Crown, Zap, CreditCard, AlertTriangle, RefreshCw } from "lucide-react";
 import EmbeddedPayment from "@/components/embedded-payment";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 
 export default function DashboardAssinatura() {
   const { nutritionist, checkAuth } = useAuth();
+  const { toast } = useToast();
   const [selectedPlan, setSelectedPlan] = useState<'pro' | 'enterprise' | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -72,9 +75,31 @@ export default function DashboardAssinatura() {
   const handleRefreshStatus = async () => {
     setIsRefreshing(true);
     try {
-      await checkAuth();
-    } catch (error) {
+      // Sync subscription status directly with Stripe
+      const response = await apiRequest("POST", "/api/stripe/sync-my-subscription");
+      const result = await response.json();
+      
+      if (result.success) {
+        toast({
+          title: "Status atualizado",
+          description: `Seu status de assinatura foi sincronizado: ${result.newStatus}`,
+        });
+        // Refresh auth to update nutritionist data
+        await checkAuth();
+      } else {
+        toast({
+          title: "Atenção",
+          description: result.message || "Não foi possível sincronizar o status",
+          variant: "destructive"
+        });
+      }
+    } catch (error: any) {
       console.error('Error refreshing status:', error);
+      toast({
+        title: "Erro",
+        description: "Falha ao sincronizar status. Tente novamente.",
+        variant: "destructive"
+      });
     } finally {
       setTimeout(() => setIsRefreshing(false), 500);
     }
