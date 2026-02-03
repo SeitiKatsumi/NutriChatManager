@@ -577,6 +577,24 @@ export class ScheduleService {
     }
   }
 
+  // Verifica se já existe um log recente para este schedule (evita duplicatas)
+  async hasRecentSuccessLog(scheduleId: number, minutesAgo: number = 5): Promise<boolean> {
+    try {
+      const cutoffTime = new Date(Date.now() - minutesAgo * 60 * 1000).toISOString();
+      const result = await this.request(
+        `/items/${SCHEDULE_LOGS_COLLECTION}?filter[schedule_id][_eq]=${scheduleId}&filter[status][_eq]=success&filter[sent_at][_gte]=${cutoffTime}&limit=1`
+      );
+      const hasRecent = (result.data || []).length > 0;
+      if (hasRecent) {
+        console.log(`[Scheduler] Schedule ${scheduleId} already has a success log in the last ${minutesAgo} minutes`);
+      }
+      return hasRecent;
+    } catch (error) {
+      console.warn("[Schedule] Error checking recent logs:", error);
+      return false; // Em caso de erro, permite o envio
+    }
+  }
+
   async sendScheduledMessage(
     instanceName: string,
     phoneNumber: string,
@@ -697,6 +715,7 @@ export class ScheduleService {
 
   private schedulerInterval: NodeJS.Timeout | null = null;
   private isProcessing = false;
+  private processingScheduleIds = new Set<number>(); // Lock por schedule ID
 
   startScheduler(intervalMs: number = 60000): void {
     if (this.schedulerInterval) {
@@ -707,6 +726,12 @@ export class ScheduleService {
     console.log(`[Scheduler] Starting automatic scheduler (interval: ${intervalMs / 1000}s)`);
     
     this.schedulerInterval = setInterval(() => {
+      // Primeiro, recuperar schedules travados em "paused"
+      this.recoverStuckSchedules().catch(err => {
+        console.error("[Scheduler] Error recovering stuck schedules:", err);
+      });
+      
+      // Depois, processar schedules pendentes
       this.processSchedules().catch(err => {
         console.error("[Scheduler] Error processing schedules:", err);
       });
@@ -715,6 +740,39 @@ export class ScheduleService {
     this.processSchedules().catch(err => {
       console.error("[Scheduler] Error on initial processing:", err);
     });
+  }
+
+  // Watchdog: Recuperar schedules que ficaram travados em "paused" por mais de 10 minutos
+  async recoverStuckSchedules(): Promise<void> {
+    try {
+      const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+      
+      // Buscar schedules pausados que foram atualizados há mais de 10 minutos
+      const result = await this.request(
+        `/items/${SCHEDULES_COLLECTION}?filter[status][_eq]=paused`
+      );
+      const pausedSchedules = (result.data || []) as WhatsappSchedule[];
+      
+      for (const schedule of pausedSchedules) {
+        // Se o schedule está pausado e date_updated é antigo, provavelmente está travado
+        if (schedule.date_updated) {
+          const updatedAt = new Date(schedule.date_updated);
+          const cutoffTime = new Date(Date.now() - 10 * 60 * 1000);
+          
+          if (updatedAt < cutoffTime) {
+            console.log(`[Scheduler] Recovering stuck schedule ${schedule.id} (paused since ${schedule.date_updated})`);
+            
+            // Restaurar para enabled
+            await this.request(`/items/${SCHEDULES_COLLECTION}/${schedule.id}`, {
+              method: "PATCH",
+              body: JSON.stringify({ status: "enabled" }),
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.error("[Scheduler] Error in recoverStuckSchedules:", error);
+    }
   }
 
   stopScheduler(): void {
@@ -739,23 +797,31 @@ export class ScheduleService {
     try {
       console.log("[Scheduler] Checking for pending schedules...");
       
+      // Buscar apenas schedules habilitados (não "paused" ou processando)
       const allSchedules = await this.request(`/items/${SCHEDULES_COLLECTION}?filter[status][_eq]=enabled`);
       const schedules = (allSchedules.data || []) as WhatsappSchedule[];
       
       const now = new Date();
-      const twoMinutesAgo = new Date(now.getTime() - 2 * 60 * 1000);
+      const cooldownMinutes = 5; // Cooldown configurável
+      const cooldownAgo = new Date(now.getTime() - cooldownMinutes * 60 * 1000);
       
       const pendingSchedules = schedules.filter(s => {
         if (!s.next_run_at) return false;
         
+        // PROTEÇÃO 1: Skip se está sendo processado localmente (lock em memória)
+        if (this.processingScheduleIds.has(s.id)) {
+          console.log(`[Scheduler] Skipping schedule ${s.id} - already being processed (local lock)`);
+          return false;
+        }
+        
         const nextRun = new Date(s.next_run_at);
         const isPastDue = nextRun <= now;
         
-        // Prevent duplicate sends: skip if last_run_at is within last 2 minutes
+        // PROTEÇÃO 2: Skip se last_run_at foi recente (cooldown)
         if (s.last_run_at) {
           const lastRun = new Date(s.last_run_at);
-          if (lastRun >= twoMinutesAgo) {
-            console.log(`[Scheduler] Skipping schedule ${s.id} - was sent ${Math.floor((now.getTime() - lastRun.getTime()) / 1000)}s ago`);
+          if (lastRun >= cooldownAgo) {
+            console.log(`[Scheduler] Skipping schedule ${s.id} - cooldown: sent ${Math.floor((now.getTime() - lastRun.getTime()) / 1000)}s ago`);
             return false;
           }
         }
@@ -770,17 +836,70 @@ export class ScheduleService {
       console.log(`[Scheduler] Found ${pendingSchedules.length} pending schedules`);
 
       for (const schedule of pendingSchedules) {
+        // Adicionar lock local por ID
+        this.processingScheduleIds.add(schedule.id);
+        
         try {
+          // PROTEÇÃO 3: Double-check - buscar o schedule novamente para verificar status atual
+          // Isso reduz a janela de race condition (não é 100% atômico mas é muito mais seguro)
+          const freshSchedule = await this.request(`/items/${SCHEDULES_COLLECTION}/${schedule.id}`);
+          if (!freshSchedule.data || freshSchedule.data.status !== "enabled") {
+            console.log(`[Scheduler] Schedule ${schedule.id} is no longer enabled (status: ${freshSchedule.data?.status}), skipping`);
+            continue;
+          }
+          
+          // Verificar last_run_at novamente (pode ter sido atualizado por outra instância)
+          if (freshSchedule.data.last_run_at) {
+            const lastRun = new Date(freshSchedule.data.last_run_at);
+            if (lastRun >= cooldownAgo) {
+              console.log(`[Scheduler] Schedule ${schedule.id} was recently sent by another instance, skipping`);
+              continue;
+            }
+          }
+          
+          // PROTEÇÃO 4: Lock persistente - mudar status para "paused" enquanto processa
+          const lockResult = await this.request(`/items/${SCHEDULES_COLLECTION}/${schedule.id}`, {
+            method: "PATCH",
+            body: JSON.stringify({ status: "paused" }),
+          });
+          
+          if (!lockResult.data) {
+            console.warn(`[Scheduler] Could not acquire lock for schedule ${schedule.id}, skipping`);
+            continue;
+          }
+          
+          // PROTEÇÃO 5: Verificar log recente no banco (após adquirir lock)
+          const hasRecentLog = await this.hasRecentSuccessLog(schedule.id, cooldownMinutes);
+          if (hasRecentLog) {
+            // Restaurar status enabled e pular
+            await this.request(`/items/${SCHEDULES_COLLECTION}/${schedule.id}`, {
+              method: "PATCH",
+              body: JSON.stringify({ status: "enabled" }),
+            });
+            console.log(`[Scheduler] Skipping schedule ${schedule.id} - recent log found`);
+            continue;
+          }
+          
           processed++;
           
           const nutritionist = await this.getNutritionistForSchedule(schedule.nutritionist_id);
           if (!nutritionist?.evolutionInstanceName) {
+            // Restaurar status
+            await this.request(`/items/${SCHEDULES_COLLECTION}/${schedule.id}`, {
+              method: "PATCH",
+              body: JSON.stringify({ status: "enabled" }),
+            });
             console.warn(`[Scheduler] Nutritionist ${schedule.nutritionist_id} has no WhatsApp instance, skipping`);
             continue;
           }
 
           const patient = await this.getPatientForSchedule(schedule.patient_id);
           if (!patient?.whatsappNumber) {
+            // Restaurar status
+            await this.request(`/items/${SCHEDULES_COLLECTION}/${schedule.id}`, {
+              method: "PATCH",
+              body: JSON.stringify({ status: "enabled" }),
+            });
             console.warn(`[Scheduler] Patient ${schedule.patient_id} has no WhatsApp, skipping`);
             continue;
           }
@@ -801,28 +920,48 @@ export class ScheduleService {
           if (result.success) {
             success++;
             
+            // Calcular próximo run
             const newNextRunAt = this.calculateNextRunAtAfterSend(schedule);
+            const isOneShot = schedule.type === "reactivation" || schedule.type === "post_consultation";
             
+            // Para schedules one-shot: marcar como "completed"
+            // Para recorrentes (meal_feedback): voltar para "enabled" com novo next_run_at
             await this.updateSchedule(schedule.id, {
               last_run_at: new Date().toISOString(),
               next_run_at: newNextRunAt,
               failure_count: 0,
               last_error: null,
-              status: schedule.type === "reactivation" ? "completed" : "enabled",
+              status: isOneShot ? "completed" : "enabled",
             });
             
-            console.log(`[Scheduler] Successfully sent to patient ${schedule.patient_id}, next run: ${newNextRunAt || 'none'}`);
+            console.log(`[Scheduler] Successfully sent to patient ${schedule.patient_id}, next run: ${newNextRunAt || 'completed'}`);
           } else {
             failed++;
+            
+            // Em caso de falha, restaurar status "enabled" para permitir retry
             await this.updateSchedule(schedule.id, {
               failure_count: (schedule.failure_count || 0) + 1,
               last_error: result.error,
+              status: "enabled", // Restaurar para retry
             });
             console.error(`[Scheduler] Failed to send to patient ${schedule.patient_id}: ${result.error}`);
           }
         } catch (error: any) {
           failed++;
           console.error(`[Scheduler] Error processing schedule ${schedule.id}:`, error);
+          
+          // Tentar restaurar status em caso de erro
+          try {
+            await this.request(`/items/${SCHEDULES_COLLECTION}/${schedule.id}`, {
+              method: "PATCH",
+              body: JSON.stringify({ status: "enabled" }),
+            });
+          } catch (restoreError) {
+            console.error(`[Scheduler] Could not restore status for schedule ${schedule.id}:`, restoreError);
+          }
+        } finally {
+          // Remover lock local
+          this.processingScheduleIds.delete(schedule.id);
         }
       }
 
