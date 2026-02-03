@@ -79,7 +79,9 @@ export default function WhatsApp() {
     refetchStatus();
   };
 
-  const isConnected = whatsappStatus?.instance?.state === "open";
+  // Check connection status - Evolution API may return "open" or "connected"
+  const connectionState = whatsappStatus?.instance?.state?.toLowerCase();
+  const isConnected = connectionState === "open" || connectionState === "connected";
   const hasEvolutionInstance = !!currentNutritionist?.evolutionInstanceName;
 
   const { error: statusError } = useQuery<any>({
@@ -87,8 +89,14 @@ export default function WhatsApp() {
     enabled: false,
   });
 
-  const isSubscriptionError = statusError && (statusError as any)?.status === 402 ||
-    (currentNutritionist?.subscriptionStatus === "canceled");
+  // Check subscription status using BOTH fields (status_pagamento and subscriptionStatus)
+  // User is considered inactive only if BOTH indicate inactive/canceled
+  const hasActivePaymentStatus = currentNutritionist?.status_pagamento === "ativo";
+  const hasActiveSubscription = currentNutritionist?.subscriptionStatus === "active";
+  const isSubscriptionActive = hasActivePaymentStatus || hasActiveSubscription;
+  
+  const isSubscriptionError = (statusError && (statusError as any)?.status === 402) || 
+    (!isSubscriptionActive && currentNutritionist?.subscriptionStatus === "canceled");
 
   return (
     <main className="p-6">

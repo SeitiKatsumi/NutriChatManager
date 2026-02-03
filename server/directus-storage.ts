@@ -1244,12 +1244,19 @@ export class DirectusStorage implements IStorage {
       const user = await this.getNutritionist(userId);
       if (!user) return false;
       
-      // SECURITY: Require active status AND valid subscription ID AND plan ID
-      // This prevents users from accessing the app without paying
-      const hasActiveStatus = user.subscriptionStatus === 'active';
-      const hasValidSubscription = !!(user.subscriptionId && user.planId);
+      // Check BOTH fields for active subscription:
+      // - status_pagamento: "ativo" (primary field used by webhooks)
+      // - subscriptionStatus: "active" (legacy/Stripe field)
+      // Either being active is sufficient (handles sync delays)
+      const hasActivePaymentStatus = user.status_pagamento === 'ativo';
+      const hasActiveSubscriptionStatus = user.subscriptionStatus === 'active';
       
-      return hasActiveStatus && hasValidSubscription;
+      // User is considered active if either status field indicates active
+      const isActive = hasActivePaymentStatus || hasActiveSubscriptionStatus;
+      
+      console.log(`[Subscription Check] User ${userId}: status_pagamento=${user.status_pagamento}, subscriptionStatus=${user.subscriptionStatus}, isActive=${isActive}`);
+      
+      return isActive;
     } catch (error) {
       console.error('Error checking subscription status:', error);
       return false;
