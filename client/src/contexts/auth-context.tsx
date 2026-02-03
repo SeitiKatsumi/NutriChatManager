@@ -30,6 +30,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
+  updateSubscriptionStatus: (newStatus: "pendente" | "ativo" | "cancelado" | "expirado") => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -78,6 +79,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const updateSubscriptionStatus = (newStatus: "pendente" | "ativo" | "cancelado" | "expirado") => {
+    if (nutritionist) {
+      setNutritionist({
+        ...nutritionist,
+        status_pagamento: newStatus
+      });
+    }
+  };
+
   useEffect(() => {
     checkAuth();
   }, []);
@@ -89,6 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     login,
     logout,
     checkAuth,
+    updateSubscriptionStatus,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

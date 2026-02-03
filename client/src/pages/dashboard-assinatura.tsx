@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
 export default function DashboardAssinatura() {
-  const { nutritionist, checkAuth } = useAuth();
+  const { nutritionist, updateSubscriptionStatus } = useAuth();
   const { toast } = useToast();
   const [selectedPlan, setSelectedPlan] = useState<'pro' | 'enterprise' | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -80,12 +80,20 @@ export default function DashboardAssinatura() {
       const result = await response.json();
       
       if (result.success) {
+        // Update local state directly to avoid Directus cache issues
+        const statusMap: Record<string, "pendente" | "ativo" | "cancelado" | "expirado"> = {
+          'ativo': 'ativo',
+          'pendente': 'pendente',
+          'cancelado': 'cancelado',
+          'expirado': 'expirado'
+        };
+        const newStatus = statusMap[result.newStatus] || 'pendente';
+        updateSubscriptionStatus(newStatus);
+        
         toast({
           title: "Status atualizado",
           description: `Seu status de assinatura foi sincronizado: ${result.newStatus}`,
         });
-        // Refresh auth to update nutritionist data
-        await checkAuth();
       } else {
         toast({
           title: "Atenção",
