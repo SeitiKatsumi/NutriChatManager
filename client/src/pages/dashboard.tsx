@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { 
@@ -12,6 +13,7 @@ import { Progress } from "@/components/ui/progress";
 import { Link } from "wouter";
 import { useAuth } from "@/contexts/auth-context";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import PatientDetailsDialog from "@/components/patients/patient-details-dialog";
 
 interface DashboardStats {
   totalPatients: number;
@@ -37,6 +39,18 @@ interface PatientWithSchedules {
 
 export default function Dashboard() {
   const { user, nutritionist } = useAuth();
+  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
+  const [viewingPatient, setViewingPatient] = useState<any>(null);
+
+  const handleView = (patient: any) => {
+    setViewingPatient(patient);
+    setIsDetailsDialogOpen(true);
+  };
+
+  const handleDetailsClose = () => {
+    setIsDetailsDialogOpen(false);
+    setViewingPatient(null);
+  };
 
   const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useQuery<DashboardStats>({
     queryKey: ["/api/dashboard/stats"],
@@ -264,11 +278,14 @@ export default function Dashboard() {
                         >
                           {patient.status === 'active' ? 'Ativo' : 'Inativo'}
                         </Badge>
-                        <Link href={`/patients/${patient.id}`}>
-                          <Button variant="ghost" size="sm" data-testid={`btn-view-patient-${patient.id}`}>
-                            Ver
-                          </Button>
-                        </Link>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          data-testid={`btn-view-patient-${patient.id}`}
+                          onClick={() => handleView(patient)}
+                        >
+                          Ver
+                        </Button>
                       </div>
                     </div>
                   ))}
@@ -502,6 +519,12 @@ export default function Dashboard() {
         </Card>
 
       </div>
+
+      <PatientDetailsDialog
+        isOpen={isDetailsDialogOpen}
+        onClose={handleDetailsClose}
+        patient={viewingPatient}
+      />
     </main>
   );
 }
