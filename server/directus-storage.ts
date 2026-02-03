@@ -710,7 +710,9 @@ export class DirectusStorage implements IStorage {
   async getNutritionist(id: string, userToken?: string) {
     try {
       const client = this.getUserClient(userToken);
-      const response = await client.request(`/users/${id}?fields=*`);
+      // Add cache-buster to prevent Directus from returning stale data
+      const cacheBuster = Date.now();
+      const response = await client.request(`/users/${id}?fields=*&_cb=${cacheBuster}`);
       return transformUserFromDirectus(response.data);
     } catch (error) {
       console.error('Error getting nutritionist:', error);
