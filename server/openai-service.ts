@@ -194,19 +194,19 @@ Responda em JSON com:
       eveningSnack?: string;
     };
   }): Promise<{
-    breakfast: string;
-    morningSnack: string;
-    lunch: string;
-    afternoonSnack: string;
-    dinner: string;
-    eveningSnack: string;
+    breakfast: string[];
+    morningSnack: string[];
+    lunch: string[];
+    afternoonSnack: string[];
+    dinner: string[];
+    eveningSnack: string[];
     generalNotes: string;
   }> {
     try {
       // Build patient context from messages and data
       const conversationContext = patientData.messages
         .sort((a, b) => a.timestamp - b.timestamp)
-        .slice(-30) // Last 30 messages for context
+        .slice(-50) // Last 50 messages for context
         .map(msg => {
           const sender = msg.fromMe ? 'Nutricionista/IA' : 'Paciente';
           return `${sender}: ${msg.text}`;
@@ -241,21 +241,22 @@ ${patientData.currentMeals.eveningSnack ? `- Ceia: ${patientData.currentMeals.ev
       const systemPrompt = `Você é um nutricionista experiente especializado em criar planos alimentares personalizados.
 
 INSTRUÇÕES:
-1. Analise todas as informações do paciente (anamnese, conversas, objetivos, restrições)
-2. Crie um recordatório alimentar de 24 horas REALISTA e PERSONALIZADO
+1. Analise todas as informações do paciente (anamnese, conversas, objetivos, gostos, desgostos, restrições)
+2. Crie um plano alimentar de 24 horas REALISTA e PERSONALIZADO com 3 opções variadas para cada refeição
 3. Considere: preferências alimentares, restrições, alergias, rotina, objetivos nutricionais
-4. Forneça porções aproximadas e horários sugeridos
-5. Seja específico nas preparações e alimentos
-6. Inclua variedade nutricional adequada
+4. Cada opção deve ser diferente das outras (variar proteínas, carboidratos, preparações)
+5. Forneça porções aproximadas e horários sugeridos
+6. Seja específico nas preparações e alimentos
+7. As opções devem ser práticas e acessíveis
 
-FORMATO DE RESPOSTA (JSON):
+FORMATO DE RESPOSTA (JSON) — cada refeição deve ser um array com EXATAMENTE 3 strings:
 {
-  "breakfast": "Descrição detalhada do café da manhã com porções",
-  "morningSnack": "Descrição do lanche da manhã",
-  "lunch": "Descrição detalhada do almoço",
-  "afternoonSnack": "Descrição do lanche da tarde",
-  "dinner": "Descrição detalhada do jantar",
-  "eveningSnack": "Descrição da ceia (ou 'Não necessário' se aplicável)",
+  "breakfast": ["Opção 1: descrição detalhada com porções", "Opção 2: descrição detalhada com porções", "Opção 3: descrição detalhada com porções"],
+  "morningSnack": ["Opção 1: ...", "Opção 2: ...", "Opção 3: ..."],
+  "lunch": ["Opção 1: ...", "Opção 2: ...", "Opção 3: ..."],
+  "afternoonSnack": ["Opção 1: ...", "Opção 2: ...", "Opção 3: ..."],
+  "dinner": ["Opção 1: ...", "Opção 2: ...", "Opção 3: ..."],
+  "eveningSnack": ["Opção 1: ...", "Opção 2: ...", "Opção 3: ..."],
   "generalNotes": "Observações gerais, dicas de hidratação e suplementação"
 }`;
 
@@ -263,7 +264,7 @@ FORMATO DE RESPOSTA (JSON):
 
 ${currentMealsInfo}
 
-Por favor, crie uma sugestão de recordatório alimentar de 24 horas personalizado para este paciente, considerando todas as informações fornecidas.`;
+Por favor, crie uma sugestão de plano alimentar personalizado com 3 opções por refeição para este paciente, considerando todas as informações fornecidas, especialmente seus objetivos, gostos e desgostos mencionados nas conversas.`;
 
       const response = await openai.chat.completions.create({
         model: "gpt-4o-mini",
@@ -273,18 +274,24 @@ Por favor, crie uma sugestão de recordatório alimentar de 24 horas personaliza
         ],
         response_format: { type: "json_object" },
         temperature: 0.7,
-        max_tokens: 1500
+        max_tokens: 2500
       });
 
       const result = JSON.parse(response.choices[0].message.content || '{}');
+
+      const toArray = (val: any, fallback: string): string[] => {
+        if (Array.isArray(val) && val.length >= 3) return val.slice(0, 3);
+        if (typeof val === 'string' && val.length > 0) return [val, fallback, fallback];
+        return [fallback, fallback, fallback];
+      };
       
       return {
-        breakfast: result.breakfast || 'Não foi possível gerar sugestão',
-        morningSnack: result.morningSnack || 'Não necessário',
-        lunch: result.lunch || 'Não foi possível gerar sugestão',
-        afternoonSnack: result.afternoonSnack || 'Não necessário',
-        dinner: result.dinner || 'Não foi possível gerar sugestão',
-        eveningSnack: result.eveningSnack || 'Não necessário',
+        breakfast: toArray(result.breakfast, 'Não foi possível gerar sugestão'),
+        morningSnack: toArray(result.morningSnack, 'Não necessário'),
+        lunch: toArray(result.lunch, 'Não foi possível gerar sugestão'),
+        afternoonSnack: toArray(result.afternoonSnack, 'Não necessário'),
+        dinner: toArray(result.dinner, 'Não foi possível gerar sugestão'),
+        eveningSnack: toArray(result.eveningSnack, 'Não necessário'),
         generalNotes: result.generalNotes || ''
       };
     } catch (error) {

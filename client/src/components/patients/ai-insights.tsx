@@ -47,12 +47,12 @@ interface QuickInsights {
 }
 
 interface MealPlan {
-  breakfast: string;
-  morningSnack: string;
-  lunch: string;
-  afternoonSnack: string;
-  dinner: string;
-  eveningSnack: string;
+  breakfast: string[];
+  morningSnack: string[];
+  lunch: string[];
+  afternoonSnack: string[];
+  dinner: string[];
+  eveningSnack: string[];
   generalNotes: string;
 }
 
@@ -373,9 +373,9 @@ export default function AIInsights({ patient }: AIInsightsProps) {
             <Card className="bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800" data-testid="meal-plan-result">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="font-semibold tracking-tight text-base flex items-center gap-2 text-[#000000]">
+                  <CardTitle className="font-semibold tracking-tight text-base flex items-center gap-2 text-[#000000] dark:text-green-100">
                     <UtensilsCrossed className="w-4 h-4 text-green-600" />
-                    Recordatório 24 Horas - Sugestão Personalizada
+                    Sugestão de Plano Alimentar Personalizado
                   </CardTitle>
                   <Button
                     variant="ghost"
@@ -387,83 +387,50 @@ export default function AIInsights({ patient }: AIInsightsProps) {
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Café da Manhã */}
-                <div>
-                  <h4 className="font-semibold text-sm mb-2 flex items-center gap-2 text-gray-700 dark:text-gray-600">
-                    <span className="w-2 h-2 bg-green-600 rounded-full" />
-                    Café da Manhã
-                  </h4>
-                  <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300" data-testid="meal-breakfast">
-                    {mealPlanMutation.data.breakfast}
-                  </p>
-                </div>
+              <CardContent className="space-y-5">
+                {/* Helper: renderiza uma refeição com 3 opções */}
+                {(() => {
+                  const MealSection = ({ title, options, testId, skip }: { title: string; options: string[]; testId: string; skip?: boolean }) => {
+                    const allSkip = options.every(o => o === 'Não necessário');
+                    if (skip && allSkip) return null;
+                    return (
+                      <div>
+                        <h4 className="font-semibold text-sm mb-3 flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                          <span className="w-2 h-2 bg-green-600 rounded-full" />
+                          {title}
+                        </h4>
+                        <div className="space-y-2" data-testid={testId}>
+                          {options.map((option, idx) => (
+                            <div key={idx} className="flex gap-2 items-start bg-white dark:bg-green-900/20 rounded-md p-2 border border-green-100 dark:border-green-800">
+                              <span className="shrink-0 w-6 h-6 rounded-full bg-green-600 text-white text-xs font-bold flex items-center justify-center mt-0.5">
+                                {idx + 1}
+                              </span>
+                              <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300">
+                                {option.replace(/^Opção\s*\d+:\s*/i, '')}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  };
 
-                {/* Lanche da Manhã */}
-                {mealPlanMutation.data.morningSnack && mealPlanMutation.data.morningSnack !== 'Não necessário' && (
-                  <div>
-                    <h4 className="font-semibold text-sm mb-2 flex items-center gap-2 text-gray-700 dark:text-gray-600">
-                      <span className="w-2 h-2 bg-green-600 rounded-full" />
-                      Lanche da Manhã
-                    </h4>
-                    <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300" data-testid="meal-morning-snack">
-                      {mealPlanMutation.data.morningSnack}
-                    </p>
-                  </div>
-                )}
-
-                {/* Almoço */}
-                <div>
-                  <h4 className="font-semibold text-sm mb-2 flex items-center gap-2 text-gray-700 dark:text-gray-600">
-                    <span className="w-2 h-2 bg-green-600 rounded-full" />
-                    Almoço
-                  </h4>
-                  <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300" data-testid="meal-lunch">
-                    {mealPlanMutation.data.lunch}
-                  </p>
-                </div>
-
-                {/* Lanche da Tarde */}
-                {mealPlanMutation.data.afternoonSnack && mealPlanMutation.data.afternoonSnack !== 'Não necessário' && (
-                  <div>
-                    <h4 className="font-semibold text-sm mb-2 flex items-center gap-2 text-gray-700 dark:text-gray-600">
-                      <span className="w-2 h-2 bg-green-600 rounded-full" />
-                      Lanche da Tarde
-                    </h4>
-                    <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300" data-testid="meal-afternoon-snack">
-                      {mealPlanMutation.data.afternoonSnack}
-                    </p>
-                  </div>
-                )}
-
-                {/* Jantar */}
-                <div>
-                  <h4 className="font-semibold text-sm mb-2 flex items-center gap-2 text-gray-700 dark:text-gray-600">
-                    <span className="w-2 h-2 bg-green-600 rounded-full" />
-                    Jantar
-                  </h4>
-                  <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300" data-testid="meal-dinner">
-                    {mealPlanMutation.data.dinner}
-                  </p>
-                </div>
-
-                {/* Ceia */}
-                {mealPlanMutation.data.eveningSnack && mealPlanMutation.data.eveningSnack !== 'Não necessário' && (
-                  <div>
-                    <h4 className="font-semibold text-sm mb-2 flex items-center gap-2 text-gray-700 dark:text-gray-600">
-                      <span className="w-2 h-2 bg-green-600 rounded-full" />
-                      Ceia
-                    </h4>
-                    <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300" data-testid="meal-evening-snack">
-                      {mealPlanMutation.data.eveningSnack}
-                    </p>
-                  </div>
-                )}
+                  return (
+                    <>
+                      <MealSection title="Café da Manhã" options={mealPlanMutation.data!.breakfast} testId="meal-breakfast" />
+                      <MealSection title="Lanche da Manhã" options={mealPlanMutation.data!.morningSnack} testId="meal-morning-snack" skip />
+                      <MealSection title="Almoço" options={mealPlanMutation.data!.lunch} testId="meal-lunch" />
+                      <MealSection title="Lanche da Tarde" options={mealPlanMutation.data!.afternoonSnack} testId="meal-afternoon-snack" skip />
+                      <MealSection title="Jantar" options={mealPlanMutation.data!.dinner} testId="meal-dinner" />
+                      <MealSection title="Ceia" options={mealPlanMutation.data!.eveningSnack} testId="meal-evening-snack" skip />
+                    </>
+                  );
+                })()}
 
                 {/* Observações Gerais */}
                 {mealPlanMutation.data.generalNotes && (
                   <div className="pt-3 border-t border-green-200 dark:border-green-800">
-                    <h4 className="font-semibold text-sm mb-2 flex items-center gap-2 text-gray-700 dark:text-gray-600">
+                    <h4 className="font-semibold text-sm mb-2 flex items-center gap-2 text-gray-700 dark:text-gray-300">
                       <Lightbulb className="w-4 h-4 text-green-600" />
                       Observações e Recomendações
                     </h4>
