@@ -576,10 +576,10 @@ export default function AIInsights({ patient }: AIInsightsProps) {
               {askMutation.data.sources.length > 0 && (
                 <div>
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
                     onClick={() => setShowSources(showSources === askMutation.data?.answer ? null : askMutation.data?.answer || null)}
-                    className="text-xs text-primary hover:text-primary/80"
+                    className="text-xs font-medium"
                     data-testid="toggle-sources"
                   >
                     {showSources === askMutation.data?.answer ? (
