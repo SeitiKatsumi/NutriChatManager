@@ -527,7 +527,7 @@ export default function AIInsights({ patient }: AIInsightsProps) {
               <CardTitle className="text-base flex items-center gap-2 text-blue-900 dark:text-blue-100">
                 <Brain className="w-4 h-4 text-blue-600" />
                 Resposta da IA
-                <Badge variant="outline" className="text-xs ml-auto" data-testid="confidence-badge">
+                <Badge variant="outline" className="text-xs ml-auto text-[#000000]" data-testid="confidence-badge">
                   Confiança: {Math.round(askMutation.data.confidence * 100)}%
                 </Badge>
               </CardTitle>
