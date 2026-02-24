@@ -579,7 +579,7 @@ export default function AIInsights({ patient }: AIInsightsProps) {
                     variant="ghost"
                     size="sm"
                     onClick={() => setShowSources(showSources === askMutation.data?.answer ? null : askMutation.data?.answer || null)}
-                    className="text-xs"
+                    className="text-xs text-primary hover:text-primary/80"
                     data-testid="toggle-sources"
                   >
                     {showSources === askMutation.data?.answer ? (
@@ -607,7 +607,7 @@ export default function AIInsights({ patient }: AIInsightsProps) {
                               {formatTimestamp(source.timestamp)}
                             </span>
                           </div>
-                          <p className="leading-relaxed" data-testid={`source-text-${index}`}>{source.text}</p>
+                          <p className="leading-relaxed text-[#000000]" data-testid={`source-text-${index}`}>{source.text}</p>
                         </div>
                       ))}
                     </div>
