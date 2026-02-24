@@ -13,7 +13,6 @@ import {
   TrendingUp, 
   Clock,
   RefreshCw,
-  ChevronDown,
   ChevronUp,
   AlertTriangle,
   UtensilsCrossed
@@ -58,7 +57,6 @@ interface MealPlan {
 
 export default function AIInsights({ patient }: AIInsightsProps) {
   const [question, setQuestion] = useState("");
-  const [showSources, setShowSources] = useState<string | null>(null);
   const [showMealPlan, setShowMealPlan] = useState(false);
   const { toast } = useToast();
 
@@ -178,15 +176,6 @@ export default function AIInsights({ patient }: AIInsightsProps) {
       mixed: "Variado"
     };
     return labels[mood as keyof typeof labels] || "Neutro";
-  };
-
-  const formatTimestamp = (timestamp: number) => {
-    return new Date(timestamp).toLocaleString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
   };
 
   // State para controlar loading do refresh manual
@@ -539,48 +528,6 @@ export default function AIInsights({ patient }: AIInsightsProps) {
                 </div>
               </div>
 
-              {/* Fontes */}
-              {askMutation.data.sources.length > 0 && (
-                <div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowSources(showSources === askMutation.data?.answer ? null : askMutation.data?.answer || null)}
-                    className="text-xs font-medium"
-                    data-testid="toggle-sources"
-                  >
-                    {showSources === askMutation.data?.answer ? (
-                      <>
-                        <ChevronUp className="w-3 h-3 mr-1" />
-                        Ocultar fontes
-                      </>
-                    ) : (
-                      <>
-                        <ChevronDown className="w-3 h-3 mr-1" />
-                        Ver {askMutation.data.sources.length} fonte(s)
-                      </>
-                    )}
-                  </Button>
-
-                  {showSources === askMutation.data?.answer && (
-                    <div className="mt-3 space-y-2" data-testid="ai-sources">
-                      {askMutation.data.sources.map((source, index) => (
-                        <div key={index} className="bg-white dark:bg-gray-900 p-3 rounded border text-xs" data-testid={`ai-source-${index}`}>
-                          <div className="flex items-center justify-between mb-2">
-                            <Badge variant={source.fromMe ? "default" : "secondary"} data-testid={`source-sender-${index}`}>
-                              {source.fromMe ? "Nutricionista/IA" : "Paciente"}
-                            </Badge>
-                            <span className="text-muted-foreground" data-testid={`source-timestamp-${index}`}>
-                              {formatTimestamp(source.timestamp)}
-                            </span>
-                          </div>
-                          <p className="leading-relaxed text-[#000000]" data-testid={`source-text-${index}`}>{source.text}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
             </CardContent>
           </Card>
         )}
