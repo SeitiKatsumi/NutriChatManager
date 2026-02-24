@@ -176,39 +176,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     try {
+      // Fast path: check session-cached subscription status first (avoids Directus query)
+      const sessionStatusPagamento = req.session.user.status_pagamento;
+      const sessionSubscriptionStatus = req.session.user.subscription_status;
+      
+      const sessionIsActive = sessionStatusPagamento === 'ativo' || 
+                              sessionSubscriptionStatus === 'active' || 
+                              sessionSubscriptionStatus === 'trialing';
+
+      if (sessionIsActive) {
+        console.log(`[Subscription Middleware] Session fast-path: status_pagamento=${sessionStatusPagamento}, subscription_status=${sessionSubscriptionStatus} → ACTIVE`);
+        return next();
+      }
+
+      // Session has no cached status or shows inactive — verify with Directus as fallback
       const userId = req.session.user.id;
       const hasActive = await storage.hasActiveSubscription(userId);
       
-      if (!hasActive) {
-        const subscriptionStatus = await storage.getSubscriptionStatus(userId);
-        
-        // Provide specific error messages based on subscription status
-        let errorMessage = "Active subscription required";
-        let errorCode = "SUBSCRIPTION_REQUIRED";
-        
-        if (subscriptionStatus === 'past_due') {
-          errorMessage = "Payment overdue. Please update your payment method.";
-          errorCode = "PAYMENT_OVERDUE";
-        } else if (subscriptionStatus === 'canceled') {
-          errorMessage = "Subscription canceled. Reactivate to continue using the app.";
-          errorCode = "SUBSCRIPTION_CANCELED";
-        } else if (subscriptionStatus === 'incomplete') {
-          errorMessage = "Complete your subscription setup to access the app.";
-          errorCode = "SUBSCRIPTION_INCOMPLETE";
-        } else if (!subscriptionStatus) {
-          errorMessage = "No active subscription found. Subscribe to access the app.";
-          errorCode = "NO_SUBSCRIPTION";
-        }
-
-        return res.status(402).json({ 
-          error: errorMessage,
-          code: errorCode,
-          subscriptionStatus: subscriptionStatus,
-          redirectTo: "/subscription/plans"
-        });
+      if (hasActive) {
+        // Update session cache with active status
+        req.session.user.status_pagamento = 'ativo';
+        return next();
       }
+
+      const subscriptionStatus = await storage.getSubscriptionStatus(userId);
       
-      next();
+      let errorMessage = "Active subscription required";
+      let errorCode = "SUBSCRIPTION_REQUIRED";
+      
+      if (subscriptionStatus === 'past_due') {
+        errorMessage = "Payment overdue. Please update your payment method.";
+        errorCode = "PAYMENT_OVERDUE";
+      } else if (subscriptionStatus === 'canceled') {
+        errorMessage = "Subscription canceled. Reactivate to continue using the app.";
+        errorCode = "SUBSCRIPTION_CANCELED";
+      } else if (subscriptionStatus === 'incomplete') {
+        errorMessage = "Complete your subscription setup to access the app.";
+        errorCode = "SUBSCRIPTION_INCOMPLETE";
+      } else if (!subscriptionStatus) {
+        errorMessage = "No active subscription found. Subscribe to access the app.";
+        errorCode = "NO_SUBSCRIPTION";
+      }
+
+      return res.status(402).json({ 
+        error: errorMessage,
+        code: errorCode,
+        subscriptionStatus: subscriptionStatus,
+        redirectTo: "/subscription/plans"
+      });
     } catch (error) {
       console.error('[Subscription Middleware] Error checking subscription:', error);
       return res.status(500).json({ error: "Error verifying subscription" });
@@ -976,7 +991,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Access denied. Nutritionist role required" });
       }
 
-      // Create local session with Directus tokens
+      // Determine subscription status from Directus user data
+      const rawStatusPagamento = directusUser.data.status_pagamento;
+      const rawSubscriptionStatus = directusUser.data.subscription_status;
+      const sessionStatusPagamento = rawStatusPagamento ||
+        (rawSubscriptionStatus === 'active' || rawSubscriptionStatus === 'trialing' ? 'ativo' :
+         rawSubscriptionStatus === 'canceled' ? 'cancelado' :
+         rawSubscriptionStatus === 'past_due' || rawSubscriptionStatus === 'incomplete_expired' || rawSubscriptionStatus === 'unpaid' ? 'expirado' : 'pendente');
+
+      // Create local session with Directus tokens and subscription status
       req.session.user = {
         id: directusUser.data.id,
         email: directusUser.data.email,
@@ -984,6 +1007,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         role: directusUser.data.role,
         accessToken: loginResponse.data.access_token,
         refreshToken: loginResponse.data.refresh_token,
+        status_pagamento: sessionStatusPagamento,
+        subscription_status: rawSubscriptionStatus,
       };
 
       console.log(`=== Login successful ===`);
@@ -1148,7 +1173,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         fullName: nutritionist.fullName,
         evolutionInstanceName: nutritionist.evolutionInstanceName,
         whatsappIA: nutritionist.whatsappIA,
+        status_pagamento: nutritionist.status_pagamento,
       });
+
+      // Keep session subscription status in sync with fresh Directus data
+      if (nutritionist.status_pagamento) {
+        req.session.user.status_pagamento = nutritionist.status_pagamento;
+      }
+      if (nutritionist.subscriptionStatus) {
+        req.session.user.subscription_status = nutritionist.subscriptionStatus;
+      }
       
       res.json({
         user: {
@@ -1758,15 +1792,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return new Date(timestamp * 1000);
       };
       
-      // Update user subscription in Directus (cast to any to access Stripe fields)
+      // Update user subscription in Directus using the user's own token (bypasses admin permission issues)
       const subData = subscription as any;
-      await storage.updateSubscriptionFromWebhook(stripeCustomerId, {
-        subscriptionId: subscription.id,
-        status: subscription.status,
-        currentPeriodStart: safeTimestampToDate(subData.current_period_start),
-        currentPeriodEnd: safeTimestampToDate(subData.current_period_end),
-        priceId: priceId
-      });
+      const userToken = req.session.user.accessToken;
+      try {
+        await storage.updateMySubscriptionStatus(nutritionistId, userToken, {
+          stripeCustomerId,
+          subscription_status: subscription.status,
+          subscription_id: subscription.id,
+          plan_id: priceId || undefined,
+          subscription_start_date: safeTimestampToDate(subData.current_period_start).toISOString(),
+          subscription_end_date: safeTimestampToDate(subData.current_period_end).toISOString(),
+        });
+      } catch (updateError: any) {
+        console.error(`[Self Sync] Failed to update Directus, but session will still be updated: ${updateError.message}`);
+      }
       
       console.log(`[Self Sync] Successfully synced subscription status: ${subscription.status}`);
       
@@ -1781,11 +1821,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         'unpaid': 'expirado'
       };
       
+      const newStatusPagamento = statusMap[subscription.status] || 'pendente';
+      
+      // Update session cache so middleware immediately reflects the new status
+      req.session.user.status_pagamento = newStatusPagamento as any;
+      req.session.user.subscription_status = subscription.status;
+      
       res.json({
         success: true,
         message: "Subscription status synced successfully",
         stripeStatus: subscription.status,
-        newStatus: statusMap[subscription.status] || 'pendente',
+        newStatus: newStatusPagamento,
         subscriptionId: subscription.id,
         currentPeriodEnd: new Date(subData.current_period_end * 1000).toISOString()
       });

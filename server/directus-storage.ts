@@ -1164,6 +1164,49 @@ export class DirectusStorage implements IStorage {
   // ========== STRIPE SUBSCRIPTION METHODS ==========
 
   /**
+   * Update current user's own subscription status using their own token
+   * This bypasses admin token permission issues by letting users update their own data
+   */
+  async updateMySubscriptionStatus(userId: string, userToken: string, subscriptionData: {
+    stripeCustomerId?: string;
+    subscription_status: string;
+    subscription_id?: string;
+    plan_id?: string;
+    subscription_start_date?: string;
+    subscription_end_date?: string;
+  }): Promise<void> {
+    const status_pagamento = mapStripeStatusToPagamento(subscriptionData.subscription_status);
+    const updateData: Record<string, any> = {
+      subscription_status: subscriptionData.subscription_status,
+      status_pagamento,
+    };
+    if (subscriptionData.stripeCustomerId) updateData.stripe_customer_id = subscriptionData.stripeCustomerId;
+    if (subscriptionData.subscription_id) updateData.subscription_id = subscriptionData.subscription_id;
+    if (subscriptionData.plan_id) updateData.plan_id = subscriptionData.plan_id;
+    if (subscriptionData.subscription_start_date) updateData.subscription_start_date = subscriptionData.subscription_start_date;
+    if (subscriptionData.subscription_end_date) updateData.subscription_end_date = subscriptionData.subscription_end_date;
+
+    const userClient = this.getUserClient(userToken);
+    try {
+      await userClient.request(`/users/${userId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(updateData),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      console.log(`[DirectusStorage] ✅ Self-updated subscription for user ${userId}: ${subscriptionData.subscription_status} → ${status_pagamento}`);
+    } catch (userTokenError: any) {
+      console.warn(`[DirectusStorage] User token update failed, trying admin client: ${userTokenError.message}`);
+      // Fallback to admin client
+      await this.client.request(`/users/${userId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(updateData),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      console.log(`[DirectusStorage] ✅ Admin-updated subscription for user ${userId}: ${subscriptionData.subscription_status} → ${status_pagamento}`);
+    }
+  }
+
+  /**
    * Update user subscription data from Stripe webhooks
    */
   async updateUserSubscription(userId: string, subscriptionData: {
