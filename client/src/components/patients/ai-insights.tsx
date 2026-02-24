@@ -346,7 +346,7 @@ export default function AIInsights({ patient }: AIInsightsProps) {
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-medium flex items-center gap-2">
               <UtensilsCrossed className="w-4 h-4" />
-              Sugestão de Recordatório Alimentar
+              Sugestão de Plano Alimentar
             </h3>
             <Button
               onClick={() => mealPlanMutation.mutate()}
