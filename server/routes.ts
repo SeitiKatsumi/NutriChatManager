@@ -1200,82 +1200,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Admin login route - for Directus administrators
+  // Admin login route - simple password-based access
   app.post("/api/auth/admin/login", async (req, res) => {
     try {
-      const { email, password } = req.body;
-      console.log(`Admin login attempt for email: ${email}`);
+      const { password } = req.body;
+      console.log(`Admin login attempt`);
       
-      if (!email || !password) {
-        return res.status(400).json({ error: "Email and password are required" });
+      if (!password) {
+        return res.status(400).json({ error: "Senha é obrigatória" });
       }
 
-
-      console.log(`Attempting Directus authentication for: ${email}`);
-      // Use Directus authentication
-      const loginResponse = await directusClient.login(email, password);
-      console.log(`Directus login successful for: ${email}`);
+      const adminPassword = process.env.ADMIN_PASSWORD || 'Nutri@admin';
       
-      // Get user details from Directus
-      const directusUser = await directusClient.getMe(loginResponse.data.access_token);
-      
-      // Debug: Log user details to understand admin access
-      console.log(`User details for ${email}:`, {
-        id: directusUser.data.id,
-        email: directusUser.data.email,
-        role: directusUser.data.role,
-        admin_access: directusUser.data.admin_access,
-        status: directusUser.data.status
-      });
-      
-      const platformAdminEmails = (process.env.ADMIN_EMAILS || 'daniellessa2023@gmail.com').split(',').map(e => e.trim().toLowerCase());
-      const isDirectusAdmin = directusUser.data.admin_access === true;
-      const isPlatformAdmin = platformAdminEmails.includes(email.toLowerCase());
-      const isAdmin = isDirectusAdmin || isPlatformAdmin;
-      
-      console.log(`Admin check result for ${email}: isAdmin=${isAdmin} (directus=${isDirectusAdmin}, platform=${isPlatformAdmin})`);
-      
-      if (!isAdmin) {
-        console.log(`Access denied for ${email} - not recognized as admin`);
-        return res.status(403).json({ error: "Access denied. Administrator role required" });
+      if (password !== adminPassword) {
+        console.log(`Admin login failed - wrong password`);
+        return res.status(401).json({ error: "Senha incorreta" });
       }
 
-      // Create local session with admin flag
+      const adminName = req.session.user?.email || 'Administrador';
+
       req.session.user = {
-        id: directusUser.data.id,
-        email: directusUser.data.email,
-        nutritionistId: null,
-        role: directusUser.data.role,
-        accessToken: loginResponse.data.access_token,
-        refreshToken: loginResponse.data.refresh_token,
+        ...(req.session.user || {}),
+        id: req.session.user?.id || 'admin',
+        email: req.session.user?.email || 'admin@nutrichatbot.com',
+        nutritionistId: req.session.user?.nutritionistId || null,
+        role: req.session.user?.role || 'admin',
+        accessToken: req.session.user?.accessToken || '',
+        refreshToken: req.session.user?.refreshToken || '',
         isAdmin: true
       };
 
       console.log(`=== Admin login successful ===`);
-      console.log(`Session ID: ${req.sessionID}`);
-      console.log(`Admin ID: ${directusUser.data.id}`);
       
       res.json({
         user: {
-          id: directusUser.data.id,
-          email: directusUser.data.email,
-          name: `${directusUser.data.first_name || ''} ${directusUser.data.last_name || ''}`.trim() || directusUser.data.email,
+          id: req.session.user.id,
+          email: req.session.user.email,
+          name: adminName,
           isAdmin: true,
         },
       });
     } catch (error: any) {
       console.error('Admin login error:', error);
-      console.log(`Error message: ${error.message}`);
-      console.log(`Error status: ${error.response?.status}`);
-      console.log(`Error response:`, error.response?.data);
-      
-      if (error.message && error.message.includes('Login failed')) {
-        return res.status(401).json({ error: "Invalid credentials" });
-      }
-      if (error.response?.status === 401) {
-        return res.status(401).json({ error: "Invalid credentials" });
-      }
-      res.status(500).json({ error: "Authentication service error" });
+      res.status(500).json({ error: "Erro no login administrativo" });
     }
   });
 

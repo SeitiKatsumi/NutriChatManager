@@ -11,7 +11,6 @@ import { useToast } from "@/hooks/use-toast";
 import { Shield } from "lucide-react";
 
 const adminLoginSchema = z.object({
-  email: z.string().email("Email inválido"),
   password: z.string().min(1, "Senha é obrigatória"),
 });
 
@@ -25,7 +24,6 @@ export default function AdminLogin() {
   const form = useForm<AdminLoginForm>({
     resolver: zodResolver(adminLoginSchema),
     defaultValues: {
-      email: "",
       password: "",
     },
   });
@@ -38,7 +36,7 @@ export default function AdminLogin() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ password: data.password }),
       });
 
       if (!response.ok) {
@@ -48,12 +46,11 @@ export default function AdminLogin() {
 
       const result = await response.json();
       
-      // Store admin session data
       localStorage.setItem("admin", JSON.stringify(result.user));
       
       toast({
         title: "Login realizado com sucesso",
-        description: `Bem-vindo, ${result.user.name}`,
+        description: `Bem-vindo ao painel administrativo`,
       });
 
       navigate("/admin");
@@ -75,33 +72,14 @@ export default function AdminLogin() {
           <div className="flex items-center justify-center w-12 h-12 bg-primary/10 rounded-lg mx-auto mb-4">
             <Shield className="w-6 h-6 text-primary" />
           </div>
-          <CardTitle className="text-2xl font-bold">Admin Login</CardTitle>
+          <CardTitle className="text-2xl font-bold">Painel Administrativo</CardTitle>
           <CardDescription>
-            Acesso administrativo ao painel do Directus
+            Digite a senha para acessar o painel admin
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        type="email"
-                        placeholder="admin@exemplo.com"
-                        disabled={isLoading}
-                        data-testid="input-admin-email"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
               <FormField
                 control={form.control}
                 name="password"
@@ -112,7 +90,7 @@ export default function AdminLogin() {
                       <Input
                         {...field}
                         type="password"
-                        placeholder="Sua senha de administrador"
+                        placeholder="Senha de administrador"
                         disabled={isLoading}
                         data-testid="input-admin-password"
                       />
