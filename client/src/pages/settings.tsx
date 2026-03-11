@@ -11,7 +11,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, User, Bot, Lock } from "lucide-react";
+import { Loader2, User, Bot, Lock, Shield } from "lucide-react";
+import { useLocation } from "wouter";
 
 // Schema for profile update
 const profileSchema = z.object({
@@ -58,6 +59,7 @@ type PasswordFormData = z.infer<typeof passwordSchema>;
 export default function Settings() {
   const { nutritionist } = useAuth();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
 
   // Helper function to format phone number for display
   const formatPhoneNumber = (phone: string): string => {
@@ -529,6 +531,16 @@ export default function Settings() {
             </form>
           </CardContent>
         </Card>
+
+        <div className="flex justify-center pt-4 pb-8">
+          <button
+            onClick={() => navigate("/admin")}
+            className="text-muted-foreground/30 hover:text-muted-foreground/60 transition-colors text-xs flex items-center gap-1"
+          >
+            <Shield className="w-3 h-3" />
+            Admin
+          </button>
+        </div>
       </div>
     </div>
   );
