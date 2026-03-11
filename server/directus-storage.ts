@@ -210,8 +210,14 @@ function transformPatientToDirectus(patient: PatientInput): DirectusPatient {
     Observacoes: patient.notes ?? undefined,
   };
 
-  if (patient.imc !== undefined) transformed.IMC = patient.imc ?? undefined;
-  if (patient.idade !== undefined) transformed.Idade = patient.idade ?? undefined;
+  if (patient.imc !== undefined) {
+    const imcNum = patient.imc ? parseFloat(patient.imc) : undefined;
+    transformed.IMC = imcNum && !isNaN(imcNum) ? imcNum : undefined;
+  }
+  if (patient.idade !== undefined) {
+    const idadeNum = patient.idade ? parseInt(patient.idade, 10) : undefined;
+    transformed.Idade = idadeNum && !isNaN(idadeNum) ? idadeNum : undefined;
+  }
   if (patient.cafe_da_manha !== undefined) transformed.Cafe_da_manha = patient.cafe_da_manha ?? undefined;
   if (patient.lanche_da_manha !== undefined) transformed.Lanche_da_manha = patient.lanche_da_manha ?? undefined;
   if (patient.almoco !== undefined) transformed.Almoco = patient.almoco ?? undefined;

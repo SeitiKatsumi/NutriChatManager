@@ -28,6 +28,8 @@ interface BaileysSession {
   nutritionistId: string;
   whatsappNumber: string;
   retryCount: number;
+  conflictCount: number;
+  lastConflictAt: number;
 }
 
 export class BaileysService extends EventEmitter {
@@ -71,6 +73,8 @@ export class BaileysService extends EventEmitter {
       nutritionistId,
       whatsappNumber,
       retryCount: 0,
+      conflictCount: 0,
+      lastConflictAt: 0,
     };
     this.sessions.set(nutritionistId, session);
 
@@ -157,19 +161,26 @@ export class BaileysService extends EventEmitter {
             this.sessions.delete(nutritionistId);
             this.reconnecting.delete(nutritionistId);
           } else if (isConflict) {
-            session.retryCount++;
-            if (session.retryCount > 3) {
-              console.log(`[Baileys] Repeated conflict for ${nutritionistId}. Another instance is active. Backing off for 60s.`);
+            const now = Date.now();
+            if (now - session.lastConflictAt < 30000) {
+              session.conflictCount++;
+            } else {
+              session.conflictCount = 1;
+            }
+            session.lastConflictAt = now;
+
+            if (session.conflictCount >= 3) {
+              console.log(`[Baileys] Repeated conflict for ${nutritionistId} (${session.conflictCount} times). Another instance is active. Backing off for 60s.`);
               session.status = "connecting";
               session.qrCode = null;
               setTimeout(() => {
-                session.retryCount = 0;
+                session.conflictCount = 0;
                 this.reconnecting.delete(nutritionistId);
                 this.connectSocket(nutritionistId, sessionDir);
               }, 60000);
             } else {
-              const delay = Math.min(session.retryCount * 5000, 30000);
-              console.log(`[Baileys] Conflict detected for ${nutritionistId}. Reconnecting in ${delay}ms (attempt ${session.retryCount})`);
+              const delay = session.conflictCount * 5000;
+              console.log(`[Baileys] Conflict detected for ${nutritionistId}. Reconnecting in ${delay}ms (conflict ${session.conflictCount})`);
               session.status = "connecting";
               session.qrCode = null;
               setTimeout(() => {

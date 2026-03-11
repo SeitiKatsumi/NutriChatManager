@@ -6,7 +6,7 @@ import { insertNutritionistSchema, insertWhatsappInstanceSchema, insertPatientSc
 import { z } from "zod";
 // @ts-ignore - directus.js doesn't have type declarations
 import { directusClient } from "./lib/directus.js";
-import { evolutionRedis } from "./evolution-redis";
+// evolutionRedis removed - migrated to Baileys
 import { patientHistoryDirectus } from "./patient-history-directus";
 import { openaiService } from "./openai-service";
 import { scheduleService } from "./schedule-service";
@@ -1562,26 +1562,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Test endpoint to check Evolution Redis connection
+  // Test endpoint to check WhatsApp connection (migrated from Evolution Redis to Baileys)
   app.get("/api/ai/test-connection/:nutritionistId", requireAuth, async (req, res) => {
     try {
       const { nutritionistId } = req.params;
       
-      // Security: Users can only test their own connection
       if (nutritionistId !== req.session.user.nutritionistId) {
         return res.status(403).json({ error: "Access denied" });
       }
       
-      const patients = await evolutionRedis.getNutritionistPatients(nutritionistId);
+      const { baileysService } = await import('./baileys-service.js');
+      const statusData = baileysService.getStatus(nutritionistId);
       
       res.json({
-        connected: true,
-        patientsFound: patients.length,
-        patients: patients.slice(0, 5) // Show first 5 for testing
+        connected: statusData.instance.state === 'open',
+        status: statusData.instance.state,
+        instanceName: statusData.instance.instanceName,
       });
       
     } catch (error) {
-      console.error('[AI Test] Redis connection error:', error);
+      console.error('[AI Test] Connection test error:', error);
       res.status(500).json({ 
         connected: false,
         error: error instanceof Error ? error.message : "Connection failed"

@@ -1,7 +1,14 @@
 import { storage } from './storage';
 import { openaiService } from './openai-service';
-import { EvolutionApiService } from './evolution-api';
 import type { Patient, WhatsappMessage } from '@shared/schema';
+
+function cleanWhatsAppNumber(whatsappNumber: string): string {
+  const cleaned = whatsappNumber.replace(/\D/g, '');
+  if ((cleaned.length === 10 || cleaned.length === 11) && !cleaned.startsWith('55')) {
+    return '55' + cleaned;
+  }
+  return cleaned;
+}
 
 export interface IncomingWhatsAppMessage {
   instanceName: string;
@@ -81,7 +88,7 @@ export class WhatsAppMessageHandler {
       }
 
       const nutritionistId = nutritionist.id;
-      const cleanNumber = EvolutionApiService.cleanWhatsAppNumber(senderNumber);
+      const cleanNumber = cleanWhatsAppNumber(senderNumber);
       const lockKey = `${nutritionistId}:${cleanNumber}`;
 
       await this.withPatientLock(lockKey, async () => {
