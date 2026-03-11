@@ -167,10 +167,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   };
 
   const requireAdmin = (req: any, res: any, next: any) => {
-    if (!req.session.user || !req.session.user.isAdmin) {
+    if (!req.session.user) {
       return res.status(403).json({ error: "Admin access required" });
     }
-    next();
+    if (req.session.user.isAdmin) {
+      return next();
+    }
+    const platformAdminEmails = (process.env.ADMIN_EMAILS || 'daniellessa2023@gmail.com').split(',').map((e: string) => e.trim().toLowerCase());
+    if (req.session.user.email && platformAdminEmails.includes(req.session.user.email.toLowerCase())) {
+      req.session.user.isAdmin = true;
+      return next();
+    }
+    return res.status(403).json({ error: "Admin access required" });
   };
 
   // Middleware to check if user has active subscription
