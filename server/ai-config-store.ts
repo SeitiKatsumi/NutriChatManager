@@ -129,24 +129,32 @@ Fora isso? Seja você mesmo: ágil nas respostas, envolvente nas conversas, e se
     temperature: 0.7,
   },
   extraction: {
-    system_prompt: `Você é um extrator de dados especializado. Analise a conversa de anamnese nutricional abaixo e extraia TODOS os dados do paciente em formato JSON.
+    system_prompt: `Você é um extrator de dados especializado em nutrição. Analise a conversa de anamnese nutricional abaixo e extraia TODOS os dados do paciente em formato JSON.
+
+REGRAS IMPORTANTES PARA O RECORDATÓRIO ALIMENTAR (Cafe_da_manha, Lanche_da_manha, Almoco, Lanche_da_tarde, Janta, Ceia):
+- NUNCA copie a fala do paciente literalmente. Sempre organize e padronize os alimentos.
+- Se o paciente disse "o mesmo do almoço" na janta, copie e repita os alimentos detalhados do almoço.
+- Liste cada alimento de forma clara e organizada, separando por vírgulas.
+- Inclua quantidades quando mencionadas (ex: "2 pães de forma, 2 ovos mexidos, 1 copo de suco de laranja com beterraba").
+- Se o paciente disse "às vezes" ou indicou variação, registre as opções (ex: "1 copo de suco natural ou 1 tapioca").
+- Padronize os nomes dos alimentos (ex: "pão de forma" em vez de "pães").
 
 Extraia os seguintes campos (use null se não encontrado):
 - Nome_Completo: nome completo do paciente
 - Data_de_nascimento: data de nascimento no formato YYYY-MM-DD
-- Sexo: "Masculino", "Feminino" ou "Outro"
+- Sexo: "masculino", "feminino" ou "outro"
 - Peso: peso em kg (número)
 - Altura: altura em cm (número)
-- Anamise_inicial: resumo completo da anamnese incluindo histórico de saúde, condições, medicações, hábitos, estilo de vida, rotina de exercícios, qualidade do sono, nível de estresse e consumo de álcool
+- Anamise_inicial: resumo completo e bem redigido da anamnese incluindo histórico de saúde, condições, medicações, hábitos, estilo de vida, rotina de exercícios, qualidade do sono, nível de estresse e consumo de álcool. Escreva em texto corrido, de forma profissional.
 - Restricoes_alimentares: alergias, intolerâncias e restrições alimentares
 - Suplementos_e_medicamentos: suplementos e medicamentos em uso
-- Metas_e_objetivos: objetivos nutricionais do paciente
-- Cafe_da_manha: o que o paciente costuma comer no café da manhã
-- Lanche_da_manha: lanche da manhã
-- Almoco: almoço
-- Lanche_da_tarde: lanche da tarde
-- Janta: jantar
-- Ceia: ceia
+- Metas_e_objetivos: objetivos nutricionais do paciente, redigidos de forma clara
+- Cafe_da_manha: alimentos detalhados e organizados com quantidades
+- Lanche_da_manha: alimentos detalhados e organizados com quantidades
+- Almoco: alimentos detalhados e organizados com quantidades
+- Lanche_da_tarde: alimentos detalhados e organizados com quantidades
+- Janta: alimentos detalhados e organizados com quantidades (se "igual ao almoço", copiar os itens do almoço)
+- Ceia: alimentos detalhados e organizados com quantidades
 
 Responda APENAS com o JSON, sem explicações.`,
     model: 'gpt-4o-mini',
