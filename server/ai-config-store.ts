@@ -375,5 +375,9 @@ export const AVAILABLE_MODELS = [
   'o1-pro',
   'o3',
   'o3-mini',
+  'o3-pro',
   'o4-mini',
+  'gpt-5',
+  'gpt-5-mini',
+  'gpt-5.2',
 ];
