@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useLocation } from "wouter";
+import { useLocation, Redirect } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -214,19 +214,13 @@ function AIConfigSection({ config, availableModels, onSaved }: { config: AIConfi
 
 export default function Admin() {
   const [, navigate] = useLocation();
-  const [admin, setAdmin] = useState<any>(null);
+  const [admin, setAdmin] = useState<any>(() => {
+    const stored = localStorage.getItem("admin");
+    return stored ? JSON.parse(stored) : null;
+  });
   const [selectedNutritionist, setSelectedNutritionist] = useState<Nutritionist | null>(null);
   const [activeTab, setActiveTab] = useState("dashboard");
   const { toast } = useToast();
-
-  useEffect(() => {
-    const adminData = localStorage.getItem("admin");
-    if (!adminData) {
-      navigate("/admin/login");
-      return;
-    }
-    setAdmin(JSON.parse(adminData));
-  }, [navigate]);
 
   const { data: nutritionists = [], isLoading: loadingNutritionists } = useQuery<Nutritionist[]>({
     queryKey: ["/api/admin/nutritionists"],
@@ -278,7 +272,7 @@ export default function Admin() {
   };
 
   if (!admin) {
-    return null;
+    return <Redirect to="/admin/login" />;
   }
 
   if (loadingNutritionists || loadingPatients) {
