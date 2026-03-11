@@ -1,5 +1,24 @@
 import { z } from "zod";
+import { pgTable, serial, text, integer, real, timestamp, varchar } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
 
+// ========== PostgreSQL Tables (Drizzle ORM) ==========
+
+export const aiConfigTable = pgTable("ai_config", {
+  id: serial("id").primaryKey(),
+  agent_type: varchar("agent_type", { length: 50 }).notNull().unique(),
+  system_prompt: text("system_prompt").notNull(),
+  model: varchar("model", { length: 100 }).notNull().default("gpt-4o-mini"),
+  max_tokens: integer("max_tokens").notNull().default(800),
+  temperature: real("temperature").notNull().default(0.3),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertAiConfigSchema = createInsertSchema(aiConfigTable).omit({ id: true, updated_at: true });
+export type AiConfig = typeof aiConfigTable.$inferSelect;
+export type InsertAiConfig = z.infer<typeof insertAiConfigSchema>;
+
+// ========== Zod Schemas (Directus-based models) ==========
 // Base Zod schemas for validation and type inference
 // These schemas define the data models for our Directus-based storage
 

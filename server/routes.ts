@@ -11,7 +11,7 @@ import { patientHistoryDirectus } from "./patient-history-directus";
 import { openaiService } from "./openai-service";
 import { scheduleService } from "./schedule-service";
 import { whatsappMessageHandler } from "./whatsapp-message-handler";
-import { getAllAIConfigs, getAIConfig, updateAIConfig, resetAIConfig, getDefaultConfig, VALID_AGENT_TYPES, AVAILABLE_MODELS, getAgentTypeLabel, type AgentType } from "./ai-config-store";
+import { getAllAIConfigs, getAIConfig, updateAIConfig, resetAIConfig, getDefaultConfig, VALID_AGENT_TYPES, AVAILABLE_MODELS, getAgentTypeLabel, initAIConfigStore, type AgentType } from "./ai-config-store";
 import Stripe from "stripe";
 
 // Extend session type to include user
@@ -151,6 +151,9 @@ const auditLog = (action: string, userId: string, details: any) => {
 export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize storage and ensure required fields exist in Directus
   await initializeStorage();
+  
+  // Initialize AI config store (seed defaults into DB if needed)
+  await initAIConfigStore();
   
   // Initialize price mapping for security
   await initializePriceMapping();
@@ -1773,7 +1776,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/admin/ai-config", requireAdmin, async (_req, res) => {
     try {
-      const configs = getAllAIConfigs();
+      const configs = await getAllAIConfigs();
       const withLabels = configs.map(c => ({ ...c, label: getAgentTypeLabel(c.agent_type) }));
       res.json({ configs: withLabels, availableModels: AVAILABLE_MODELS });
     } catch (error) {
@@ -1788,7 +1791,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!VALID_AGENT_TYPES.includes(agentType)) {
         return res.status(400).json({ error: `Invalid agent type: ${agentType}` });
       }
-      const config = getAIConfig(agentType);
+      const config = await getAIConfig(agentType);
       res.json({ ...config, label: getAgentTypeLabel(agentType) });
     } catch (error) {
       console.error('[Admin AI Config] Error fetching config:', error);
@@ -1815,7 +1818,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid data", details: parsed.error.errors });
       }
 
-      const updated = updateAIConfig(agentType, parsed.data);
+      const updated = await updateAIConfig(agentType, parsed.data);
       console.log(`[Admin AI Config] Updated config for ${agentType}`);
       res.json({ ...updated, label: getAgentTypeLabel(agentType) });
     } catch (error) {
@@ -1830,7 +1833,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!VALID_AGENT_TYPES.includes(agentType)) {
         return res.status(400).json({ error: `Invalid agent type: ${agentType}` });
       }
-      const reset = resetAIConfig(agentType);
+      const reset = await resetAIConfig(agentType);
       console.log(`[Admin AI Config] Reset config for ${agentType} to defaults`);
       res.json({ ...reset, label: getAgentTypeLabel(agentType) });
     } catch (error) {

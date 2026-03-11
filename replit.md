@@ -62,7 +62,9 @@ Replaces N8N workflow with an in-app AI agent system for handling incoming Whats
 Platform-wide admin panel at `/admin` (tab "Configuração de IA") for managing all AI agent configurations without code changes.
 
 **Architecture:**
-- `server/ai-config-store.ts`: File-based JSON config store (`server/data/ai-config.json`) with in-memory cache (5-minute TTL), hardcoded defaults as fallback
+- `server/ai-config-store.ts`: PostgreSQL-backed config store using Drizzle ORM (`ai_config` table) with in-memory cache (5-minute TTL), auto-seeds defaults on startup
+- `server/db.ts`: Drizzle ORM database connection using `@neondatabase/serverless`
+- `shared/schema.ts`: Contains `aiConfigTable` Drizzle table definition with `insertAiConfigSchema`, `AiConfig`, and `InsertAiConfig` types
 - 7 agent types: anamnesis, followup, extraction, mealplan, insights, food_analysis, ask_patient
 - Each config has: system_prompt, model, max_tokens, temperature
 

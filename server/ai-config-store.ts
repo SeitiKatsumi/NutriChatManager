@@ -1,23 +1,20 @@
-import fs from 'fs';
-import path from 'path';
+import { db } from './db';
+import { aiConfigTable } from '@shared/schema';
+import { eq } from 'drizzle-orm';
 
 export type AgentType = 'anamnesis' | 'followup' | 'extraction' | 'mealplan' | 'insights' | 'food_analysis' | 'ask_patient';
 
-export interface AIConfig {
+export interface AIConfigData {
   agent_type: AgentType;
   system_prompt: string;
   model: string;
   max_tokens: number;
   temperature: number;
-  updated_at: string;
+  updated_at: Date;
 }
 
-const DATA_DIR = path.join(process.cwd(), 'server', 'data');
-const CONFIG_FILE = path.join(DATA_DIR, 'ai-config.json');
-
-const DEFAULT_CONFIGS: Record<AgentType, Omit<AIConfig, 'updated_at'>> = {
+const DEFAULT_CONFIGS: Record<AgentType, { system_prompt: string; model: string; max_tokens: number; temperature: number }> = {
   anamnesis: {
-    agent_type: 'anamnesis',
     system_prompt: `Você é o {agentName}, um assistente virtual especializado em avaliações nutricionais iniciais.
 
 IMPORTANTE: Nunca envie listas ou tópicos.
@@ -110,7 +107,6 @@ Se quiser falar com a equipe da clínica, é só mandar uma mensagem por aqui: h
     temperature: 0.7,
   },
   followup: {
-    agent_type: 'followup',
     system_prompt: `{patientContext}
 
 Você é o {agentName}, uma IA nutricionista com personalidade marcante: conversa com inteligência, tem um humor afiado (sem ser bobo), e sabe exatamente quando ser direto, divertido ou acolhedor. Seu estilo é espontâneo, carismático e com um toque sarcástico na medida certa — afinal, nem todo bate-papo precisa parecer consulta, certo?
@@ -133,7 +129,6 @@ Fora isso? Seja você mesmo: ágil nas respostas, envolvente nas conversas, e se
     temperature: 0.7,
   },
   extraction: {
-    agent_type: 'extraction',
     system_prompt: `Você é um extrator de dados especializado. Analise a conversa de anamnese nutricional abaixo e extraia TODOS os dados do paciente em formato JSON.
 
 Extraia os seguintes campos (use null se não encontrado):
@@ -159,7 +154,6 @@ Responda APENAS com o JSON, sem explicações.`,
     temperature: 0.1,
   },
   mealplan: {
-    agent_type: 'mealplan',
     system_prompt: `Você é um nutricionista experiente especializado em criar planos alimentares personalizados.
 
 INSTRUÇÕES:
@@ -186,7 +180,6 @@ FORMATO DE RESPOSTA (JSON) — cada refeição deve ser um array com EXATAMENTE 
     temperature: 0.7,
   },
   insights: {
-    agent_type: 'insights',
     system_prompt: `Analise esta conversa entre um nutricionista/IA e um paciente e forneça insights no formato JSON:
 
 Responda em JSON com:
@@ -201,7 +194,6 @@ Responda em JSON com:
     temperature: 0.3,
   },
   food_analysis: {
-    agent_type: 'food_analysis',
     system_prompt: `Você é um especialista em nutrição. Analise a imagem de comida enviada e forneça:
 
 1. Identificação dos alimentos visíveis
@@ -216,7 +208,6 @@ Se a imagem não contiver comida, diga isso educadamente.`,
     temperature: 0.3,
   },
   ask_patient: {
-    agent_type: 'ask_patient',
     system_prompt: `Você é um assistente especializado em nutrição que ajuda nutricionistas a analisar conversas com pacientes. 
 
 INSTRUÇÕES IMPORTANTES:
@@ -248,119 +239,119 @@ const AGENT_TYPE_LABELS: Record<AgentType, string> = {
   ask_patient: 'Perguntas sobre Paciente',
 };
 
-let configCache: Map<AgentType, AIConfig> | null = null;
+let configCache: Map<AgentType, AIConfigData> | null = null;
 let lastCacheRefresh = 0;
 const CACHE_TTL = 5 * 60 * 1000;
 
-function ensureDataDir(): void {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-}
-
-function loadFromFile(): Record<AgentType, AIConfig> | null {
+async function seedDefaults(): Promise<void> {
   try {
-    if (fs.existsSync(CONFIG_FILE)) {
-      const raw = fs.readFileSync(CONFIG_FILE, 'utf-8');
-      return JSON.parse(raw);
+    const existing = await db.select().from(aiConfigTable);
+    const existingTypes = new Set(existing.map(e => e.agent_type));
+
+    for (const [agentType, defaults] of Object.entries(DEFAULT_CONFIGS)) {
+      if (!existingTypes.has(agentType)) {
+        await db.insert(aiConfigTable).values({
+          agent_type: agentType,
+          system_prompt: defaults.system_prompt,
+          model: defaults.model,
+          max_tokens: defaults.max_tokens,
+          temperature: defaults.temperature,
+        });
+        console.log(`[AIConfigStore] Seeded default config for ${agentType}`);
+      }
     }
   } catch (error) {
-    console.error('[AIConfigStore] Error reading config file:', error);
+    console.error('[AIConfigStore] Error seeding defaults:', error);
   }
-  return null;
 }
 
-function saveToFile(configs: Record<string, AIConfig>): void {
-  ensureDataDir();
-  fs.writeFileSync(CONFIG_FILE, JSON.stringify(configs, null, 2), 'utf-8');
+export async function initAIConfigStore(): Promise<void> {
+  await seedDefaults();
+  await refreshCache();
+  console.log('[AIConfigStore] Initialized with DB-backed storage');
 }
 
-function initializeDefaults(): Record<AgentType, AIConfig> {
-  const now = new Date().toISOString();
-  const configs: Record<string, AIConfig> = {};
-  for (const [key, val] of Object.entries(DEFAULT_CONFIGS)) {
-    configs[key] = { ...val, updated_at: now };
-  }
-  saveToFile(configs as Record<AgentType, AIConfig>);
-  return configs as Record<AgentType, AIConfig>;
-}
-
-function refreshCache(): void {
+async function refreshCache(): Promise<void> {
   const now = Date.now();
   if (configCache && now - lastCacheRefresh < CACHE_TTL) return;
 
-  const stored = loadFromFile();
-  const configs = stored || initializeDefaults();
-
-  configCache = new Map();
-  for (const [key, val] of Object.entries(configs)) {
-    configCache.set(key as AgentType, val);
-  }
-
-  for (const [key, val] of Object.entries(DEFAULT_CONFIGS)) {
-    if (!configCache.has(key as AgentType)) {
-      const entry: AIConfig = { ...val, updated_at: new Date().toISOString() };
-      configCache.set(key as AgentType, entry);
+  try {
+    const rows = await db.select().from(aiConfigTable);
+    configCache = new Map();
+    for (const row of rows) {
+      configCache.set(row.agent_type as AgentType, {
+        agent_type: row.agent_type as AgentType,
+        system_prompt: row.system_prompt,
+        model: row.model,
+        max_tokens: row.max_tokens,
+        temperature: row.temperature,
+        updated_at: row.updated_at,
+      });
+    }
+    lastCacheRefresh = now;
+  } catch (error) {
+    console.error('[AIConfigStore] Error refreshing cache from DB:', error);
+    if (!configCache) {
+      configCache = new Map();
+      for (const [key, val] of Object.entries(DEFAULT_CONFIGS)) {
+        configCache.set(key as AgentType, { ...val, agent_type: key as AgentType, updated_at: new Date() });
+      }
     }
   }
-
-  lastCacheRefresh = now;
 }
 
-export function getAIConfig(agentType: AgentType): AIConfig {
-  refreshCache();
-  const cached = configCache?.get(agentType);
-  if (cached) return cached;
-  return { ...DEFAULT_CONFIGS[agentType], updated_at: new Date().toISOString() };
+export async function getAIConfig(agentType: AgentType): Promise<AIConfigData> {
+  await refreshCache();
+  if (configCache) {
+    const cached = configCache.get(agentType);
+    if (cached) return cached;
+  }
+  const defaults = DEFAULT_CONFIGS[agentType];
+  return { ...defaults, agent_type: agentType, updated_at: new Date() };
 }
 
-export function getAllAIConfigs(): AIConfig[] {
-  refreshCache();
+export async function getAllAIConfigs(): Promise<AIConfigData[]> {
+  await refreshCache();
   if (!configCache) return [];
   return Array.from(configCache.values());
 }
 
-export function updateAIConfig(agentType: AgentType, updates: Partial<Pick<AIConfig, 'system_prompt' | 'model' | 'max_tokens' | 'temperature'>>): AIConfig {
-  refreshCache();
+export async function updateAIConfig(agentType: AgentType, updates: Partial<Pick<AIConfigData, 'system_prompt' | 'model' | 'max_tokens' | 'temperature'>>): Promise<AIConfigData> {
+  const now = new Date();
+  await db.update(aiConfigTable)
+    .set({ ...updates, updated_at: now })
+    .where(eq(aiConfigTable.agent_type, agentType));
 
-  const existing = configCache?.get(agentType) || { ...DEFAULT_CONFIGS[agentType], updated_at: new Date().toISOString() };
-  const updated: AIConfig = {
-    ...existing,
-    ...updates,
-    agent_type: agentType,
-    updated_at: new Date().toISOString(),
-  };
+  configCache = null;
+  lastCacheRefresh = 0;
+  await refreshCache();
 
-  configCache!.set(agentType, updated);
-
-  const all: Record<string, AIConfig> = {};
-  configCache!.forEach((val, key) => {
-    all[key] = val;
-  });
-  saveToFile(all);
-
-  return updated;
+  return getAIConfig(agentType);
 }
 
-export function resetAIConfig(agentType: AgentType): AIConfig {
+export async function resetAIConfig(agentType: AgentType): Promise<AIConfigData> {
   const defaults = DEFAULT_CONFIGS[agentType];
   if (!defaults) throw new Error(`Unknown agent type: ${agentType}`);
 
-  const reset: AIConfig = { ...defaults, updated_at: new Date().toISOString() };
+  const now = new Date();
+  await db.update(aiConfigTable)
+    .set({
+      system_prompt: defaults.system_prompt,
+      model: defaults.model,
+      max_tokens: defaults.max_tokens,
+      temperature: defaults.temperature,
+      updated_at: now,
+    })
+    .where(eq(aiConfigTable.agent_type, agentType));
 
-  refreshCache();
-  configCache!.set(agentType, reset);
+  configCache = null;
+  lastCacheRefresh = 0;
+  await refreshCache();
 
-  const all: Record<string, AIConfig> = {};
-  configCache!.forEach((val, key) => {
-    all[key] = val;
-  });
-  saveToFile(all);
-
-  return reset;
+  return getAIConfig(agentType);
 }
 
-export function getDefaultConfig(agentType: AgentType): Omit<AIConfig, 'updated_at'> | undefined {
+export function getDefaultConfig(agentType: AgentType): typeof DEFAULT_CONFIGS[AgentType] | undefined {
   return DEFAULT_CONFIGS[agentType];
 }
 

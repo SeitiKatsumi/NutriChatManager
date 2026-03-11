@@ -39,7 +39,7 @@ export class OpenAIService {
         })
         .join('\n');
 
-      const config = getAIConfig('ask_patient');
+      const config = await getAIConfig('ask_patient');
 
       const userPrompt = `CONVERSA:
 ${conversationContext}
@@ -121,7 +121,7 @@ Por favor, analise a conversa e responda à pergunta fornecendo insights úteis 
         })
         .join('\n');
 
-      const config = getAIConfig('insights');
+      const config = await getAIConfig('insights');
 
       const prompt = `${config.system_prompt}
 
@@ -219,7 +219,7 @@ ${patientData.currentMeals.dinner ? `- Jantar: ${patientData.currentMeals.dinner
 ${patientData.currentMeals.eveningSnack ? `- Ceia: ${patientData.currentMeals.eveningSnack}` : ''}
       `.trim() : '';
 
-      const config = getAIConfig('mealplan');
+      const config = await getAIConfig('mealplan');
 
       const userPrompt = `${patientInfo}
 
@@ -268,7 +268,7 @@ Por favor, crie uma sugestão de plano alimentar personalizado com 3 opções po
     customGreeting?: string
   ): Promise<{ response: string; isComplete: boolean }> {
     try {
-      const config = getAIConfig('anamnesis');
+      const config = await getAIConfig('anamnesis');
       const systemPrompt = config.system_prompt.replace(/\{agentName\}/g, agentName || 'Nutri Chatbot');
 
       const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
@@ -325,7 +325,7 @@ Por favor, crie uma sugestão de plano alimentar personalizado com 3 opções po
         .map(msg => `${msg.role === 'assistant' ? 'Assistente' : 'Paciente'}: ${msg.content}`)
         .join('\n');
 
-      const config = getAIConfig('extraction');
+      const config = await getAIConfig('extraction');
 
       const completion = await openai.chat.completions.create({
         model: config.model,
@@ -369,7 +369,7 @@ DADOS DO PACIENTE:
 - Jantar: ${patientData.janta || 'Não informado'}
 `.trim();
 
-      const config = getAIConfig('followup');
+      const config = await getAIConfig('followup');
       const systemPrompt = config.system_prompt
         .replace(/\{patientContext\}/g, patientContext)
         .replace(/\{agentName\}/g, agentName || 'Nutri chatbot');
@@ -396,7 +396,7 @@ DADOS DO PACIENTE:
 
   async analyzeFood(imageBuffer: Buffer): Promise<string> {
     try {
-      const config = getAIConfig('food_analysis');
+      const config = await getAIConfig('food_analysis');
       const base64Image = imageBuffer.toString('base64');
       const dataUrl = `data:image/jpeg;base64,${base64Image}`;
 
