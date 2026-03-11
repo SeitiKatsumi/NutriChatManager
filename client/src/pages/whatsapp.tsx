@@ -102,7 +102,7 @@ export default function WhatsApp() {
 
   const connectionState = whatsappStatus?.instance?.state?.toLowerCase();
   const isConnected = connectionState === "open" || connectionState === "connected";
-  const hasWhatsAppSetup = !!currentNutritionist?.whatsappIA || !!currentNutritionist?.whatsappNumber || !!currentNutritionist?.evolutionInstanceName;
+  const hasWhatsAppSetup = !!currentNutritionist?.whatsappIA || !!currentNutritionist?.whatsappNumber;
 
   const { error: statusError } = useQuery<any>({
     queryKey: ["/api/whatsapp/status", currentNutritionist?.id],
@@ -275,14 +275,7 @@ export default function WhatsApp() {
               </div>
               
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Instância:</span>
-                <span className="text-foreground font-mono text-sm">
-                  {currentNutritionist?.evolutionInstanceName || "Não configurado"}
-                </span>
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">WhatsApp:</span>
+                <span className="text-muted-foreground">Número do Bot:</span>
                 <span className="text-sm text-foreground">
                   {currentNutritionist?.whatsappIA ? 
                     `+${currentNutritionist.whatsappIA.replace(/(\d{2})(\d{2})(\d{5})(\d{4})/, '$1 $2 $3-$4')}` : 
@@ -292,9 +285,9 @@ export default function WhatsApp() {
               </div>
 
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">API Status:</span>
-                <span className="text-sm text-muted-foreground">
-                  {whatsappStatus ? "Conectada" : "Aguardando"}
+                <span className="text-muted-foreground">Agente de IA:</span>
+                <span className="text-sm text-foreground">
+                  {currentNutritionist?.agentName || "Nutri ChatBot"}
                 </span>
               </div>
             </CardContent>
@@ -304,10 +297,23 @@ export default function WhatsApp() {
         {/* Configuration Section */}
         <Card>
           <CardHeader>
-            <CardTitle>Configuração do Agente de IA</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <MessageCircle className="w-5 h-5" />
+              Configuração do Agente de IA
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
+              <div>
+                <Label>Nome do Agente</Label>
+                <Input
+                  value={currentNutritionist?.agentName || "Nutri ChatBot"}
+                  readOnly
+                  className="bg-muted"
+                  data-testid="text-agent-name"
+                />
+              </div>
+
               <div>
                 <Label>Mensagem de Boas-vindas</Label>
                 <Input
@@ -317,35 +323,10 @@ export default function WhatsApp() {
                   data-testid="text-welcome-message"
                 />
               </div>
-              
-              <div>
-                <Label>Horário de Funcionamento</Label>
-                <Input
-                  value={
-                    currentNutritionist?.workingHours === "commercial" 
-                      ? "Comercial (9h-18h)" 
-                      : currentNutritionist?.workingHours || "Não configurado"
-                  }
-                  readOnly
-                  className="bg-muted"
-                  data-testid="text-working-hours"
-                />
-              </div>
-              
-              <div>
-                <Label>Token da Instância</Label>
-                <Input
-                  value={currentNutritionist?.evolutionToken ? "••••••••••••••••••••" : "Não configurado"}
-                  readOnly
-                  className="bg-muted font-mono"
-                  data-testid="text-instance-token"
-                />
-              </div>
 
               <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
                 <p className="text-sm text-blue-800 dark:text-blue-200">
-                  <strong>Informação:</strong> As configurações do agente são definidas durante o registro.
-                  Para alterar essas configurações, entre em contato com o suporte.
+                  <strong>Informação:</strong> As configurações do agente podem ser alteradas na página de Configurações.
                 </p>
               </div>
             </div>
