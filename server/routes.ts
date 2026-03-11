@@ -984,8 +984,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const statusResponse = baileysService.getStatus(req.params.nutritionistId);
+      const qrCode = baileysService.getQRCode(req.params.nutritionistId);
       
-      // Force fresh response with unique identifiers
       const timestamp = Date.now();
       const uniqueETag = `"${timestamp}-${Math.random()}"`;
       
@@ -998,9 +998,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         'Vary': '*'
       });
       
-      // Add timestamp to response to ensure uniqueness
       res.json({
         ...statusResponse,
+        qrCode: qrCode || null,
         _timestamp: timestamp,
         _cache_buster: Math.random()
       });

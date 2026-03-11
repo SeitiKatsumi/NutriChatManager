@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -29,11 +29,10 @@ export default function WhatsApp() {
 
   const currentNutritionist = nutritionists?.[0];
 
-  // Get WhatsApp status
   const { data: whatsappStatus, isLoading: statusLoading, refetch: refetchStatus } = useQuery<any>({
     queryKey: ["/api/whatsapp/status", currentNutritionist?.id],
     enabled: !!currentNutritionist?.id,
-    refetchInterval: 5000,
+    refetchInterval: showQRCode ? 3000 : 5000,
   });
 
   // Generate QR Code mutation
@@ -103,6 +102,16 @@ export default function WhatsApp() {
   const connectionState = whatsappStatus?.instance?.state?.toLowerCase();
   const isConnected = connectionState === "open" || connectionState === "connected";
   const hasWhatsAppSetup = !!currentNutritionist?.whatsappIA || !!currentNutritionist?.whatsappNumber;
+
+  useEffect(() => {
+    if (whatsappStatus?.qrCode && showQRCode) {
+      setQrCode(whatsappStatus.qrCode);
+    }
+    if (isConnected && showQRCode) {
+      setShowQRCode(false);
+      setQrCode("");
+    }
+  }, [whatsappStatus?.qrCode, isConnected, showQRCode]);
 
   const { error: statusError } = useQuery<any>({
     queryKey: ["/api/whatsapp/status", currentNutritionist?.id],

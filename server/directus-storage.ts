@@ -877,7 +877,7 @@ export class DirectusStorage implements IStorage {
       const client = this.client; // Using admin client temporarily
       
       // Explicit field list using all available Directus collection fields (including meal fields, dietary restrictions, and AI cache)
-      const fields = 'id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,Suplementos_e_medicamentos,Restricoes_alimentares,Metas_e_objetivos,Etapas,IMC,Idade,Feedbacks,Cafe_da_manha,Lanche_da_manha,Almoco,Lanche_da_tarde,Janta,Ceia,ultima_analise_ia,data_ultima_analise,date_created,date_updated';
+      const fields = 'id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,Suplementos_e_medicamentos,Restricoes_alimentares,Etapas,IMC,Idade,Feedbacks,Cafe_da_manha,Lanche_da_manha,Almoco,Lanche_da_tarde,Janta,Ceia,ultima_analise_ia,data_ultima_analise,date_created,date_updated';
       
       console.log(`[Directus] Getting patient: ${id}`);
       const response = await client.request(`/items/${PATIENTS_COLLECTION}/${id}?fields=${fields}`);
@@ -896,8 +896,7 @@ export class DirectusStorage implements IStorage {
       const client = this.client; // Using admin client temporarily
       const encodedId = encodeURIComponent(nutritionistId);
       
-      // Explicit field list using all available Directus collection fields (including meal fields, dietary restrictions, and AI cache)
-      const fields = 'id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,Suplementos_e_medicamentos,Restricoes_alimentares,Metas_e_objetivos,Etapas,IMC,Idade,Feedbacks,Cafe_da_manha,Lanche_da_manha,Almoco,Lanche_da_tarde,Janta,Ceia,ultima_analise_ia,data_ultima_analise,date_created,date_updated';
+      const fields = 'id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,Suplementos_e_medicamentos,Restricoes_alimentares,Etapas,IMC,Idade,Feedbacks,Cafe_da_manha,Lanche_da_manha,Almoco,Lanche_da_tarde,Janta,Ceia,ultima_analise_ia,data_ultima_analise,date_created,date_updated';
       
       console.log(`[Directus] Getting patients for nutritionist: ${nutritionistId}`);
       // Using correct Directus field name for nutritionist filter
@@ -1444,7 +1443,7 @@ export class DirectusStorage implements IStorage {
   async getPatientByWhatsapp(whatsappNumber: string, nutritionistId: string): Promise<Patient | undefined> {
     try {
       const cleanNumber = whatsappNumber.replace(/\D/g, '');
-      const fields = 'id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,Suplementos_e_medicamentos,Restricoes_alimentares,Metas_e_objetivos,Etapas,IMC,Idade,Feedbacks,Cafe_da_manha,Lanche_da_manha,Almoco,Lanche_da_tarde,Janta,Ceia,ultima_analise_ia,data_ultima_analise,date_created,date_updated';
+      const fields = 'id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,Suplementos_e_medicamentos,Restricoes_alimentares,Etapas,IMC,Idade,Feedbacks,Cafe_da_manha,Lanche_da_manha,Almoco,Lanche_da_tarde,Janta,Ceia,ultima_analise_ia,data_ultima_analise,date_created,date_updated';
 
       const searchVariants = [cleanNumber];
       if (cleanNumber.startsWith('55') && cleanNumber.length === 13) {
