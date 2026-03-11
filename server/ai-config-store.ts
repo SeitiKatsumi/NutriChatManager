@@ -361,4 +361,19 @@ export function getAgentTypeLabel(agentType: AgentType): string {
 
 export const VALID_AGENT_TYPES: AgentType[] = ['anamnesis', 'followup', 'extraction', 'mealplan', 'insights', 'food_analysis', 'ask_patient'];
 
-export const AVAILABLE_MODELS = ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo', 'gpt-3.5-turbo'];
+export const AVAILABLE_MODELS = [
+  'gpt-4o-mini',
+  'gpt-4o',
+  'gpt-4.1',
+  'gpt-4.1-mini',
+  'gpt-4.1-nano',
+  'gpt-4.5-preview',
+  'gpt-4-turbo',
+  'gpt-3.5-turbo',
+  'o1',
+  'o1-mini',
+  'o1-pro',
+  'o3',
+  'o3-mini',
+  'o4-mini',
+];
