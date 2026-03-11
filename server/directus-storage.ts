@@ -4,6 +4,7 @@ import bcrypt from "bcrypt";
 import { randomUUID } from "crypto";
 import type { IStorage } from "./storage";
 import { MemStorage } from "./storage";
+import type { Patient, Nutritionist } from "@shared/schema";
 
 // Directus field mappings for collections
 const PATIENTS_COLLECTION = "Cadastro_de_Pacientes";
@@ -139,52 +140,80 @@ function mapStripeStatusToPagamento(stripeStatus: string | null): 'pendente' | '
 }
 
 // Transform functions between local types and Directus types
-function transformPatientToDirectus(patient: any): DirectusPatient {
+interface PatientInput {
+  nutritionistId?: string;
+  fullName?: string;
+  email?: string | null;
+  phone?: string | null;
+  whatsappNumber?: string | null;
+  dateOfBirth?: string | Date | null;
+  gender?: string | null;
+  weight?: string | null;
+  height?: string | null;
+  medicalHistory?: string | null;
+  anamnese_inicial?: string | null;
+  suplementos_medicamentos?: string | null;
+  dietaryRestrictions?: string | null;
+  goals?: string | null;
+  status?: string;
+  lastConsultation?: Date | null;
+  notes?: string | null;
+  cafe_da_manha?: string | null;
+  lanche_da_manha?: string | null;
+  almoco?: string | null;
+  lanche_da_tarde?: string | null;
+  janta?: string | null;
+  ceia?: string | null;
+}
+
+function transformPatientToDirectus(patient: PatientInput): DirectusPatient {
   console.log('Transforming patient to Directus:', patient);
   
-  // Format date as YYYY-MM-DD string
   let formattedDate: string | undefined;
   if (patient.dateOfBirth) {
     const date = new Date(patient.dateOfBirth);
     if (!isNaN(date.getTime())) {
-      formattedDate = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+      formattedDate = date.toISOString().split('T')[0];
     }
   }
 
-  // Format WhatsApp number - ensure it has country code format
   let formattedWhatsapp: string | undefined;
   if (patient.whatsappNumber) {
-    const cleanNumber = patient.whatsappNumber.replace(/\D/g, ''); // Remove non-digits
+    const cleanNumber = patient.whatsappNumber.replace(/\D/g, '');
     if (cleanNumber.length === 11) {
-      formattedWhatsapp = `55${cleanNumber}`; // Add Brazil country code
+      formattedWhatsapp = `55${cleanNumber}`;
     } else if (cleanNumber.length === 13 && cleanNumber.startsWith('55')) {
-      formattedWhatsapp = cleanNumber; // Already has country code
+      formattedWhatsapp = cleanNumber;
     } else {
-      formattedWhatsapp = patient.whatsappNumber; // Use as-is if format unclear
+      formattedWhatsapp = patient.whatsappNumber;
     }
   }
 
-  const transformed = {
+  const transformed: DirectusPatient = {
     Nutricionista_responsavel: patient.nutritionistId,
     Nome_Completo: patient.fullName,
-    Email: patient.email,
-    Telefone: patient.phone,
+    Email: patient.email ?? undefined,
+    Telefone: patient.phone ?? undefined,
     Whatsapp: formattedWhatsapp,
     Data_de_nascimento: formattedDate,
-    Sexo: patient.gender,
+    Sexo: patient.gender ?? undefined,
     Peso: patient.weight ? parseInt(patient.weight, 10) : undefined,
     Altura: patient.height ? parseInt(patient.height, 10) : undefined,
-    Anamise_inicial: patient.medicalHistory || patient.anamnese_inicial,
-    // Preserve legacy data: if suplementos_medicamentos is not provided, keep legacy value in Suplementos_e_medicamentos
-    Suplementos_e_medicamentos: patient.suplementos_medicamentos !== undefined 
-      ? patient.suplementos_medicamentos 
-      : (patient.dietaryRestrictions || undefined),
-    Restricoes_alimentares: patient.dietaryRestrictions,
-    Metas_e_objetivos: patient.goals,
+    Anamise_inicial: patient.medicalHistory || patient.anamnese_inicial || undefined,
+    Suplementos_e_medicamentos: patient.suplementos_medicamentos ?? undefined,
+    Restricoes_alimentares: patient.dietaryRestrictions ?? undefined,
+    Metas_e_objetivos: patient.goals ?? undefined,
     Etapas: patient.status || 'Aguardando agendamento',
-    Ultima_consulta: patient.lastConsultation,
-    Observacoes: patient.notes,
+    Ultima_consulta: patient.lastConsultation ?? undefined,
+    Observacoes: patient.notes ?? undefined,
   };
+
+  if (patient.cafe_da_manha !== undefined) transformed.Cafe_da_manha = patient.cafe_da_manha ?? undefined;
+  if (patient.lanche_da_manha !== undefined) transformed.Lanche_da_manha = patient.lanche_da_manha ?? undefined;
+  if (patient.almoco !== undefined) transformed.Almoco = patient.almoco ?? undefined;
+  if (patient.lanche_da_tarde !== undefined) transformed.Lanche_da_tarde = patient.lanche_da_tarde ?? undefined;
+  if (patient.janta !== undefined) transformed.Janta = patient.janta ?? undefined;
+  if (patient.ceia !== undefined) transformed.Ceia = patient.ceia ?? undefined;
 
   console.log('Transformed patient data:', transformed);
   return transformed;
@@ -848,7 +877,7 @@ export class DirectusStorage implements IStorage {
       const client = this.client; // Using admin client temporarily
       
       // Explicit field list using all available Directus collection fields (including meal fields, dietary restrictions, and AI cache)
-      const fields = 'id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,Suplementos_e_medicamentos,Restricoes_alimentares,Etapas,IMC,Idade,Feedbacks,Cafe_da_manha,Lanche_da_manha,Almoco,Lanche_da_tarde,Janta,Ceia,ultima_analise_ia,data_ultima_analise,date_created,date_updated';
+      const fields = 'id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,Suplementos_e_medicamentos,Restricoes_alimentares,Metas_e_objetivos,Etapas,IMC,Idade,Feedbacks,Cafe_da_manha,Lanche_da_manha,Almoco,Lanche_da_tarde,Janta,Ceia,ultima_analise_ia,data_ultima_analise,date_created,date_updated';
       
       console.log(`[Directus] Getting patient: ${id}`);
       const response = await client.request(`/items/${PATIENTS_COLLECTION}/${id}?fields=${fields}`);
@@ -868,7 +897,7 @@ export class DirectusStorage implements IStorage {
       const encodedId = encodeURIComponent(nutritionistId);
       
       // Explicit field list using all available Directus collection fields (including meal fields, dietary restrictions, and AI cache)
-      const fields = 'id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,Suplementos_e_medicamentos,Restricoes_alimentares,Etapas,IMC,Idade,Feedbacks,Cafe_da_manha,Lanche_da_manha,Almoco,Lanche_da_tarde,Janta,Ceia,ultima_analise_ia,data_ultima_analise,date_created,date_updated';
+      const fields = 'id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,Suplementos_e_medicamentos,Restricoes_alimentares,Metas_e_objetivos,Etapas,IMC,Idade,Feedbacks,Cafe_da_manha,Lanche_da_manha,Almoco,Lanche_da_tarde,Janta,Ceia,ultima_analise_ia,data_ultima_analise,date_created,date_updated';
       
       console.log(`[Directus] Getting patients for nutritionist: ${nutritionistId}`);
       // Using correct Directus field name for nutritionist filter
@@ -1409,6 +1438,55 @@ export class DirectusStorage implements IStorage {
       console.error('[DirectusStorage] ❌ Error updating subscription from webhook:', error.message || error);
       console.error('[DirectusStorage] Stack trace:', error.stack);
       throw error;
+    }
+  }
+
+  async getPatientByWhatsapp(whatsappNumber: string, nutritionistId: string): Promise<Patient | undefined> {
+    try {
+      const cleanNumber = whatsappNumber.replace(/\D/g, '');
+      const fields = 'id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,Suplementos_e_medicamentos,Restricoes_alimentares,Metas_e_objetivos,Etapas,IMC,Idade,Feedbacks,Cafe_da_manha,Lanche_da_manha,Almoco,Lanche_da_tarde,Janta,Ceia,ultima_analise_ia,data_ultima_analise,date_created,date_updated';
+
+      const searchVariants = [cleanNumber];
+      if (cleanNumber.startsWith('55') && cleanNumber.length === 13) {
+        searchVariants.push(cleanNumber.substring(2));
+      } else if (cleanNumber.length === 11) {
+        searchVariants.push('55' + cleanNumber);
+      }
+
+      for (const variant of searchVariants) {
+        const response = await this.client.request(
+          `/items/${PATIENTS_COLLECTION}?filter[Whatsapp][_eq]=${variant}&filter[Nutricionista_responsavel][_eq]=${encodeURIComponent(nutritionistId)}&fields=${fields}&limit=1`
+        );
+        const patients = response.data || [];
+        if (patients.length > 0) {
+          console.log(`[DirectusStorage] Found patient by WhatsApp ${variant}`);
+          return transformPatientFromDirectus(patients[0]);
+        }
+      }
+
+      console.log(`[DirectusStorage] No patient found for WhatsApp ${cleanNumber}, nutritionist ${nutritionistId}`);
+      return undefined;
+    } catch (error: any) {
+      console.error('[DirectusStorage] Error finding patient by WhatsApp:', error.message);
+      return undefined;
+    }
+  }
+
+  async getNutritionistByInstanceName(instanceName: string): Promise<Nutritionist | undefined> {
+    try {
+      const response = await this.client.request(
+        `/users?filter[Instancia_Evolution][_eq]=${encodeURIComponent(instanceName)}&fields=*&limit=1`
+      );
+      const users = response.data || [];
+      if (users.length > 0) {
+        return transformUserFromDirectus(users[0]);
+      }
+
+      console.log(`[DirectusStorage] No nutritionist found for instance ${instanceName}`);
+      return undefined;
+    } catch (error: any) {
+      console.error('[DirectusStorage] Error finding nutritionist by instance:', error.message);
+      return undefined;
     }
   }
 

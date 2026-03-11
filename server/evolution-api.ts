@@ -65,6 +65,11 @@ export class EvolutionApiService {
   async createInstance(nutritionistId: string, whatsappNumber: string): Promise<EvolutionInstanceResponse> {
     const instanceName = `nutri_${nutritionistId}`;
     
+    const appUrl = process.env.APP_URL 
+      || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : null)
+      || 'http://localhost:5000';
+    const aiWebhookUrl = `${appUrl}/api/whatsapp/ai-webhook`;
+
     const payload = {
       instanceName,
       integration: "WHATSAPP-BAILEYS",
@@ -77,9 +82,8 @@ export class EvolutionApiService {
       readMessages: true,
       readStatus: true,
       syncFullHistory: false,
-      // Webhook configuration for N8N integration
       webhook: {
-        url: "https://n8n-nutrichatbot.app.11mind.com.br/webhook/nutrichatbot",
+        url: aiWebhookUrl,
         events: [
           "MESSAGES_UPSERT"
         ],

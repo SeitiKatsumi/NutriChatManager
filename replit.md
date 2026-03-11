@@ -31,6 +31,33 @@ The platform uses Baileys (`@whiskeysockets/baileys`) running directly inside th
 ## AI Consultation & Patient History
 The system provides AI-powered consultation analysis using OpenAI, integrated with patient conversation history stored in a dedicated Directus `whatsapp_messages` collection. This collection stores persistent, queryable WhatsApp messages with fields like `patient_id`, `message_body`, and `from_me`. AI capabilities include generating quick insights, answering custom questions, and creating personalized 24-hour meal plans based on patient data and conversation history. The meal plan generator uses GPT-4o-mini to produce structured JSON output for 6 meal periods, considering dietary restrictions and goals.
 
+## Internal AI Agent System
+Replaces N8N workflow with an in-app AI agent system for handling incoming WhatsApp messages.
+
+**Architecture:**
+- `server/whatsapp-message-handler.ts`: Central message dispatcher that receives Evolution API webhooks, identifies patients, routes to correct AI agent, and sends responses back via Evolution API
+- `server/openai-service.ts`: Contains `runAnamnesisAgent`, `extractPatientData`, `runFollowUpAgent`, and `analyzeFood` methods
+
+**AI Agents:**
+- **Anamnesis Agent**: Collects initial patient data through a multi-step conversational flow. Asks one question at a time, covers personal info, health history, dietary habits, lifestyle, and 24h food recall. When complete, triggers data extraction.
+- **Follow-up Agent**: Serves patients in "Acompanhamento" stage with personalized nutritional support using their Directus profile data.
+- **Food Image Analysis**: Uses OpenAI Vision (gpt-4o-mini) to analyze food photos and return calorie/macro estimates in Portuguese.
+
+**Flow:**
+1. Incoming message arrives at `POST /api/whatsapp/ai-webhook` from Evolution API
+2. Handler identifies nutritionist by instance name, looks up or auto-creates patient by WhatsApp number
+3. Saves incoming message to `whatsapp_messages` collection
+4. Routes to anamnesis agent (if `Etapas` = "Anamnese Inicial") or follow-up agent (if "Acompanhamento")
+5. For images, routes directly to food analysis
+6. Saves AI response to `whatsapp_messages` and sends via Evolution API
+7. When anamnesis completes, extracts structured data and updates all patient fields in Directus, sets `Etapas` to "Acompanhamento"
+
+**Storage Methods Added:**
+- `getPatientByWhatsapp(whatsappNumber, nutritionistId)`: Finds patient by WhatsApp number with format variant search
+- `getNutritionistByInstanceName(instanceName)`: Finds nutritionist by Evolution instance name
+
+**Conversation Memory:** Fetches last 30 messages from `whatsapp_messages` for context building.
+
 **AI Analysis Caching:**
 - Two fields in `Cadastro_de_Pacientes` collection: `ultima_analise_ia` (JSON) and `data_ultima_analise` (timestamp)
 - Backend checks cache validity (24-hour TTL) before calling OpenAI

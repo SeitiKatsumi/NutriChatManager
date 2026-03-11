@@ -28,6 +28,12 @@ export interface IStorage {
   saveWhatsappMessage(message: InsertWhatsappMessage): Promise<WhatsappMessage>;
   getPatientMessages(patientId: string, limit?: number): Promise<WhatsappMessage[]>;
 
+  // Patient lookup by WhatsApp number
+  getPatientByWhatsapp(whatsappNumber: string, nutritionistId: string): Promise<Patient | undefined>;
+
+  // Nutritionist lookup by Evolution instance name
+  getNutritionistByInstanceName(instanceName: string): Promise<Nutritionist | undefined>;
+
   // Patients
   getPatient(id: string): Promise<Patient | undefined>;
   getPatientsByNutritionist(nutritionistId: string): Promise<Patient[]>;
@@ -228,6 +234,17 @@ export class MemStorage implements IStorage {
 
   async getPatientMessages(patientId: string, limit?: number): Promise<WhatsappMessage[]> {
     throw new Error('WhatsApp messages are only supported in DirectusStorage');
+  }
+
+  async getPatientByWhatsapp(whatsappNumber: string, nutritionistId: string): Promise<Patient | undefined> {
+    return Array.from(this.patients.values()).find(
+      (patient) => patient.whatsappNumber === whatsappNumber && patient.nutritionistId === nutritionistId,
+    );
+  }
+
+  async getNutritionistByInstanceName(instanceName: string): Promise<Nutritionist | undefined> {
+    const userId = instanceName.replace('nutri_', '');
+    return this.nutritionists.get(userId);
   }
 
   // Patients

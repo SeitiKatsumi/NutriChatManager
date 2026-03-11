@@ -10,6 +10,7 @@ import { evolutionRedis } from "./evolution-redis";
 import { patientHistoryDirectus } from "./patient-history-directus";
 import { openaiService } from "./openai-service";
 import { scheduleService } from "./schedule-service";
+import { whatsappMessageHandler } from "./whatsapp-message-handler";
 import Stripe from "stripe";
 
 // Extend session type to include user
@@ -763,17 +764,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log('[API] Received WhatsApp message webhook from N8N');
       
-      // Validate webhook (simple token authentication)
       const webhookToken = req.headers['x-webhook-token'];
       if (webhookToken !== process.env.N8N_WEBHOOK_TOKEN && process.env.N8N_WEBHOOK_TOKEN) {
         console.error('[API] Invalid webhook token');
         return res.status(401).json({ error: "Unauthorized" });
       }
 
-      // Validate message data
       const messageData = insertWhatsappMessageSchema.parse(req.body);
-      
-      // Save message to Directus
       const savedMessage = await storage.saveWhatsappMessage(messageData);
       
       console.log(`[API] Message saved successfully: ${savedMessage.id}`);
@@ -784,6 +781,118 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid message data", details: error.errors });
       }
       res.status(500).json({ error: "Failed to save message" });
+    }
+  });
+
+  const processedMessageIds = new Set<string>();
+  const MESSAGE_ID_TTL = 5 * 60 * 1000;
+  setInterval(() => {
+    processedMessageIds.clear();
+  }, MESSAGE_ID_TTL);
+
+  app.post("/api/whatsapp/ai-webhook", async (req, res) => {
+    try {
+      console.log('[API] Received Evolution API webhook for AI processing');
+
+      const webhookToken = req.headers['x-webhook-token'] || req.headers['apikey'];
+      const expectedToken = process.env.AI_WEBHOOK_TOKEN || process.env.EVOLUTION_API_KEY;
+      if (expectedToken && webhookToken !== expectedToken) {
+        console.error('[API] Invalid or missing webhook token for AI webhook');
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const body = req.body;
+
+      const event = body.event || body.type;
+      if (event && event !== 'MESSAGES_UPSERT' && event !== 'messages.upsert') {
+        return res.status(200).json({ ignored: true, reason: 'Not a message event' });
+      }
+
+      const data = body.data || body;
+      const instanceName = body.instance || body.instanceName || data.instance || '';
+
+      const messageId = data.key?.id || data.messageId || '';
+      if (messageId && processedMessageIds.has(messageId)) {
+        console.log(`[API] Duplicate message ${messageId} ignored`);
+        return res.status(200).json({ ignored: true, reason: 'Duplicate message' });
+      }
+      if (messageId) {
+        processedMessageIds.add(messageId);
+      }
+
+      let senderNumber = '';
+      let messageBody = '';
+      let messageType: 'text' | 'image' | 'audio' | 'video' | 'document' = 'text';
+      let imageBuffer: Buffer | undefined;
+
+      if (data.key) {
+        if (data.key.fromMe) {
+          return res.status(200).json({ ignored: true, reason: 'Message from self' });
+        }
+        senderNumber = (data.key.remoteJid || '').replace('@s.whatsapp.net', '').replace('@g.us', '');
+        
+        if ((data.key.remoteJid || '').includes('@g.us')) {
+          return res.status(200).json({ ignored: true, reason: 'Group message' });
+        }
+      } else if (data.remoteJid) {
+        senderNumber = data.remoteJid.replace('@s.whatsapp.net', '');
+      } else if (data.from) {
+        senderNumber = data.from;
+      }
+
+      if (!senderNumber || !instanceName) {
+        console.warn('[API] Missing senderNumber or instanceName in webhook');
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+
+      const msg = data.message || data;
+      if (msg.conversation) {
+        messageBody = msg.conversation;
+        messageType = 'text';
+      } else if (msg.extendedTextMessage?.text) {
+        messageBody = msg.extendedTextMessage.text;
+        messageType = 'text';
+      } else if (msg.imageMessage) {
+        messageType = 'image';
+        messageBody = msg.imageMessage.caption || '[Imagem]';
+
+        if (data.base64 || msg.imageMessage.base64) {
+          try {
+            const b64 = data.base64 || msg.imageMessage.base64;
+            imageBuffer = Buffer.from(b64, 'base64');
+          } catch (e) {
+            console.warn('[API] Failed to decode image base64');
+          }
+        }
+      } else if (msg.audioMessage) {
+        messageType = 'audio';
+        messageBody = '[Áudio - não suportado no momento]';
+      } else if (msg.videoMessage) {
+        messageType = 'video';
+        messageBody = '[Vídeo]';
+      } else if (msg.documentMessage) {
+        messageType = 'document';
+        messageBody = '[Documento]';
+      } else {
+        messageBody = JSON.stringify(msg).substring(0, 200);
+      }
+
+      res.status(200).json({ success: true, processing: true });
+
+      whatsappMessageHandler.handleIncomingMessage({
+        instanceName,
+        senderNumber,
+        messageBody,
+        messageType,
+        imageBuffer,
+        timestamp: data.messageTimestamp ? Number(data.messageTimestamp) * 1000 : Date.now(),
+      }).catch(err => {
+        console.error('[API] Error in async message handler:', err);
+      });
+
+    } catch (error) {
+      console.error('[API] Error processing AI webhook:', error);
+      res.status(500).json({ error: 'Failed to process webhook' });
     }
   });
 
