@@ -1229,11 +1229,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: directusUser.data.status
       });
       
-      // Check admin access through Directus admin_access flag only
-      const isAdmin = directusUser.data.admin_access === true;
+      const platformAdminEmails = (process.env.ADMIN_EMAILS || 'daniellessa2023@gmail.com').split(',').map(e => e.trim().toLowerCase());
+      const isDirectusAdmin = directusUser.data.admin_access === true;
+      const isPlatformAdmin = platformAdminEmails.includes(email.toLowerCase());
+      const isAdmin = isDirectusAdmin || isPlatformAdmin;
       
-      console.log(`Admin check result for ${email}: isAdmin=${isAdmin}`);
-      console.log(`- admin_access: ${directusUser.data.admin_access}`);
+      console.log(`Admin check result for ${email}: isAdmin=${isAdmin} (directus=${isDirectusAdmin}, platform=${isPlatformAdmin})`);
       
       if (!isAdmin) {
         console.log(`Access denied for ${email} - not recognized as admin`);
