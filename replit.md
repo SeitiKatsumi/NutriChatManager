@@ -56,7 +56,17 @@ Replaces N8N workflow with an in-app AI agent system for handling incoming Whats
 - `getPatientByWhatsapp(whatsappNumber, nutritionistId)`: Finds patient by WhatsApp number with format variant search
 - `getNutritionistByInstanceName(instanceName)`: Finds nutritionist by Evolution instance name
 
-**Conversation Memory:** Fetches last 30 messages from `whatsapp_messages` for context building.
+**Conversation Memory:**
+- Primary storage: Directus `whatsapp_messages` collection (persistent)
+- Secondary: In-memory `conversationCache` in `WhatsAppMessageHandler` (60 messages, 30-min TTL)
+- `buildConversationHistory` merges Directus data + local cache with deduplication, sorted by timestamp
+- Cache fills gaps from Directus API cache delays, ensuring consecutive messages always have full context
+- Falls back to cache-only if Directus is unreachable
+
+**Concurrency Protection:**
+- `withPatientLock` serializes message processing per patient (keyed by `nutritionistId:phoneNumber`)
+- Prevents duplicate patient creation from rapid sequential messages
+- Messages queue and process one at a time per patient
 
 ## Admin AI Configuration Panel
 Platform-wide admin panel at `/admin` (tab "Configuração de IA") for managing all AI agent configurations without code changes.

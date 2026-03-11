@@ -31,9 +31,22 @@ interface PatientUpdateData {
   status?: string;
 }
 
+interface CachedMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: number;
+}
+
 export class WhatsAppMessageHandler {
   private patientLocks = new Map<string, Promise<void>>();
   private messageQueue = new Map<string, Promise<void>>();
+  private conversationCache = new Map<string, CachedMessage[]>();
+  private static CACHE_MAX_MESSAGES = 60;
+  private static CACHE_TTL_MS = 30 * 60 * 1000;
+
+  constructor() {
+    setInterval(() => this.cleanOldCacheEntries(), 5 * 60 * 1000);
+  }
 
   private async withPatientLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
     const existing = this.messageQueue.get(key) || Promise.resolve();
@@ -142,6 +155,7 @@ export class WhatsAppMessageHandler {
           from_me: false,
           message_type: messageType,
         });
+        this.addToCache(patient.id, 'user', messageBody || `[${messageType}]`);
 
         const etapas = patient.status || '';
         const agentName = nutritionist.nome_do_agente || 'Nutri Chatbot';
@@ -164,6 +178,8 @@ export class WhatsAppMessageHandler {
           );
         }
       }
+
+      this.addToCache(patient.id, 'assistant', aiResponse);
 
       await storage.saveWhatsappMessage({
         patient_id: patient.id,
@@ -257,28 +273,73 @@ export class WhatsAppMessageHandler {
     return openaiService.runFollowUpAgent(patientData, conversationHistory, messageBody, agentName);
   }
 
+  private addToCache(patientId: string, role: 'user' | 'assistant', content: string): void {
+    const cached = this.conversationCache.get(patientId) || [];
+    cached.push({ role, content, timestamp: Date.now() });
+    if (cached.length > WhatsAppMessageHandler.CACHE_MAX_MESSAGES) {
+      cached.splice(0, cached.length - WhatsAppMessageHandler.CACHE_MAX_MESSAGES);
+    }
+    this.conversationCache.set(patientId, cached);
+  }
+
+  private cleanOldCacheEntries(): void {
+    const now = Date.now();
+    for (const [patientId, messages] of this.conversationCache.entries()) {
+      const fresh = messages.filter(m => now - m.timestamp < WhatsAppMessageHandler.CACHE_TTL_MS);
+      if (fresh.length === 0) {
+        this.conversationCache.delete(patientId);
+      } else {
+        this.conversationCache.set(patientId, fresh);
+      }
+    }
+  }
+
   private async buildConversationHistory(
     patientId: string,
-    limit: number = 30
+    limit: number = 50
   ): Promise<{ role: 'user' | 'assistant'; content: string }[]> {
     try {
-      const messages = await storage.getPatientMessages(patientId, limit);
-      if (!messages || messages.length === 0) return [];
+      const directusMessages = await storage.getPatientMessages(patientId, limit);
 
-      const sorted = [...messages].sort((a, b) => {
-        const timeA = a.date_created instanceof Date ? a.date_created.getTime() : new Date(a.date_created || 0).getTime();
-        const timeB = b.date_created instanceof Date ? b.date_created.getTime() : new Date(b.date_created || 0).getTime();
-        return timeA - timeB;
-      });
+      const directusHistory: { role: 'user' | 'assistant'; content: string; timestamp: number }[] = [];
+      if (directusMessages && directusMessages.length > 0) {
+        for (const msg of directusMessages) {
+          if (!msg.message_body || !msg.message_body.trim()) continue;
+          const ts = msg.date_created instanceof Date ? msg.date_created.getTime() : new Date(msg.date_created || 0).getTime();
+          directusHistory.push({
+            role: msg.from_me ? 'assistant' as const : 'user' as const,
+            content: msg.message_body,
+            timestamp: ts,
+          });
+        }
+      }
 
-      return sorted
-        .filter((msg) => msg.message_body && msg.message_body.trim())
-        .map((msg) => ({
-          role: msg.from_me ? 'assistant' as const : 'user' as const,
-          content: msg.message_body,
-        }));
+      const cached = this.conversationCache.get(patientId) || [];
+
+      const contentSet = new Set(directusHistory.map(m => `${m.role}:${m.content.substring(0, 100)}`));
+      const merged = [...directusHistory];
+      for (const cm of cached) {
+        const key = `${cm.role}:${cm.content.substring(0, 100)}`;
+        if (!contentSet.has(key)) {
+          merged.push(cm);
+          contentSet.add(key);
+        }
+      }
+
+      merged.sort((a, b) => a.timestamp - b.timestamp);
+
+      const result = merged.slice(-limit).map(m => ({ role: m.role, content: m.content }));
+
+      console.log(`[MessageHandler] Built history for patient ${patientId}: ${directusHistory.length} from Directus, ${cached.length} from cache, ${result.length} merged`);
+
+      return result;
     } catch (error) {
       console.error('[MessageHandler] Error building conversation history:', error);
+      const cached = this.conversationCache.get(patientId) || [];
+      if (cached.length > 0) {
+        console.log(`[MessageHandler] Falling back to cache: ${cached.length} messages`);
+        return cached.map(m => ({ role: m.role, content: m.content }));
+      }
       return [];
     }
   }
