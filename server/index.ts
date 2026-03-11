@@ -90,7 +90,22 @@ app.use((req, res, next) => {
     port,
     host: "0.0.0.0",
     reusePort: true,
-  }, () => {
+  }, async () => {
     log(`serving on port ${port}`);
+
+    try {
+      const { baileysService } = await import('./baileys-service.js');
+      const { storage } = await import('./storage.js');
+      await baileysService.autoStartSessions(async () => {
+        const nutritionists = await storage.listNutritionists();
+        return nutritionists.map((n: any) => ({
+          id: n.id,
+          whatsappIA: n.whatsappIA,
+          evolutionInstanceName: n.evolutionInstanceName,
+        }));
+      });
+    } catch (err) {
+      console.error('[Baileys] Auto-start failed:', err);
+    }
   });
 })();

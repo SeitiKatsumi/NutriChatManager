@@ -32,8 +32,8 @@ export default function WhatsApp() {
   // Get WhatsApp status
   const { data: whatsappStatus, isLoading: statusLoading, refetch: refetchStatus } = useQuery<any>({
     queryKey: ["/api/whatsapp/status", currentNutritionist?.id],
-    enabled: !!currentNutritionist?.id && !!currentNutritionist?.evolutionInstanceName,
-    refetchInterval: 5000, // Poll every 5 seconds
+    enabled: !!currentNutritionist?.id,
+    refetchInterval: 5000,
   });
 
   // Generate QR Code mutation
@@ -43,16 +43,37 @@ export default function WhatsApp() {
         throw new Error("Nutricionista não encontrado. Faça login novamente.");
       }
       
-      const response = await apiRequest("GET", `/api/whatsapp/qrcode/${currentNutritionist?.id}`);
+      const response = await fetch(`/api/whatsapp/qrcode/${currentNutritionist?.id}`, {
+        credentials: "include",
+      });
       const data = await response.json();
       
-      if (!data.base64) {
-        throw new Error("QR Code não foi gerado corretamente.");
+      if (data.connected) {
+        return { connected: true, base64: null, pending: false };
       }
       
-      return data;
+      if (!data.base64) {
+        return { connected: false, base64: null, pending: true };
+      }
+      
+      return { ...data, connected: false, pending: false };
     },
     onSuccess: (data) => {
+      if (data.connected) {
+        refetchStatus();
+        toast({
+          title: "WhatsApp já conectado!",
+          description: "Seu WhatsApp já está conectado e pronto para uso.",
+        });
+        return;
+      }
+      if (data.pending) {
+        toast({
+          title: "Aguarde...",
+          description: "O QR Code está sendo gerado. Tente novamente em alguns segundos.",
+        });
+        return;
+      }
       setQrCode(data.base64);
       setShowQRCode(true);
       toast({
@@ -79,10 +100,9 @@ export default function WhatsApp() {
     refetchStatus();
   };
 
-  // Check connection status - Evolution API may return "open" or "connected"
   const connectionState = whatsappStatus?.instance?.state?.toLowerCase();
   const isConnected = connectionState === "open" || connectionState === "connected";
-  const hasEvolutionInstance = !!currentNutritionist?.evolutionInstanceName;
+  const hasWhatsAppSetup = !!currentNutritionist?.whatsappIA || !!currentNutritionist?.whatsappNumber || !!currentNutritionist?.evolutionInstanceName;
 
   const { error: statusError } = useQuery<any>({
     queryKey: ["/api/whatsapp/status", currentNutritionist?.id],
@@ -107,7 +127,7 @@ export default function WhatsApp() {
             Integração WhatsApp
           </h1>
           <p className="text-muted-foreground">
-            Configure e gerencie sua conexão WhatsApp com a Evolution API
+            Configure e gerencie sua conexão WhatsApp
           </p>
         </div>
 
@@ -148,7 +168,7 @@ export default function WhatsApp() {
                   <Loader2 className="w-6 h-6 animate-spin" />
                   <span className="ml-2">Carregando dados...</span>
                 </div>
-              ) : !hasEvolutionInstance ? (
+              ) : !hasWhatsAppSetup ? (
                 <div className="text-center p-6 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
                   <AlertCircle className="w-16 h-16 mx-auto mb-4 text-yellow-600" />
                   <p className="font-medium text-yellow-800 dark:text-yellow-200">Instância não configurada</p>

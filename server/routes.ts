@@ -6,7 +6,6 @@ import { insertNutritionistSchema, insertWhatsappInstanceSchema, insertPatientSc
 import { z } from "zod";
 // @ts-ignore - directus.js doesn't have type declarations
 import { directusClient } from "./lib/directus.js";
-import { evolutionApi } from "./evolution-api";
 import { evolutionRedis } from "./evolution-redis";
 import { patientHistoryDirectus } from "./patient-history-directus";
 import { openaiService } from "./openai-service";
@@ -806,10 +805,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Evolution API WhatsApp routes
+  // WhatsApp routes (Baileys)
   app.get("/api/whatsapp/qrcode/:nutritionistId", requireAuth, requireActiveSubscription, async (req, res) => {
     try {
-      // Security: Users can only get QR code for their own instance  
       if (req.params.nutritionistId !== req.session.user.nutritionistId) {
         return res.status(403).json({ error: "Access denied" });
       }
@@ -817,17 +815,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userToken = req.session.user.accessToken;
       const nutritionist = await storage.getNutritionist(req.params.nutritionistId, userToken);
       
-      if (!nutritionist || !nutritionist.evolutionInstanceName) {
-        return res.status(404).json({ error: "WhatsApp instance not found" });
+      if (!nutritionist) {
+        return res.status(404).json({ error: "Nutritionist not found" });
       }
 
-      const { evolutionApi } = await import('./evolution-api.ts');
-      const qrResponse = await evolutionApi.getQRCode(nutritionist.evolutionInstanceName);
-      
-      // Extract only the base64 field that the frontend expects
-      res.json({ 
-        base64: qrResponse.base64
-      });
+      const whatsappNumber = nutritionist.whatsappIA || nutritionist.whatsappNumber || "";
+      if (!whatsappNumber) {
+        return res.status(400).json({ error: "No WhatsApp number configured for this nutritionist" });
+      }
+      const { baileysService } = await import('./baileys-service.js');
+
+      await baileysService.startSession(req.params.nutritionistId, whatsappNumber);
+
+      const maxWait = 10;
+      let qrCode: string | null = null;
+      let status = baileysService.getStatus(req.params.nutritionistId);
+
+      for (let i = 0; i < maxWait; i++) {
+        qrCode = baileysService.getQRCode(req.params.nutritionistId);
+        status = baileysService.getStatus(req.params.nutritionistId);
+        if (qrCode || status.instance.state === "open") break;
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+
+      if (status.instance.state === "open") {
+        return res.json({ base64: null, connected: true });
+      }
+
+      if (!qrCode) {
+        return res.status(202).json({ base64: null, message: "QR code is being generated, please try again in a few seconds." });
+      }
+
+      res.json({ base64: qrCode });
     } catch (error: any) {
       console.error("Error getting QR code:", error);
       res.status(500).json({ error: error.message || "Failed to generate QR code" });
@@ -836,20 +855,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/whatsapp/status/:nutritionistId", requireAuth, requireActiveSubscription, async (req, res) => {
     try {
-      // Security: Users can only check status of their own instance
       if (req.params.nutritionistId !== req.session.user.nutritionistId) {
         return res.status(403).json({ error: "Access denied" });
       }
 
-      const userToken = req.session.user.accessToken;
-      const nutritionist = await storage.getNutritionist(req.params.nutritionistId, userToken);
-      
-      if (!nutritionist || !nutritionist.evolutionInstanceName) {
-        return res.status(404).json({ error: "WhatsApp instance not found" });
+      const { baileysService } = await import('./baileys-service.js');
+
+      if (baileysService.hasExistingSession(req.params.nutritionistId)) {
+        const userToken = req.session.user.accessToken;
+        const nutritionist = await storage.getNutritionist(req.params.nutritionistId, userToken);
+        const whatsappNumber = nutritionist?.whatsappIA || nutritionist?.whatsappNumber || "";
+        if (whatsappNumber) {
+          await baileysService.startSession(req.params.nutritionistId, whatsappNumber);
+        }
       }
 
-      const { evolutionApi } = await import('./evolution-api.ts');
-      const statusResponse = await evolutionApi.getInstanceStatus(nutritionist.evolutionInstanceName);
+      const statusResponse = baileysService.getStatus(req.params.nutritionistId);
       
       // Force fresh response with unique identifiers
       const timestamp = Date.now();
@@ -1202,57 +1223,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Evolution API proxy endpoints
-  app.post("/api/evolution/generate-qr/:instanceId", async (req, res) => {
+  // Evolution API proxy endpoints (now backed by Baileys)
+  app.post("/api/evolution/generate-qr/:instanceId", requireAuth, async (req, res) => {
     try {
       const { instanceId } = req.params;
+      const { baileysService } = await import('./baileys-service.js');
       
-      // Create instance first if it doesn't exist
-      try {
-        await evolutionApi.createInstance('', instanceId);
-      } catch (createError) {
-        // Instance might already exist, continue
-        console.log('Instance might already exist:', instanceId);
+      const match = instanceId.match(/^nutri_(.+)$/);
+      const nutritionistId = match ? match[1] : instanceId;
+      
+      if (nutritionistId !== req.session.user?.nutritionistId) {
+        return res.status(403).json({ error: "Access denied" });
       }
       
-      // Get QR code from Evolution API
-      const qrResponse = await evolutionApi.getQRCode(instanceId);
+      const nutritionist = await storage.getNutritionist(nutritionistId);
+      const whatsappNumber = nutritionist?.whatsappIA || nutritionist?.whatsappNumber || "";
+      await baileysService.startSession(nutritionistId, whatsappNumber);
+
+      let qrCode: string | null = null;
+      for (let i = 0; i < 10; i++) {
+        qrCode = baileysService.getQRCode(nutritionistId);
+        if (qrCode) break;
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
       
       res.json({
-        qrCode: qrResponse.base64 || qrResponse.code,
+        qrCode: qrCode || null,
         instanceId,
-        status: "waiting_for_connection"
+        status: qrCode ? "waiting_for_connection" : "connecting"
       });
     } catch (error) {
       const { instanceId } = req.params;
-      console.error('Evolution API QR generation error:', error);
-      // Fallback to mock for development
-      const qrCode = `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAADICAYAAACtWK6eAAAACXBIWXMAAAsTAAALEwEAmpwYAAABM0lEQVR4nO3BMQEAAADCoPVPbQdvoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA+DEfEKYAAAH5BJQAAAAASUVORK5CYII=`;
-      
+      console.error('Baileys QR generation error:', error);
       res.json({
-        qrCode,
+        qrCode: null,
         instanceId,
-        status: "waiting_for_connection"
+        status: "error"
       });
     }
   });
 
-  app.get("/api/evolution/status/:instanceId", async (req, res) => {
+  app.get("/api/evolution/status/:instanceId", requireAuth, async (req, res) => {
     try {
       const { instanceId } = req.params;
+      const { baileysService } = await import('./baileys-service.js');
       
-      // Get status from Evolution API
-      const statusResponse = await evolutionApi.getInstanceStatus(instanceId);
+      const match = instanceId.match(/^nutri_(.+)$/);
+      const nutritionistId = match ? match[1] : instanceId;
+      
+      if (nutritionistId !== req.session.user?.nutritionistId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      
+      const statusData = baileysService.getStatus(nutritionistId);
       
       res.json({
         instanceId,
-        status: statusResponse.state || "disconnected",
-        phoneNumber: statusResponse.instance?.instanceName || null
+        status: statusData.instance.state === "open" ? "connected" : "disconnected",
+        phoneNumber: null
       });
     } catch (error) {
       const { instanceId } = req.params;
-      console.error('Evolution API status check error:', error);
-      // Fallback to mock for development
+      console.error('Baileys status check error:', error);
       res.json({
         instanceId,
         status: "disconnected",

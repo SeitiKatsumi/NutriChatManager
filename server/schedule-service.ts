@@ -1,4 +1,4 @@
-import { evolutionApi } from "./evolution-api";
+import { baileysService, BaileysService } from "./baileys-service";
 import type { WhatsappSchedule, InsertWhatsappSchedule, WhatsappScheduleLog } from "@shared/schema";
 
 const DIRECTUS_URL = process.env.DIRECTUS_URL || "https://nutrichatbot.app.11mind.com.br";
@@ -605,7 +605,7 @@ export class ScheduleService {
     try {
       console.log(`[Schedule] Sending message to ${phoneNumber} via ${instanceName}`);
       
-      const result = await evolutionApi.sendText(instanceName, phoneNumber, message);
+      const result = await baileysService.sendTextByInstanceName(instanceName, phoneNumber, message);
       
       await this.createScheduleLog({
         schedule_id: scheduleId,
