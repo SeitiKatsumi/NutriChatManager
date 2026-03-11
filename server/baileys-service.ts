@@ -138,8 +138,10 @@ export class BaileysService extends EventEmitter {
           const statusCode = error instanceof Boom ? error.output.statusCode : undefined;
           const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
+          const isConflict = statusCode === 440 || statusCode === DisconnectReason.connectionReplaced;
+
           console.log(
-            `[Baileys] Connection closed for ${nutritionistId}. Status code: ${statusCode}. Reconnect: ${shouldReconnect}`
+            `[Baileys] Connection closed for ${nutritionistId}. Status code: ${statusCode}. Reconnect: ${shouldReconnect}. Conflict: ${isConflict}`
           );
 
           if (statusCode === DisconnectReason.loggedOut) {
@@ -154,6 +156,27 @@ export class BaileysService extends EventEmitter {
             }
             this.sessions.delete(nutritionistId);
             this.reconnecting.delete(nutritionistId);
+          } else if (isConflict) {
+            session.retryCount++;
+            if (session.retryCount > 3) {
+              console.log(`[Baileys] Repeated conflict for ${nutritionistId}. Another instance is active. Backing off for 60s.`);
+              session.status = "connecting";
+              session.qrCode = null;
+              setTimeout(() => {
+                session.retryCount = 0;
+                this.reconnecting.delete(nutritionistId);
+                this.connectSocket(nutritionistId, sessionDir);
+              }, 60000);
+            } else {
+              const delay = Math.min(session.retryCount * 5000, 30000);
+              console.log(`[Baileys] Conflict detected for ${nutritionistId}. Reconnecting in ${delay}ms (attempt ${session.retryCount})`);
+              session.status = "connecting";
+              session.qrCode = null;
+              setTimeout(() => {
+                this.reconnecting.delete(nutritionistId);
+                this.connectSocket(nutritionistId, sessionDir);
+              }, delay);
+            }
           } else if (shouldReconnect && session.retryCount < 5) {
             session.retryCount++;
             const delay = Math.min(session.retryCount * 2000, 30000);
