@@ -43,8 +43,10 @@ export class WhatsAppMessageHandler {
   private patientLocks = new Map<string, Promise<void>>();
   private messageQueue = new Map<string, Promise<void>>();
   private conversationCache = new Map<string, CachedMessage[]>();
+  private patientStageCache = new Map<string, { stage: string; updatedAt: number }>();
   private static CACHE_MAX_MESSAGES = 60;
   private static CACHE_TTL_MS = 30 * 60 * 1000;
+  private static STAGE_CACHE_TTL_MS = 10 * 60 * 1000;
 
   constructor() {
     setInterval(() => this.cleanOldCacheEntries(), 5 * 60 * 1000);
@@ -159,7 +161,14 @@ export class WhatsAppMessageHandler {
         });
         this.addToCache(patient.id, 'user', messageBody || `[${messageType}]`);
 
-        const etapas = patient.status || '';
+        let etapas = patient.status || '';
+        const cachedStage = this.patientStageCache.get(patient.id);
+        if (cachedStage && (Date.now() - cachedStage.updatedAt) < WhatsAppMessageHandler.STAGE_CACHE_TTL_MS) {
+          if (cachedStage.stage === 'Acompanhamento' && etapas === 'Anamnese Inicial') {
+            console.log(`[MessageHandler] Overriding Directus stage "${etapas}" with cached stage "${cachedStage.stage}" for patient ${patient.id}`);
+            etapas = cachedStage.stage;
+          }
+        }
         const agentName = nutritionist.nome_do_agente || 'Nutri Chatbot';
 
         if (etapas === 'Anamnese Inicial' || isNewPatient) {
@@ -281,7 +290,8 @@ export class WhatsAppMessageHandler {
         updateData.status = 'Acompanhamento';
 
         await storage.updatePatient(patient.id, updateData);
-        console.log(`[MessageHandler] Patient ${patient.id} updated with anamnesis data, stage set to Acompanhamento`);
+        this.patientStageCache.set(patient.id, { stage: 'Acompanhamento', updatedAt: Date.now() });
+        console.log(`[MessageHandler] Patient ${patient.id} updated with anamnesis data, stage set to Acompanhamento (cached)`);
       } catch (extractErr) {
         console.error('[MessageHandler] Error extracting/saving anamnesis data:', extractErr);
       }
@@ -327,6 +337,11 @@ export class WhatsAppMessageHandler {
         this.conversationCache.delete(patientId);
       } else {
         this.conversationCache.set(patientId, fresh);
+      }
+    }
+    for (const [patientId, entry] of this.patientStageCache.entries()) {
+      if (now - entry.updatedAt > WhatsAppMessageHandler.STAGE_CACHE_TTL_MS) {
+        this.patientStageCache.delete(patientId);
       }
     }
   }
