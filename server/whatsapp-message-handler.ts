@@ -32,6 +32,24 @@ interface PatientUpdateData {
 }
 
 export class WhatsAppMessageHandler {
+  private patientLocks = new Map<string, Promise<void>>();
+  private messageQueue = new Map<string, Promise<void>>();
+
+  private async withPatientLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+    const existing = this.messageQueue.get(key) || Promise.resolve();
+    let resolve: () => void;
+    const next = new Promise<void>((r) => { resolve = r; });
+    this.messageQueue.set(key, next);
+    await existing;
+    try {
+      return await fn();
+    } finally {
+      resolve!();
+      if (this.messageQueue.get(key) === next) {
+        this.messageQueue.delete(key);
+      }
+    }
+  }
 
   async handleIncomingMessage(message: IncomingWhatsAppMessage): Promise<void> {
     const { instanceName, senderNumber, messageBody, messageType, imageBuffer } = message;
@@ -47,6 +65,26 @@ export class WhatsAppMessageHandler {
 
       const nutritionistId = nutritionist.id;
       const cleanNumber = EvolutionApiService.cleanWhatsAppNumber(senderNumber);
+      const lockKey = `${nutritionistId}:${cleanNumber}`;
+
+      await this.withPatientLock(lockKey, async () => {
+        await this.processMessage(nutritionist, cleanNumber, instanceName, messageBody, messageType, imageBuffer);
+      });
+
+    } catch (error) {
+      console.error('[MessageHandler] Error processing message:', error);
+    }
+  }
+
+  private async processMessage(
+    nutritionist: any,
+    cleanNumber: string,
+    instanceName: string,
+    messageBody: string,
+    messageType: 'text' | 'image' | 'audio' | 'video' | 'document',
+    imageBuffer?: Buffer
+  ): Promise<void> {
+      const nutritionistId = nutritionist.id;
 
       let patient = await storage.getPatientByWhatsapp(cleanNumber, nutritionistId);
       let isNewPatient = false;
@@ -141,10 +179,6 @@ export class WhatsAppMessageHandler {
       } catch (sendErr) {
         console.error(`[MessageHandler] Failed to send message via Baileys to ${cleanNumber}:`, sendErr);
       }
-
-    } catch (error) {
-      console.error('[MessageHandler] Error processing message:', error);
-    }
   }
 
   private async handleAnamnesis(
