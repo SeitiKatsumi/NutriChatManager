@@ -3,6 +3,14 @@ import session from "express-session";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
+process.on("uncaughtException", (err) => {
+  console.error("[Process] Uncaught exception (non-fatal):", err.message);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("[Process] Unhandled rejection (non-fatal):", reason);
+});
+
 const app = express();
 
 // Stripe webhook endpoint needs raw body - register BEFORE JSON parsing

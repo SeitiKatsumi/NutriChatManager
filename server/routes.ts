@@ -974,15 +974,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { baileysService } = await import('./baileys-service.js');
 
-      if (baileysService.hasExistingSession(req.params.nutritionistId)) {
-        const userToken = req.session.user.accessToken;
-        const nutritionist = await storage.getNutritionist(req.params.nutritionistId, userToken);
-        const whatsappNumber = nutritionist?.whatsappIA || nutritionist?.whatsappNumber || "";
-        if (whatsappNumber) {
-          await baileysService.startSession(req.params.nutritionistId, whatsappNumber);
-        }
-      }
-
       const statusResponse = baileysService.getStatus(req.params.nutritionistId);
       const qrCode = baileysService.getQRCode(req.params.nutritionistId);
       

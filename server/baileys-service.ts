@@ -33,6 +33,7 @@ interface BaileysSession {
 export class BaileysService extends EventEmitter {
   private sessions: Map<string, BaileysSession> = new Map();
   private sessionsDir: string;
+  private reconnecting: Set<string> = new Set();
 
   constructor() {
     super();
@@ -80,7 +81,24 @@ export class BaileysService extends EventEmitter {
     const session = this.sessions.get(nutritionistId);
     if (!session) return;
 
+    if (this.reconnecting.has(nutritionistId)) {
+      console.log(`[Baileys] Already reconnecting ${nutritionistId}, skipping`);
+      return;
+    }
+    this.reconnecting.add(nutritionistId);
+
     try {
+      if (session.socket) {
+        try {
+          session.socket.ev.removeAllListeners("connection.update");
+          session.socket.ev.removeAllListeners("creds.update");
+          session.socket.ev.removeAllListeners("messages.upsert");
+          session.socket.end(undefined);
+        } catch (e) {
+        }
+        session.socket = null;
+      }
+
       const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
       const { version } = await fetchLatestBaileysVersion();
 
@@ -97,6 +115,7 @@ export class BaileysService extends EventEmitter {
       });
 
       session.socket = socket;
+      this.reconnecting.delete(nutritionistId);
 
       socket.ev.on("creds.update", saveCreds);
 
@@ -115,9 +134,6 @@ export class BaileysService extends EventEmitter {
         }
 
         if (connection === "close") {
-          session.status = "disconnected";
-          session.qrCode = null;
-
           const error = lastDisconnect?.error;
           const statusCode = error instanceof Boom ? error.output.statusCode : undefined;
           const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
@@ -126,14 +142,9 @@ export class BaileysService extends EventEmitter {
             `[Baileys] Connection closed for ${nutritionistId}. Status code: ${statusCode}. Reconnect: ${shouldReconnect}`
           );
 
-          if (shouldReconnect && session.retryCount < 5) {
-            session.retryCount++;
-            const delay = Math.min(session.retryCount * 2000, 10000);
-            console.log(
-              `[Baileys] Reconnecting ${nutritionistId} in ${delay}ms (attempt ${session.retryCount})`
-            );
-            setTimeout(() => this.connectSocket(nutritionistId, sessionDir), delay);
-          } else if (statusCode === DisconnectReason.loggedOut) {
+          if (statusCode === DisconnectReason.loggedOut) {
+            session.status = "disconnected";
+            session.qrCode = null;
             console.log(`[Baileys] Session logged out for ${nutritionistId}. Clearing auth state.`);
             try {
               fs.rmSync(sessionDir, { recursive: true, force: true });
@@ -142,6 +153,24 @@ export class BaileysService extends EventEmitter {
               console.error(`[Baileys] Error clearing session dir:`, e);
             }
             this.sessions.delete(nutritionistId);
+            this.reconnecting.delete(nutritionistId);
+          } else if (shouldReconnect && session.retryCount < 5) {
+            session.retryCount++;
+            const delay = Math.min(session.retryCount * 2000, 30000);
+            console.log(
+              `[Baileys] Will reconnect ${nutritionistId} in ${delay}ms (attempt ${session.retryCount})`
+            );
+            session.status = "connecting";
+            session.qrCode = null;
+            setTimeout(() => {
+              this.reconnecting.delete(nutritionistId);
+              this.connectSocket(nutritionistId, sessionDir);
+            }, delay);
+          } else {
+            console.log(`[Baileys] Max retries reached for ${nutritionistId}. Stopping.`);
+            session.status = "disconnected";
+            session.qrCode = null;
+            this.reconnecting.delete(nutritionistId);
           }
         }
 
@@ -149,6 +178,7 @@ export class BaileysService extends EventEmitter {
           session.status = "connected";
           session.qrCode = null;
           session.retryCount = 0;
+          this.reconnecting.delete(nutritionistId);
           console.log(`[Baileys] Connected for ${nutritionistId}`);
         }
       });
@@ -187,6 +217,7 @@ export class BaileysService extends EventEmitter {
     } catch (error) {
       console.error(`[Baileys] Error starting session for ${nutritionistId}:`, error);
       session.status = "disconnected";
+      this.reconnecting.delete(nutritionistId);
     }
   }
 
