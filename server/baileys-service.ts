@@ -1,4 +1,4 @@
-import makeWASocket, {
+import baileysPkg, {
   DisconnectReason,
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
@@ -6,9 +6,12 @@ import makeWASocket, {
   isJidGroup,
   isJidBroadcast,
   isJidStatusBroadcast,
+  makeWASocket as namedMakeWASocket,
   type WASocket,
   type ConnectionState,
 } from "@whiskeysockets/baileys";
+
+const makeWASocket = namedMakeWASocket || (baileysPkg as any).default || baileysPkg;
 import { Boom } from "@hapi/boom";
 import { EventEmitter } from "events";
 import * as QRCode from "qrcode";
