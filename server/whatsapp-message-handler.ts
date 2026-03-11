@@ -1,6 +1,6 @@
 import { storage } from './storage';
 import { openaiService } from './openai-service';
-import { evolutionApi, EvolutionApiService } from './evolution-api';
+import { EvolutionApiService } from './evolution-api';
 import type { Patient, WhatsappMessage } from '@shared/schema';
 
 export interface IncomingWhatsAppMessage {
@@ -135,10 +135,11 @@ export class WhatsAppMessageHandler {
       });
 
       try {
-        await evolutionApi.sendText(instanceName, cleanNumber, aiResponse);
-        console.log(`[MessageHandler] Response sent to ${cleanNumber}`);
+        const { baileysService } = await import('./baileys-service.js');
+        await baileysService.sendTextByInstanceName(instanceName, cleanNumber, aiResponse);
+        console.log(`[MessageHandler] Response sent via Baileys to ${cleanNumber}`);
       } catch (sendErr) {
-        console.error(`[MessageHandler] Failed to send message to ${cleanNumber}:`, sendErr);
+        console.error(`[MessageHandler] Failed to send message via Baileys to ${cleanNumber}:`, sendErr);
       }
 
     } catch (error) {
