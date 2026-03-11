@@ -218,9 +218,26 @@ export default function Admin() {
     const stored = localStorage.getItem("admin");
     return stored ? JSON.parse(stored) : null;
   });
+  const [checkingAuth, setCheckingAuth] = useState(!localStorage.getItem("admin"));
   const [selectedNutritionist, setSelectedNutritionist] = useState<Nutritionist | null>(null);
   const [activeTab, setActiveTab] = useState("dashboard");
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (!admin) {
+      fetch("/api/auth/me", { credentials: "include" })
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data?.user?.email) {
+            const adminData = { id: data.user.id, email: data.user.email, name: data.user.fullName || data.user.email, isAdmin: true };
+            localStorage.setItem("admin", JSON.stringify(adminData));
+            setAdmin(adminData);
+          }
+          setCheckingAuth(false);
+        })
+        .catch(() => setCheckingAuth(false));
+    }
+  }, [admin]);
 
   const { data: nutritionists = [], isLoading: loadingNutritionists } = useQuery<Nutritionist[]>({
     queryKey: ["/api/admin/nutritionists"],
@@ -270,6 +287,14 @@ export default function Admin() {
         return "outline";
     }
   };
+
+  if (checkingAuth) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   if (!admin) {
     return <Redirect to="/admin/login" />;
