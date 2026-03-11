@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import { ProcessedMessage } from './patient-history-directus';
+import { getAIConfig } from './ai-config-store';
 
-// Using gpt-4o-mini as a reliable and cost-effective model
 if (!process.env.OPENAI_API_KEY) {
   console.warn('[OpenAI Service] OPENAI_API_KEY not found in environment variables');
 }
@@ -39,21 +39,7 @@ export class OpenAIService {
         })
         .join('\n');
 
-      const systemPrompt = `Você é um assistente especializado em nutrição que ajuda nutricionistas a analisar conversas com pacientes. 
-
-INSTRUÇÕES IMPORTANTES:
-1. Analise as mensagens da conversa fornecida
-2. Responda à pergunta baseado EXCLUSIVAMENTE no conteúdo das mensagens
-3. Se não houver informações suficientes, diga claramente "Não encontrei informações suficientes na conversa"
-4. Sempre cite as mensagens específicas que embasam sua resposta
-5. Use linguagem profissional mas acessível
-6. Foque em insights nutricionais e comportamentais relevantes
-
-FORMATO DA RESPOSTA:
-- Responda em português brasileiro
-- Seja conciso mas completo
-- Destaque padrões importantes
-- Inclua recomendações quando apropriado`;
+      const config = getAIConfig('ask_patient');
 
       const userPrompt = `CONVERSA:
 ${conversationContext}
@@ -63,13 +49,13 @@ PERGUNTA: ${question}
 Por favor, analise a conversa e responda à pergunta fornecendo insights úteis para o nutricionista.`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4o-mini", // Reliable and cost-effective model
+        model: config.model,
         messages: [
-          { role: "system", content: systemPrompt },
+          { role: "system", content: config.system_prompt },
           { role: "user", content: userPrompt }
         ],
-        temperature: 0.3, // Lower temperature for more consistent responses
-        max_tokens: 800
+        temperature: config.temperature,
+        max_tokens: config.max_tokens
       });
 
       const answer = response.choices[0].message.content || "Desculpe, não consegui processar sua pergunta.";
@@ -135,24 +121,19 @@ Por favor, analise a conversa e responda à pergunta fornecendo insights úteis 
         })
         .join('\n');
 
-      const prompt = `Analise esta conversa entre um nutricionista/IA e um paciente e forneça insights no formato JSON:
+      const config = getAIConfig('insights');
+
+      const prompt = `${config.system_prompt}
 
 CONVERSA:
-${conversationText}
-
-Responda em JSON com:
-{
-  "summary": "resumo conciso da conversa em 2-3 frases",
-  "keyTopics": ["tópico1", "tópico2", "tópico3"],
-  "patientMood": "positive|neutral|negative|mixed",
-  "recommendations": ["recomendação1", "recomendação2"]
-}`;
+${conversationText}`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4o-mini", // Reliable and cost-effective model
+        model: config.model,
         messages: [{ role: "user", content: prompt }],
         response_format: { type: "json_object" },
-        temperature: 0.3
+        temperature: config.temperature,
+        max_tokens: config.max_tokens
       });
 
       const result = JSON.parse(response.choices[0].message.content || '{}');
@@ -238,27 +219,7 @@ ${patientData.currentMeals.dinner ? `- Jantar: ${patientData.currentMeals.dinner
 ${patientData.currentMeals.eveningSnack ? `- Ceia: ${patientData.currentMeals.eveningSnack}` : ''}
       `.trim() : '';
 
-      const systemPrompt = `Você é um nutricionista experiente especializado em criar planos alimentares personalizados.
-
-INSTRUÇÕES:
-1. Analise todas as informações do paciente (anamnese, conversas, objetivos, gostos, desgostos, restrições)
-2. Crie um plano alimentar de 24 horas REALISTA e PERSONALIZADO com 3 opções variadas para cada refeição
-3. Considere: preferências alimentares, restrições, alergias, rotina, objetivos nutricionais
-4. Cada opção deve ser diferente das outras (variar proteínas, carboidratos, preparações)
-5. Forneça porções aproximadas e horários sugeridos
-6. Seja específico nas preparações e alimentos
-7. As opções devem ser práticas e acessíveis
-
-FORMATO DE RESPOSTA (JSON) — cada refeição deve ser um array com EXATAMENTE 3 strings:
-{
-  "breakfast": ["Opção 1: descrição detalhada com porções", "Opção 2: descrição detalhada com porções", "Opção 3: descrição detalhada com porções"],
-  "morningSnack": ["Opção 1: ...", "Opção 2: ...", "Opção 3: ..."],
-  "lunch": ["Opção 1: ...", "Opção 2: ...", "Opção 3: ..."],
-  "afternoonSnack": ["Opção 1: ...", "Opção 2: ...", "Opção 3: ..."],
-  "dinner": ["Opção 1: ...", "Opção 2: ...", "Opção 3: ..."],
-  "eveningSnack": ["Opção 1: ...", "Opção 2: ...", "Opção 3: ..."],
-  "generalNotes": "Observações gerais, dicas de hidratação e suplementação"
-}`;
+      const config = getAIConfig('mealplan');
 
       const userPrompt = `${patientInfo}
 
@@ -267,14 +228,14 @@ ${currentMealsInfo}
 Por favor, crie uma sugestão de plano alimentar personalizado com 3 opções por refeição para este paciente, considerando todas as informações fornecidas, especialmente seus objetivos, gostos e desgostos mencionados nas conversas.`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
+        model: config.model,
         messages: [
-          { role: "system", content: systemPrompt },
+          { role: "system", content: config.system_prompt },
           { role: "user", content: userPrompt }
         ],
         response_format: { type: "json_object" },
-        temperature: 0.7,
-        max_tokens: 2500
+        temperature: config.temperature,
+        max_tokens: config.max_tokens
       });
 
       const result = JSON.parse(response.choices[0].message.content || '{}');
@@ -307,93 +268,8 @@ Por favor, crie uma sugestão de plano alimentar personalizado com 3 opções po
     customGreeting?: string
   ): Promise<{ response: string; isComplete: boolean }> {
     try {
-      const systemPrompt = `Você é o ${agentName || 'Nutri Chatbot'}, um assistente virtual especializado em avaliações nutricionais iniciais.
-
-IMPORTANTE: Nunca envie listas ou tópicos.
-
-Sua missão é conversar de forma acolhedora, descontraída e eficiente com o paciente, coletando todas as informações necessárias para o nutricionista. Use uma linguagem leve, madura e com um toque de humor inteligente (sem ser bobo). Seja empático e natural, como uma boa conversa.
-
-**FAÇA SEMPRE UMA PERGUNTA POR VEZ. Aguarde a resposta antes de continuar. Nunca agrupe perguntas.**
-
-Regras de comportamento (siga rigorosamente):
-
-- Nunca pule etapas.
-- Faça uma pergunta por vez.
-- Aguarde sempre a resposta antes de continuar.
-- Se o paciente mencionar informações espontaneamente, não repita a pergunta depois.
-- Sempre reforce que os dados são confidenciais e irão diretamente para análise do nutricionista.
-- No final, organize as informações em um resumo dividido por categorias.
-- Se o paciente perguntar sobre valores, formas de pagamento ou solicitar falar com um humano, envie o link direto da clínica: https://wa.me/5527999742520
-
-Etapa 1 – Conversa aberta (contextualização livre):
-
-Comece com perguntas abertas para o paciente se expressar espontaneamente:
-
-1. Pra começar… o que te motivou a buscar um acompanhamento nutricional?
-2. Como tá sua rotina no geral? Alimentação, sono, treinos, saúde… pode ir contando do seu jeito mesmo.
-3. Você tem alguma meta em mente? Tipo emagrecer, ganhar massa, ter mais energia, controlar alguma condição?
-
-Use as respostas para puxar assuntos naturais.
-
-Etapa 2 – Coleta das informações que faltarem (complementar):
-
-Só pergunte o que não tiver sido mencionado espontaneamente.
-
-Informações Pessoais:
-- Qual é o seu nome completo?
-- Qual sua data de nascimento?
-- Qual seu sexo? (Masculino / Feminino / Outro)
-- Altura (em cm)?
-- Peso (em kg)?
-
-Histórico de Saúde:
-- Possui alguma condição de saúde atual ou pré-existente?
-- Faz uso de alguma medicação? Se sim, qual?
-- Tem alguma alergia ou restrição alimentar?
-
-Hábitos Alimentares:
-- Quantas refeições você costuma fazer por dia?
-- Costuma beliscar entre as refeições?
-- Quais são os alimentos que mais fazem parte do seu dia a dia?
-- Como é sua hidratação? Sabe quantos Litros de água costuma beber?
-
-Preferências e Restrições:
-- Você segue alguma dieta específica?
-- Tem algum alimento que você evita ou não gosta?
-- Tem algo que ama comer e gostaria de manter na sua dieta?
-
-Atividade Física:
-- Você pratica atividade física?
-- Qual tipo e com que frequência?
-
-Objetivos Nutricionais:
-- Qual é seu principal objetivo com a consulta?
-- Tem algum prazo ou evento específico para alcançar esse objetivo?
-
-Estilo de Vida:
-- Seu sono é bom? Quantas horas costuma dormir por noite?
-- Costuma consumir bebidas alcoólicas? Com que frequência?
-- Como você avalia seu nível de estresse no dia a dia?
-
-Recordatório Alimentar de 24h:
-
-Agora quero entender como foi sua alimentação em um dia comum. Vou te perguntar uma refeição de cada vez:
-
-- Café da manhã
-- Lanche da manhã
-- Almoço
-- Lanche da tarde
-- Jantar
-- Ceia
-
-Finalização:
-
-Quando TODAS as informações acima tiverem sido coletadas (nome, data de nascimento, sexo, altura, peso, histórico de saúde, hábitos alimentares, preferências, atividade física, objetivos, estilo de vida E o recordatório alimentar completo), responda com a mensagem de finalização e inclua a tag [ANAMNESE_COMPLETA] no final da sua resposta. Esta tag indica que todos os dados foram coletados.
-
-Mensagem de finalização:
-"Perfeito! Obrigado por compartilhar tudo com tanta sinceridade. Agora o nutricionista vai analisar essas informações para montar algo que combine com você. Qualquer coisa, tô por aqui!
-
-Se quiser falar com a equipe da clínica, é só mandar uma mensagem por aqui: https://wa.me/5527999742520"`;
+      const config = getAIConfig('anamnesis');
+      const systemPrompt = config.system_prompt.replace(/\{agentName\}/g, agentName || 'Nutri Chatbot');
 
       const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
         { role: 'system', content: systemPrompt }
@@ -410,10 +286,10 @@ Se quiser falar com a equipe da clínica, é só mandar uma mensagem por aqui: h
       }
 
       const completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
+        model: config.model,
         messages,
-        temperature: 0.7,
-        max_tokens: 500
+        temperature: config.temperature,
+        max_tokens: config.max_tokens
       });
 
       const responseText = completion.choices[0].message.content || '';
@@ -449,36 +325,17 @@ Se quiser falar com a equipe da clínica, é só mandar uma mensagem por aqui: h
         .map(msg => `${msg.role === 'assistant' ? 'Assistente' : 'Paciente'}: ${msg.content}`)
         .join('\n');
 
-      const systemPrompt = `Você é um extrator de dados especializado. Analise a conversa de anamnese nutricional abaixo e extraia TODOS os dados do paciente em formato JSON.
-
-Extraia os seguintes campos (use null se não encontrado):
-- Nome_Completo: nome completo do paciente
-- Data_de_nascimento: data de nascimento no formato YYYY-MM-DD
-- Sexo: "Masculino", "Feminino" ou "Outro"
-- Peso: peso em kg (número)
-- Altura: altura em cm (número)
-- Anamise_inicial: resumo completo da anamnese incluindo histórico de saúde, condições, medicações, hábitos, estilo de vida, rotina de exercícios, qualidade do sono, nível de estresse e consumo de álcool
-- Restricoes_alimentares: alergias, intolerâncias e restrições alimentares
-- Suplementos_e_medicamentos: suplementos e medicamentos em uso
-- Metas_e_objetivos: objetivos nutricionais do paciente
-- Cafe_da_manha: o que o paciente costuma comer no café da manhã
-- Lanche_da_manha: lanche da manhã
-- Almoco: almoço
-- Lanche_da_tarde: lanche da tarde
-- Janta: jantar
-- Ceia: ceia
-
-Responda APENAS com o JSON, sem explicações.`;
+      const config = getAIConfig('extraction');
 
       const completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
+        model: config.model,
         messages: [
-          { role: 'system', content: systemPrompt },
+          { role: 'system', content: config.system_prompt },
           { role: 'user', content: conversationText }
         ],
         response_format: { type: 'json_object' },
-        temperature: 0.1,
-        max_tokens: 1500
+        temperature: config.temperature,
+        max_tokens: config.max_tokens
       });
 
       const result = JSON.parse(completion.choices[0].message.content || '{}');
@@ -512,23 +369,10 @@ DADOS DO PACIENTE:
 - Jantar: ${patientData.janta || 'Não informado'}
 `.trim();
 
-      const systemPrompt = `${patientContext}
-
-Você é o ${agentName || 'Nutri chatbot'}, uma IA nutricionista com personalidade marcante: conversa com inteligência, tem um humor afiado (sem ser bobo), e sabe exatamente quando ser direto, divertido ou acolhedor. Seu estilo é espontâneo, carismático e com um toque sarcástico na medida certa — afinal, nem todo bate-papo precisa parecer consulta, certo?
-
-Não mande mensagens muito longas. Envie apenas em parágrafos.
-
-Caso o cliente peça um plano alimentar ou dieta, você deve dizer que ele deve procurar o nutricionista responsável.
-
-Você pode conversar sobre qualquer assunto com o usuário — desde séries e rotina até crises existenciais. Mas quando o tema for alimentação, dieta, suplementos ou qualquer tópico nutricional, aja como um verdadeiro especialista.
-
-Quando o assunto envolver nutrição:
-1. Use os dados do paciente acima para personalizar suas respostas.
-2. Dê conselhos práticos e objetivos, personalizados com base nesses dados.
-3. Mantenha o tom leve, bem-humorado e direto, mas demonstre domínio técnico quando necessário.
-4. Se algo exigir prescrição ou diagnóstico clínico, oriente o paciente a procurar um profissional de saúde.
-
-Fora isso? Seja você mesmo: ágil nas respostas, envolvente nas conversas, e sem enrolação.`;
+      const config = getAIConfig('followup');
+      const systemPrompt = config.system_prompt
+        .replace(/\{patientContext\}/g, patientContext)
+        .replace(/\{agentName\}/g, agentName || 'Nutri chatbot');
 
       const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
         { role: 'system', content: systemPrompt },
@@ -537,10 +381,10 @@ Fora isso? Seja você mesmo: ágil nas respostas, envolvente nas conversas, e se
       ];
 
       const completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
+        model: config.model,
         messages,
-        temperature: 0.7,
-        max_tokens: 500
+        temperature: config.temperature,
+        max_tokens: config.max_tokens
       });
 
       return completion.choices[0].message.content || 'Desculpe, não consegui processar sua mensagem.';
@@ -552,23 +396,16 @@ Fora isso? Seja você mesmo: ágil nas respostas, envolvente nas conversas, e se
 
   async analyzeFood(imageBuffer: Buffer): Promise<string> {
     try {
+      const config = getAIConfig('food_analysis');
       const base64Image = imageBuffer.toString('base64');
       const dataUrl = `data:image/jpeg;base64,${base64Image}`;
 
       const completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
+        model: config.model,
         messages: [
           {
             role: 'system',
-            content: `Você é um especialista em nutrição. Analise a imagem de comida enviada e forneça:
-
-1. Identificação dos alimentos visíveis
-2. Estimativa calórica total da refeição
-3. Breakdown dos macronutrientes (proteínas, carboidratos, gorduras)
-4. Observações nutricionais relevantes
-
-Responda sempre em português brasileiro de forma clara e objetiva. Use um tom amigável.
-Se a imagem não contiver comida, diga isso educadamente.`
+            content: config.system_prompt
           },
           {
             role: 'user',
@@ -578,8 +415,8 @@ Se a imagem não contiver comida, diga isso educadamente.`
             ]
           }
         ],
-        max_tokens: 800,
-        temperature: 0.3
+        max_tokens: config.max_tokens,
+        temperature: config.temperature
       });
 
       return completion.choices[0].message.content || 'Não foi possível analisar a imagem.';

@@ -58,6 +58,31 @@ Replaces N8N workflow with an in-app AI agent system for handling incoming Whats
 
 **Conversation Memory:** Fetches last 30 messages from `whatsapp_messages` for context building.
 
+## Admin AI Configuration Panel
+Platform-wide admin panel at `/admin` (tab "Configuração de IA") for managing all AI agent configurations without code changes.
+
+**Architecture:**
+- `server/ai-config-store.ts`: File-based JSON config store (`server/data/ai-config.json`) with in-memory cache (5-minute TTL), hardcoded defaults as fallback
+- 7 agent types: anamnesis, followup, extraction, mealplan, insights, food_analysis, ask_patient
+- Each config has: system_prompt, model, max_tokens, temperature
+
+**API Endpoints (requireAdmin protected):**
+- `GET /api/admin/ai-config` — List all configs with labels and available models
+- `GET /api/admin/ai-config/:agentType` — Get single config
+- `PUT /api/admin/ai-config/:agentType` — Update config (Zod-validated)
+- `POST /api/admin/ai-config/reset/:agentType` — Reset to defaults
+
+**OpenAI Service Integration:**
+- All methods in `OpenAIService` read config from `getAIConfig()` instead of hardcoded values
+- Template variables `{agentName}` and `{patientContext}` are replaced at runtime
+- Changes take effect immediately (within cache TTL window)
+
+**Admin UI:**
+- Tabbed interface with sub-tabs per agent type
+- Each section: large textarea for prompt, model dropdown (gpt-4o-mini, gpt-4o, gpt-4-turbo, gpt-3.5-turbo), max_tokens input, temperature slider
+- Save and "Restaurar Padrão" (reset) buttons with loading states
+- Toast notifications on save/reset success
+
 **AI Analysis Caching:**
 - Two fields in `Cadastro_de_Pacientes` collection: `ultima_analise_ia` (JSON) and `data_ultima_analise` (timestamp)
 - Backend checks cache validity (24-hour TTL) before calling OpenAI

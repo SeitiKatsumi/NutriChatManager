@@ -11,6 +11,7 @@ import { patientHistoryDirectus } from "./patient-history-directus";
 import { openaiService } from "./openai-service";
 import { scheduleService } from "./schedule-service";
 import { whatsappMessageHandler } from "./whatsapp-message-handler";
+import { getAllAIConfigs, getAIConfig, updateAIConfig, resetAIConfig, getDefaultConfig, VALID_AGENT_TYPES, AVAILABLE_MODELS, getAgentTypeLabel, type AgentType } from "./ai-config-store";
 import Stripe from "stripe";
 
 // Extend session type to include user
@@ -1765,6 +1766,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('[Admin] Error getting patients:', error);
       res.status(500).json({ error: "Failed to fetch patients" });
+    }
+  });
+
+  // ========== ADMIN AI CONFIGURATION ROUTES ==========
+
+  app.get("/api/admin/ai-config", requireAdmin, async (_req, res) => {
+    try {
+      const configs = getAllAIConfigs();
+      const withLabels = configs.map(c => ({ ...c, label: getAgentTypeLabel(c.agent_type) }));
+      res.json({ configs: withLabels, availableModels: AVAILABLE_MODELS });
+    } catch (error) {
+      console.error('[Admin AI Config] Error fetching configs:', error);
+      res.status(500).json({ error: "Failed to fetch AI configurations" });
+    }
+  });
+
+  app.get("/api/admin/ai-config/:agentType", requireAdmin, async (req, res) => {
+    try {
+      const agentType = req.params.agentType as AgentType;
+      if (!VALID_AGENT_TYPES.includes(agentType)) {
+        return res.status(400).json({ error: `Invalid agent type: ${agentType}` });
+      }
+      const config = getAIConfig(agentType);
+      res.json({ ...config, label: getAgentTypeLabel(agentType) });
+    } catch (error) {
+      console.error('[Admin AI Config] Error fetching config:', error);
+      res.status(500).json({ error: "Failed to fetch AI configuration" });
+    }
+  });
+
+  app.put("/api/admin/ai-config/:agentType", requireAdmin, async (req, res) => {
+    try {
+      const agentType = req.params.agentType as AgentType;
+      if (!VALID_AGENT_TYPES.includes(agentType)) {
+        return res.status(400).json({ error: `Invalid agent type: ${agentType}` });
+      }
+
+      const schema = z.object({
+        system_prompt: z.string().min(1).optional(),
+        model: z.string().optional(),
+        max_tokens: z.number().int().min(100).max(16000).optional(),
+        temperature: z.number().min(0).max(2).optional(),
+      });
+
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid data", details: parsed.error.errors });
+      }
+
+      const updated = updateAIConfig(agentType, parsed.data);
+      console.log(`[Admin AI Config] Updated config for ${agentType}`);
+      res.json({ ...updated, label: getAgentTypeLabel(agentType) });
+    } catch (error) {
+      console.error('[Admin AI Config] Error updating config:', error);
+      res.status(500).json({ error: "Failed to update AI configuration" });
+    }
+  });
+
+  app.post("/api/admin/ai-config/reset/:agentType", requireAdmin, async (req, res) => {
+    try {
+      const agentType = req.params.agentType as AgentType;
+      if (!VALID_AGENT_TYPES.includes(agentType)) {
+        return res.status(400).json({ error: `Invalid agent type: ${agentType}` });
+      }
+      const reset = resetAIConfig(agentType);
+      console.log(`[Admin AI Config] Reset config for ${agentType} to defaults`);
+      res.json({ ...reset, label: getAgentTypeLabel(agentType) });
+    } catch (error) {
+      console.error('[Admin AI Config] Error resetting config:', error);
+      res.status(500).json({ error: "Failed to reset AI configuration" });
     }
   });
 
