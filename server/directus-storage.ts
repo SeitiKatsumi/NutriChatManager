@@ -150,6 +150,8 @@ interface PatientInput {
   gender?: string | null;
   weight?: string | null;
   height?: string | null;
+  imc?: string | null;
+  idade?: string | null;
   medicalHistory?: string | null;
   anamnese_inicial?: string | null;
   suplementos_medicamentos?: string | null;
@@ -208,6 +210,8 @@ function transformPatientToDirectus(patient: PatientInput): DirectusPatient {
     Observacoes: patient.notes ?? undefined,
   };
 
+  if (patient.imc !== undefined) transformed.IMC = patient.imc ?? undefined;
+  if (patient.idade !== undefined) transformed.Idade = patient.idade ?? undefined;
   if (patient.cafe_da_manha !== undefined) transformed.Cafe_da_manha = patient.cafe_da_manha ?? undefined;
   if (patient.lanche_da_manha !== undefined) transformed.Lanche_da_manha = patient.lanche_da_manha ?? undefined;
   if (patient.almoco !== undefined) transformed.Almoco = patient.almoco ?? undefined;

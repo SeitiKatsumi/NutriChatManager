@@ -18,6 +18,8 @@ interface PatientUpdateData {
   gender?: string;
   weight?: string;
   height?: string;
+  imc?: string;
+  idade?: string;
   medicalHistory?: string;
   dietaryRestrictions?: string;
   suplementos_medicamentos?: string;
@@ -240,6 +242,41 @@ export class WhatsAppMessageHandler {
         if (extractedData.Lanche_da_tarde) updateData.lanche_da_tarde = extractedData.Lanche_da_tarde;
         if (extractedData.Janta) updateData.janta = extractedData.Janta;
         if (extractedData.Ceia) updateData.ceia = extractedData.Ceia;
+
+        if (extractedData.Peso && extractedData.Altura) {
+          const peso = Number(extractedData.Peso);
+          const alturaCm = Number(extractedData.Altura);
+          if (peso > 0 && alturaCm > 0) {
+            const alturaM = alturaCm / 100;
+            const imcValue = peso / (alturaM * alturaM);
+            const imcRounded = Math.round(imcValue * 10) / 10;
+            let classification = '';
+            if (imcRounded < 18.5) classification = 'Abaixo do peso';
+            else if (imcRounded < 25) classification = 'Peso normal';
+            else if (imcRounded < 30) classification = 'Sobrepeso';
+            else if (imcRounded < 35) classification = 'Obesidade grau I';
+            else if (imcRounded < 40) classification = 'Obesidade grau II';
+            else classification = 'Obesidade grau III';
+            updateData.imc = `${imcRounded} – ${classification}`;
+            console.log(`[MessageHandler] Calculated IMC: ${updateData.imc}`);
+          }
+        }
+
+        if (extractedData.Data_de_nascimento) {
+          try {
+            const birth = new Date(extractedData.Data_de_nascimento);
+            const today = new Date();
+            let age = today.getFullYear() - birth.getFullYear();
+            const monthDiff = today.getMonth() - birth.getMonth();
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+              age--;
+            }
+            if (age > 0 && age < 150) {
+              updateData.idade = String(age);
+              console.log(`[MessageHandler] Calculated age: ${age}`);
+            }
+          } catch (e) {}
+        }
 
         updateData.status = 'Acompanhamento';
 
