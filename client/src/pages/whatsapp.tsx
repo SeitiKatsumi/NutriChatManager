@@ -101,6 +101,7 @@ export default function WhatsApp() {
 
   const connectionState = whatsappStatus?.instance?.state?.toLowerCase();
   const isConnected = connectionState === "open" || connectionState === "connected";
+  const isReconnecting = connectionState === "connecting";
   const hasWhatsAppSetup = !!currentNutritionist?.whatsappIA || !!currentNutritionist?.whatsappNumber;
 
   useEffect(() => {
@@ -186,12 +187,22 @@ export default function WhatsApp() {
                     Entre em contato com o suporte.
                   </p>
                 </div>
-              ) : isConnected ? (
-                <div className="text-center p-6 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                  <CheckCircle className="w-16 h-16 mx-auto mb-4 text-green-600" />
-                  <p className="font-medium text-green-800 dark:text-green-200">WhatsApp Conectado!</p>
-                  <p className="text-sm text-green-600 mt-2">
-                    Seu bot está ativo e pronto para atender pacientes.
+              ) : isConnected || isReconnecting ? (
+                <div className={`text-center p-6 rounded-lg border ${
+                  isReconnecting 
+                    ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800' 
+                    : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                }`}>
+                  {isReconnecting ? (
+                    <Loader2 className="w-16 h-16 mx-auto mb-4 text-yellow-600 animate-spin" />
+                  ) : (
+                    <CheckCircle className="w-16 h-16 mx-auto mb-4 text-green-600" />
+                  )}
+                  <p className={`font-medium ${isReconnecting ? 'text-yellow-800 dark:text-yellow-200' : 'text-green-800 dark:text-green-200'}`}>
+                    {isReconnecting ? 'Reconectando...' : 'WhatsApp Conectado!'}
+                  </p>
+                  <p className={`text-sm mt-2 ${isReconnecting ? 'text-yellow-600' : 'text-green-600'}`}>
+                    {isReconnecting ? 'Conexão temporariamente instável. Reconectando automaticamente...' : 'Seu bot está ativo e pronto para atender pacientes.'}
                   </p>
                   <Button 
                     variant="outline" 
@@ -274,11 +285,13 @@ export default function WhatsApp() {
                 <div className="flex items-center space-x-2">
                   <div className={`w-2 h-2 rounded-full ${
                     statusLoading ? 'bg-yellow-500' :
-                    isConnected ? 'bg-green-500' : 'bg-red-500'
+                    isConnected ? 'bg-green-500' : 
+                    isReconnecting ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'
                   }`} />
-                  <Badge variant={isConnected ? "default" : "secondary"}>
+                  <Badge variant={isConnected || isReconnecting ? "default" : "secondary"}>
                     {statusLoading ? "Verificando..." : 
-                     isConnected ? "Conectado" : "Desconectado"}
+                     isConnected ? "Conectado" : 
+                     isReconnecting ? "Reconectando..." : "Desconectado"}
                   </Badge>
                 </div>
               </div>

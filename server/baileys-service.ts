@@ -233,8 +233,16 @@ export class BaileysService extends EventEmitter {
     const session = this.sessions.get(nutritionistId);
     const state = session?.status || "disconnected";
 
-    const mappedState =
-      state === "connected" ? "open" : state === "qr" ? "qr" : "close";
+    let mappedState: string;
+    if (state === "connected") {
+      mappedState = "open";
+    } else if (state === "qr") {
+      mappedState = "qr";
+    } else if (state === "connecting" && this.reconnecting.has(nutritionistId)) {
+      mappedState = "connecting";
+    } else {
+      mappedState = "close";
+    }
 
     return {
       status: mappedState,
