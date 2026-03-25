@@ -52,6 +52,8 @@ Incoming messages are processed by the handler, identified by nutritionist and p
 
 **Concurrency Protection:** `withPatientLock` serializes message processing per patient to prevent conflicts.
 
+**WhatsApp JID Filtering:** Baileys message handler filters all non-user JID types at the source level using Baileys utilities: `isJidGroup` (groups), `isJidBroadcast` (broadcast lists), `isJidStatusBroadcast` (status), `isLidUser` (Linked Device IDs — internal WhatsApp identifiers that are NOT phone numbers), and `isJidNewsletter` (channels). Only messages from `@s.whatsapp.net` JIDs (real phone numbers) are processed. The message handler additionally validates phone number format (Brazilian: 12-13 digits starting with 55; international: 10-15 digits).
+
 ## Admin AI Configuration Panel
 An admin panel at `/admin` allows managing AI agent configurations without code changes.
 

@@ -348,7 +348,10 @@ export class WhatsAppMessageHandler {
     if (digits.startsWith('55')) {
       return digits.length === 12 || digits.length === 13;
     }
-    return digits.length >= 10 && digits.length <= 15;
+    if (/^[1-9]\d{9,14}$/.test(digits)) {
+      return true;
+    }
+    return false;
   }
 
   private cleanOldCacheEntries(): void {

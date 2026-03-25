@@ -6,6 +6,11 @@ import baileysPkg, {
   isJidGroup,
   isJidBroadcast,
   isJidStatusBroadcast,
+  isJidUser,
+  isLidUser,
+  isJidNewsletter,
+  jidDecode,
+  jidNormalizedUser,
   makeWASocket as namedMakeWASocket,
   type WASocket,
   type ConnectionState,
@@ -231,13 +236,34 @@ export class BaileysService extends EventEmitter {
             continue;
           }
 
+          if (isLidUser(jid)) {
+            console.log(`[Baileys] Ignoring LID message from ${jid} (linked device ID, not a phone number)`);
+            continue;
+          }
+
+          if (isJidNewsletter(jid)) {
+            console.log(`[Baileys] Ignoring newsletter message from ${jid}`);
+            continue;
+          }
+
+          if (!isJidUser(jid)) {
+            console.log(`[Baileys] Ignoring message from unknown JID type: ${jid}`);
+            continue;
+          }
+
+          const decoded = jidDecode(jid);
+          if (!decoded || !decoded.user) {
+            console.log(`[Baileys] Could not decode JID: ${jid}`);
+            continue;
+          }
+
+          const phoneNumber = decoded.user;
+
           const text =
             msg.message.conversation ||
             msg.message.extendedTextMessage?.text ||
             msg.message.imageMessage?.caption ||
             "";
-
-          const phoneNumber = jid.replace("@s.whatsapp.net", "");
 
           this.emit("message", {
             nutritionistId,
