@@ -41,6 +41,7 @@ export class BaileysService extends EventEmitter {
   private sessions: Map<string, BaileysSession> = new Map();
   private sessionsDir: string;
   private reconnecting: Set<string> = new Set();
+  private lidToPhoneMap: Map<string, string> = new Map();
 
   constructor() {
     super();
@@ -222,6 +223,15 @@ export class BaileysService extends EventEmitter {
         }
       });
 
+      socket.ev.on("chats.phoneNumberShare", ({ lid, jid: phoneJid }) => {
+        const lidUser = lid.replace("@lid", "").split(":")[0];
+        const phoneUser = phoneJid.replace("@s.whatsapp.net", "").split(":")[0];
+        if (lidUser && phoneUser) {
+          this.lidToPhoneMap.set(lidUser, phoneUser);
+          console.log(`[Baileys] LID mapping: ${lidUser} → ${phoneUser}`);
+        }
+      });
+
       socket.ev.on("messages.upsert", async ({ messages, type }) => {
         if (type !== "notify") return;
 
@@ -236,28 +246,47 @@ export class BaileysService extends EventEmitter {
             continue;
           }
 
-          if (isLidUser(jid)) {
-            console.log(`[Baileys] Ignoring LID message from ${jid} (linked device ID, not a phone number)`);
-            continue;
-          }
-
           if (isJidNewsletter(jid)) {
             console.log(`[Baileys] Ignoring newsletter message from ${jid}`);
             continue;
           }
 
-          if (!isJidUser(jid)) {
+          let phoneNumber: string | null = null;
+
+          if (isLidUser(jid)) {
+            const lidUser = jid.replace("@lid", "").split(":")[0];
+            const cachedPhone = this.lidToPhoneMap.get(lidUser);
+            if (cachedPhone) {
+              phoneNumber = cachedPhone;
+              console.log(`[Baileys] Resolved LID ${lidUser} → phone ${phoneNumber}`);
+            } else {
+              try {
+                const results = await socket.onWhatsApp(jid);
+                if (results && results.length > 0 && results[0].jid) {
+                  phoneNumber = results[0].jid.replace("@s.whatsapp.net", "");
+                  this.lidToPhoneMap.set(lidUser, phoneNumber);
+                  console.log(`[Baileys] Resolved LID via lookup ${lidUser} → phone ${phoneNumber}`);
+                }
+              } catch (err) {
+                console.log(`[Baileys] Could not resolve LID ${lidUser}: ${err}`);
+              }
+            }
+
+            if (!phoneNumber) {
+              console.log(`[Baileys] Ignoring LID message from ${jid} (could not resolve to phone number)`);
+              continue;
+            }
+          } else if (isJidUser(jid)) {
+            const decoded = jidDecode(jid);
+            if (!decoded || !decoded.user) {
+              console.log(`[Baileys] Could not decode JID: ${jid}`);
+              continue;
+            }
+            phoneNumber = decoded.user;
+          } else {
             console.log(`[Baileys] Ignoring message from unknown JID type: ${jid}`);
             continue;
           }
-
-          const decoded = jidDecode(jid);
-          if (!decoded || !decoded.user) {
-            console.log(`[Baileys] Could not decode JID: ${jid}`);
-            continue;
-          }
-
-          const phoneNumber = decoded.user;
 
           const text =
             msg.message.conversation ||
