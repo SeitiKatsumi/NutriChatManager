@@ -89,6 +89,12 @@ export class WhatsAppMessageHandler {
 
       const nutritionistId = nutritionist.id;
       const cleanNumber = cleanWhatsAppNumber(senderNumber);
+
+      if (!this.isValidPhoneNumber(cleanNumber)) {
+        console.log(`[MessageHandler] Ignoring message from invalid/non-Brazilian number: ${cleanNumber}`);
+        return;
+      }
+
       const lockKey = `${nutritionistId}:${cleanNumber}`;
 
       await this.withPatientLock(lockKey, async () => {
@@ -334,6 +340,15 @@ export class WhatsAppMessageHandler {
       cached.splice(0, cached.length - WhatsAppMessageHandler.CACHE_MAX_MESSAGES);
     }
     this.conversationCache.set(patientId, cached);
+  }
+
+  private isValidPhoneNumber(number: string): boolean {
+    const digits = number.replace(/\D/g, '');
+    if (digits.length < 10 || digits.length > 15) return false;
+    if (digits.startsWith('55')) {
+      return digits.length === 12 || digits.length === 13;
+    }
+    return digits.length >= 10 && digits.length <= 15;
   }
 
   private cleanOldCacheEntries(): void {
