@@ -1,7 +1,3 @@
-import { db } from './db';
-import { aiConfigTable } from '@shared/schema';
-import { eq } from 'drizzle-orm';
-
 export type AgentType = 'anamnesis' | 'followup' | 'extraction' | 'mealplan' | 'insights' | 'food_analysis' | 'ask_patient';
 
 export interface AIConfigData {
@@ -251,61 +247,28 @@ let configCache: Map<AgentType, AIConfigData> | null = null;
 let lastCacheRefresh = 0;
 const CACHE_TTL = 5 * 60 * 1000;
 
-async function seedDefaults(): Promise<void> {
-  try {
-    const existing = await db.select().from(aiConfigTable);
-    const existingTypes = new Set(existing.map(e => e.agent_type));
+function seedDefaults(): void {
+  if (configCache) return;
 
-    for (const [agentType, defaults] of Object.entries(DEFAULT_CONFIGS)) {
-      if (!existingTypes.has(agentType)) {
-        await db.insert(aiConfigTable).values({
-          agent_type: agentType,
-          system_prompt: defaults.system_prompt,
-          model: defaults.model,
-          max_tokens: defaults.max_tokens,
-          temperature: defaults.temperature,
-        });
-        console.log(`[AIConfigStore] Seeded default config for ${agentType}`);
-      }
-    }
-  } catch (error) {
-    console.error('[AIConfigStore] Error seeding defaults:', error);
+  configCache = new Map();
+  for (const [key, val] of Object.entries(DEFAULT_CONFIGS)) {
+    configCache.set(key as AgentType, { ...val, agent_type: key as AgentType, updated_at: new Date() });
   }
+  lastCacheRefresh = Date.now();
 }
 
 export async function initAIConfigStore(): Promise<void> {
-  await seedDefaults();
+  seedDefaults();
   await refreshCache();
-  console.log('[AIConfigStore] Initialized with DB-backed storage');
+  console.log('[AIConfigStore] Initialized with in-memory defaults');
 }
 
 async function refreshCache(): Promise<void> {
   const now = Date.now();
   if (configCache && now - lastCacheRefresh < CACHE_TTL) return;
 
-  try {
-    const rows = await db.select().from(aiConfigTable);
-    configCache = new Map();
-    for (const row of rows) {
-      configCache.set(row.agent_type as AgentType, {
-        agent_type: row.agent_type as AgentType,
-        system_prompt: row.system_prompt,
-        model: row.model,
-        max_tokens: row.max_tokens,
-        temperature: row.temperature,
-        updated_at: row.updated_at,
-      });
-    }
-    lastCacheRefresh = now;
-  } catch (error) {
-    console.error('[AIConfigStore] Error refreshing cache from DB:', error);
-    if (!configCache) {
-      configCache = new Map();
-      for (const [key, val] of Object.entries(DEFAULT_CONFIGS)) {
-        configCache.set(key as AgentType, { ...val, agent_type: key as AgentType, updated_at: new Date() });
-      }
-    }
-  }
+  seedDefaults();
+  lastCacheRefresh = now;
 }
 
 export async function getAIConfig(agentType: AgentType): Promise<AIConfigData> {
@@ -326,37 +289,21 @@ export async function getAllAIConfigs(): Promise<AIConfigData[]> {
 
 export async function updateAIConfig(agentType: AgentType, updates: Partial<Pick<AIConfigData, 'system_prompt' | 'model' | 'max_tokens' | 'temperature'>>): Promise<AIConfigData> {
   const now = new Date();
-  await db.update(aiConfigTable)
-    .set({ ...updates, updated_at: now })
-    .where(eq(aiConfigTable.agent_type, agentType));
-
-  configCache = null;
-  lastCacheRefresh = 0;
-  await refreshCache();
-
-  return getAIConfig(agentType);
+  const current = await getAIConfig(agentType);
+  configCache!.set(agentType, { ...current, ...updates, updated_at: now });
+  lastCacheRefresh = Date.now();
+  return configCache!.get(agentType)!;
 }
 
 export async function resetAIConfig(agentType: AgentType): Promise<AIConfigData> {
   const defaults = DEFAULT_CONFIGS[agentType];
   if (!defaults) throw new Error(`Unknown agent type: ${agentType}`);
 
-  const now = new Date();
-  await db.update(aiConfigTable)
-    .set({
-      system_prompt: defaults.system_prompt,
-      model: defaults.model,
-      max_tokens: defaults.max_tokens,
-      temperature: defaults.temperature,
-      updated_at: now,
-    })
-    .where(eq(aiConfigTable.agent_type, agentType));
-
-  configCache = null;
-  lastCacheRefresh = 0;
-  await refreshCache();
-
-  return getAIConfig(agentType);
+  seedDefaults();
+  const reset = { ...defaults, agent_type: agentType, updated_at: new Date() };
+  configCache!.set(agentType, reset);
+  lastCacheRefresh = Date.now();
+  return reset;
 }
 
 export function getDefaultConfig(agentType: AgentType): typeof DEFAULT_CONFIGS[AgentType] | undefined {
