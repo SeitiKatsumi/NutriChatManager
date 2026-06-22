@@ -182,6 +182,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return res.status(403).json({ error: "Admin access required" });
   };
 
+  const getSessionDirectusToken = (req: any) =>
+    req.session.user?.isAdmin ? process.env.DIRECTUS_TOKEN : req.session.user?.accessToken;
+
   // Middleware to check if user has active subscription
   const requireActiveSubscription = async (req: any, res: any, next: any) => {
     if (!req.session.user) {
@@ -1111,6 +1114,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
+      if (req.session.user.isAdmin) {
+        return res.json({
+          user: {
+            id: req.session.user.id,
+            email: req.session.user.email,
+            name: req.session.user.email || 'Administrador',
+            isAdmin: true,
+          },
+        });
+      }
+
       // Get nutritionist from local database
       const nutritionist = await storage.getNutritionist(req.session.user.nutritionistId);
       if (!nutritionist) {
@@ -1390,10 +1404,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('[Admin] Getting all nutritionists');
       
       // Use Directus to get all users with nutritionist role
-      // For temporary admin sessions, use system token
-      const userToken = req.session.user.accessToken === 'temp-admin-token' 
-        ? process.env.DIRECTUS_TOKEN 
-        : req.session.user.accessToken;
+      const userToken = getSessionDirectusToken(req);
       const response = await fetch(`${process.env.DIRECTUS_URL}/users?filter[role][_eq]=90ce89ef-abe3-4359-9fc0-3e882127775a&fields=*`, {
         headers: {
           'Authorization': `Bearer ${userToken}`,
@@ -1440,7 +1451,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const nutritionistId = req.params.id;
       console.log(`[Admin] Getting nutritionist details for ID: ${nutritionistId}`);
       
-      const userToken = req.session.user.accessToken;
+      const userToken = getSessionDirectusToken(req);
       const response = await fetch(`${process.env.DIRECTUS_URL}/users/${nutritionistId}?fields=*`, {
         headers: {
           'Authorization': `Bearer ${userToken}`,
@@ -1489,10 +1500,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log('[Admin] Getting all patients');
       
-      // For temporary admin sessions, use system token
-      const userToken = req.session.user.accessToken === 'temp-admin-token' 
-        ? process.env.DIRECTUS_TOKEN 
-        : req.session.user.accessToken;
+      const userToken = getSessionDirectusToken(req);
       
       // Get all patients directly from Directus
       const response = await fetch(`${process.env.DIRECTUS_URL}/items/Cadastro_de_Pacientes?fields=id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,Suplementos_e_medicamentos,Etapas,date_created,date_updated`, {
@@ -1618,9 +1626,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Check if user has an active subscription
-      const hasActiveSubscription = user.subscriptionStatus === 'active' && 
-                                  user.subscriptionId && 
-                                  user.planId;
+      const hasActiveSubscription = Boolean(
+        user.subscriptionStatus === 'active' &&
+        user.subscriptionId &&
+        user.planId
+      );
 
       res.json({
         hasActiveSubscription,
