@@ -213,6 +213,64 @@ function transformPatientToDirectus(patient: PatientInput): DirectusPatient {
   return transformed;
 }
 
+function transformPatientUpdateToDirectus(patient: PatientInput): Partial<DirectusPatient> {
+  console.log('Transforming patient update to Directus:', patient);
+
+  const transformed: Partial<DirectusPatient> = {};
+
+  if (patient.nutritionistId !== undefined) transformed.Nutricionista_responsavel = patient.nutritionistId || '';
+  if (patient.fullName !== undefined) transformed.Nome_Completo = patient.fullName || '';
+  if (patient.email !== undefined) transformed.Email = patient.email ?? undefined;
+  if (patient.phone !== undefined) transformed.Telefone = patient.phone ?? undefined;
+  if (patient.whatsappNumber !== undefined) {
+    const cleanNumber = patient.whatsappNumber ? patient.whatsappNumber.replace(/\D/g, '') : '';
+    if (cleanNumber.length === 11) transformed.Whatsapp = `55${cleanNumber}`;
+    else if (cleanNumber.length === 13 && cleanNumber.startsWith('55')) transformed.Whatsapp = cleanNumber;
+    else transformed.Whatsapp = patient.whatsappNumber ?? undefined;
+  }
+  if (patient.dateOfBirth !== undefined) {
+    if (patient.dateOfBirth) {
+      const date = new Date(patient.dateOfBirth);
+      transformed.Data_de_nascimento = !isNaN(date.getTime()) ? date.toISOString().split('T')[0] : undefined;
+    } else {
+      transformed.Data_de_nascimento = undefined;
+    }
+  }
+  if (patient.gender !== undefined) transformed.Sexo = patient.gender ?? undefined;
+  if (patient.weight !== undefined) transformed.Peso = patient.weight ? parseInt(patient.weight, 10) : undefined;
+  if (patient.height !== undefined) transformed.Altura = patient.height ? parseInt(patient.height, 10) : undefined;
+  if (patient.medicalHistory !== undefined || patient.anamnese_inicial !== undefined) {
+    transformed.Anamise_inicial = patient.medicalHistory || patient.anamnese_inicial || undefined;
+  }
+  if (patient.suplementos_medicamentos !== undefined) transformed.Suplementos_e_medicamentos = patient.suplementos_medicamentos ?? undefined;
+  if (patient.dietaryRestrictions !== undefined) transformed.Restricoes_alimentares = patient.dietaryRestrictions ?? undefined;
+  if (patient.goals !== undefined) transformed.Metas_e_objetivos = patient.goals ?? undefined;
+  if (patient.status !== undefined) transformed.Etapas = patient.status || undefined;
+  if (patient.lastConsultation !== undefined) {
+    transformed.Ultima_consulta = patient.lastConsultation instanceof Date
+      ? patient.lastConsultation.toISOString()
+      : patient.lastConsultation ?? undefined;
+  }
+  if (patient.notes !== undefined) transformed.Observacoes = patient.notes ?? undefined;
+  if (patient.imc !== undefined) {
+    const imcNum = patient.imc ? parseFloat(patient.imc) : undefined;
+    transformed.IMC = imcNum && !isNaN(imcNum) ? imcNum : undefined;
+  }
+  if (patient.idade !== undefined) {
+    const idadeNum = patient.idade ? parseInt(patient.idade, 10) : undefined;
+    transformed.Idade = idadeNum && !isNaN(idadeNum) ? idadeNum : undefined;
+  }
+  if (patient.cafe_da_manha !== undefined) transformed.Cafe_da_manha = patient.cafe_da_manha ?? undefined;
+  if (patient.lanche_da_manha !== undefined) transformed.Lanche_da_manha = patient.lanche_da_manha ?? undefined;
+  if (patient.almoco !== undefined) transformed.Almoco = patient.almoco ?? undefined;
+  if (patient.lanche_da_tarde !== undefined) transformed.Lanche_da_tarde = patient.lanche_da_tarde ?? undefined;
+  if (patient.janta !== undefined) transformed.Janta = patient.janta ?? undefined;
+  if (patient.ceia !== undefined) transformed.Ceia = patient.ceia ?? undefined;
+
+  console.log('Transformed patient update data:', transformed);
+  return transformed;
+}
+
 function transformPatientFromDirectus(directusPatient: any): any {
   // Combinar campos do recordatório 24h em um texto organizado
   const recordatorio = [
@@ -940,7 +998,7 @@ export class DirectusStorage implements IStorage {
   async updatePatient(id: string, updateData: any, userToken?: string) {
     try {
       const client = this.getUserClient(userToken);
-      const directusUpdate = transformPatientToDirectus(updateData);
+      const directusUpdate = transformPatientUpdateToDirectus(updateData);
       const response = await client.request(`/items/${PATIENTS_COLLECTION}/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(directusUpdate),
