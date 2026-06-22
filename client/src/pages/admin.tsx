@@ -31,8 +31,7 @@ interface Nutritionist {
   createdAt: string;
   updatedAt: string;
   lastAccess: string;
-  evolutionInstance: string;
-  whatsappIA: string;
+  twilioSender: string | null;
 }
 
 interface Patient {

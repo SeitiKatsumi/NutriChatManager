@@ -2,15 +2,16 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import bcrypt from "bcrypt";
 import { storage, initializeStorage } from "./storage";
-import { insertNutritionistSchema, insertWhatsappInstanceSchema, insertPatientSchema, insertWhatsappMessageSchema, insertWhatsappScheduleSchema, scheduleTypeEnum, scheduleStatusEnum } from "@shared/schema";
+import { insertNutritionistSchema, insertPatientSchema, insertWhatsappScheduleSchema, scheduleTypeEnum, scheduleStatusEnum } from "@shared/schema";
 import { z } from "zod";
 // @ts-ignore - directus.js doesn't have type declarations
 import { directusClient } from "./lib/directus.js";
-// evolutionRedis removed - migrated to Baileys
+// Official WhatsApp communication is handled by Twilio webhooks.
 import { patientHistoryDirectus } from "./patient-history-directus";
 import { openaiService } from "./openai-service";
 import { scheduleService } from "./schedule-service";
 import { whatsappMessageHandler } from "./whatsapp-message-handler";
+import { twilioWhatsAppService } from "./twilio-whatsapp-service";
 import { getAllAIConfigs, getAIConfig, updateAIConfig, resetAIConfig, getDefaultConfig, VALID_AGENT_TYPES, AVAILABLE_MODELS, getAgentTypeLabel, initAIConfigStore, type AgentType } from "./ai-config-store";
 import Stripe from "stripe";
 
@@ -550,26 +551,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // WhatsApp instances routes (PROTECTED with subscription)
   app.get("/api/whatsapp-instances", requireAuth, requireActiveSubscription, async (req, res) => {
     try {
-      // Security: Users can only see their own instance
-      const nutritionistId = req.session.user.nutritionistId;
-      const userToken = req.session.user.accessToken;
+      const status = twilioWhatsAppService.getStatus();
       
-      // Get nutritionist data to check for Evolution instance
-      const nutritionist = await storage.getNutritionist(nutritionistId, userToken);
-      if (!nutritionist || !nutritionist.evolutionInstanceName) {
-        return res.json([]); // Return empty if no instance configured
-      }
-      
-      // Return formatted instance data for backward compatibility
-      const instance = {
-        id: nutritionist.evolutionInstanceName,
-        instanceName: nutritionist.evolutionInstanceName,
-        phoneNumber: nutritionist.whatsappIA,
-        status: "connected", // This would need real status check
-        nutritionistId: nutritionistId
-      };
-      
-      res.json([instance]);
+      res.json([{
+        id: status.instance.instanceName,
+        instanceName: status.instance.instanceName,
+        phoneNumber: status.sender,
+        status: status.status,
+        provider: status.provider,
+        nutritionistId: req.session.user.nutritionistId
+      }]);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch WhatsApp instances" });
     }
@@ -577,62 +568,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/whatsapp-instances/nutritionist/:nutritionistId", requireAuth, requireActiveSubscription, async (req, res) => {
     try {
-      // Security: Users can only access their own instance
       if (req.params.nutritionistId !== req.session.user.nutritionistId) {
         return res.status(403).json({ error: "Access denied" });
       }
       
-      const instance = await storage.getWhatsappInstanceByNutritionist(req.params.nutritionistId);
-      if (!instance) {
-        return res.status(404).json({ error: "WhatsApp instance not found" });
-      }
-      res.json(instance);
+      const status = twilioWhatsAppService.getStatus();
+      res.json({
+        id: status.instance.instanceName,
+        instanceName: status.instance.instanceName,
+        phoneNumber: status.sender,
+        status: status.status,
+        provider: status.provider,
+        nutritionistId: req.params.nutritionistId
+      });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch WhatsApp instance" });
     }
   });
 
   app.post("/api/whatsapp-instances", requireAuth, requireActiveSubscription, async (req, res) => {
-    try {
-      // Security: Add nutritionistId from session
-      const instanceData = {
-        ...req.body,
-        nutritionistId: req.session.user.nutritionistId
-      };
-      
-      const validatedData = insertWhatsappInstanceSchema.parse(instanceData);
-      const instance = await storage.createWhatsappInstance(validatedData);
-      res.status(201).json(instance);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid data", details: error.errors });
-      }
-      res.status(500).json({ error: "Failed to create WhatsApp instance" });
-    }
+    res.status(410).json({ error: "Deprecated endpoint", message: "WhatsApp instances are managed by the global Twilio sender." });
   });
 
   app.put("/api/whatsapp-instances/:id", requireAuth, requireActiveSubscription, async (req, res) => {
-    try {
-      // Security: Verify ownership before update
-      const existingInstance = await storage.getWhatsappInstance(req.params.id);
-      if (!existingInstance || existingInstance.nutritionistId !== req.session.user.nutritionistId) {
-        return res.status(403).json({ error: "Access denied" });
-      }
-      
-      const validatedData = insertWhatsappInstanceSchema.partial().parse(req.body);
-      const instance = await storage.updateWhatsappInstance(req.params.id, validatedData);
-      
-      if (!instance) {
-        return res.status(404).json({ error: "WhatsApp instance not found" });
-      }
-      
-      res.json(instance);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid data", details: error.errors });
-      }
-      res.status(500).json({ error: "Failed to update WhatsApp instance" });
-    }
+    res.status(410).json({ error: "Deprecated endpoint", message: "WhatsApp instances are managed by the global Twilio sender." });
   });
 
   // Patients routes (protected with subscription)
@@ -771,29 +730,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // WhatsApp Messages - Webhook route for N8N to save messages
   app.post("/api/messages/webhook", async (req, res) => {
-    try {
-      console.log('[API] Received WhatsApp message webhook from N8N');
-      
-      const webhookToken = req.headers['x-webhook-token'];
-      if (webhookToken !== process.env.N8N_WEBHOOK_TOKEN && process.env.N8N_WEBHOOK_TOKEN) {
-        console.error('[API] Invalid webhook token');
-        return res.status(401).json({ error: "Unauthorized" });
-      }
-
-      const messageData = insertWhatsappMessageSchema.parse(req.body);
-      const savedMessage = await storage.saveWhatsappMessage(messageData);
-      
-      console.log(`[API] Message saved successfully: ${savedMessage.id}`);
-      res.status(201).json({ success: true, messageId: savedMessage.id });
-    } catch (error) {
-      console.error('[API] Error saving WhatsApp message:', error);
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid message data", details: error.errors });
-      }
-      res.status(500).json({ error: "Failed to save message" });
-    }
+    res.status(410).json({ error: "Deprecated webhook", message: "Messages are now ingested through /api/twilio/whatsapp/webhook." });
   });
 
   const processedMessageIds = new Set<string>();
@@ -802,112 +740,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
     processedMessageIds.clear();
   }, MESSAGE_ID_TTL);
 
-  app.post("/api/whatsapp/ai-webhook", async (req, res) => {
+  app.post("/api/twilio/whatsapp/webhook", async (req, res) => {
     try {
-      console.log('[API] Received Evolution API webhook for AI processing');
+      console.log('[Twilio Webhook] Received WhatsApp message');
 
-      const webhookToken = req.headers['x-webhook-token'] || req.headers['apikey'];
-      const expectedToken = process.env.AI_WEBHOOK_TOKEN || process.env.EVOLUTION_API_KEY;
-      if (expectedToken && webhookToken !== expectedToken) {
-        console.error('[API] Invalid or missing webhook token for AI webhook');
-        return res.status(401).json({ error: 'Unauthorized' });
+      if (!twilioWhatsAppService.validateWebhook(req)) {
+        console.error('[Twilio Webhook] Invalid signature');
+        return res.status(401).send('Unauthorized');
       }
 
-      const body = req.body;
-
-      const event = body.event || body.type;
-      if (event && event !== 'MESSAGES_UPSERT' && event !== 'messages.upsert') {
-        return res.status(200).json({ ignored: true, reason: 'Not a message event' });
+      const inbound = twilioWhatsAppService.parseInboundMessage(req.body);
+      if (!inbound.messageSid || !inbound.fromNumber) {
+        console.warn('[Twilio Webhook] Missing MessageSid or From');
+        return res.status(400).send('Missing required fields');
       }
 
-      const data = body.data || body;
-      const instanceName = body.instance || body.instanceName || data.instance || '';
-
-      const messageId = data.key?.id || data.messageId || '';
-      if (messageId && processedMessageIds.has(messageId)) {
-        console.log(`[API] Duplicate message ${messageId} ignored`);
-        return res.status(200).json({ ignored: true, reason: 'Duplicate message' });
+      if (processedMessageIds.has(inbound.messageSid)) {
+        return res.status(200).type('text/xml').send('<Response></Response>');
       }
-      if (messageId) {
-        processedMessageIds.add(messageId);
-      }
+      processedMessageIds.add(inbound.messageSid);
 
-      let senderNumber = '';
-      let messageBody = '';
-      let messageType: 'text' | 'image' | 'audio' | 'video' | 'document' = 'text';
       let imageBuffer: Buffer | undefined;
-
-      if (data.key) {
-        if (data.key.fromMe) {
-          return res.status(200).json({ ignored: true, reason: 'Message from self' });
+      if (inbound.messageType === 'image' && inbound.media[0]?.url) {
+        try {
+          imageBuffer = await twilioWhatsAppService.downloadMedia(inbound.media[0].url);
+        } catch (downloadError) {
+          console.warn('[Twilio Webhook] Could not download image media:', downloadError);
         }
-        senderNumber = (data.key.remoteJid || '').replace('@s.whatsapp.net', '').replace('@g.us', '');
-        
-        if ((data.key.remoteJid || '').includes('@g.us')) {
-          return res.status(200).json({ ignored: true, reason: 'Group message' });
-        }
-      } else if (data.remoteJid) {
-        senderNumber = data.remoteJid.replace('@s.whatsapp.net', '');
-      } else if (data.from) {
-        senderNumber = data.from;
       }
 
-      if (!senderNumber || !instanceName) {
-        console.warn('[API] Missing senderNumber or instanceName in webhook');
-        return res.status(400).json({ error: 'Missing required fields' });
-      }
-
-      const msg = data.message || data;
-      if (msg.conversation) {
-        messageBody = msg.conversation;
-        messageType = 'text';
-      } else if (msg.extendedTextMessage?.text) {
-        messageBody = msg.extendedTextMessage.text;
-        messageType = 'text';
-      } else if (msg.imageMessage) {
-        messageType = 'image';
-        messageBody = msg.imageMessage.caption || '[Imagem]';
-
-        if (data.base64 || msg.imageMessage.base64) {
-          try {
-            const b64 = data.base64 || msg.imageMessage.base64;
-            imageBuffer = Buffer.from(b64, 'base64');
-          } catch (e) {
-            console.warn('[API] Failed to decode image base64');
-          }
-        }
-      } else if (msg.audioMessage) {
-        messageType = 'audio';
-        messageBody = '[Áudio - não suportado no momento]';
-      } else if (msg.videoMessage) {
-        messageType = 'video';
-        messageBody = '[Vídeo]';
-      } else if (msg.documentMessage) {
-        messageType = 'document';
-        messageBody = '[Documento]';
-      } else {
-        messageBody = JSON.stringify(msg).substring(0, 200);
-      }
-
-      res.status(200).json({ success: true, processing: true });
+      res.status(200).type('text/xml').send('<Response></Response>');
 
       whatsappMessageHandler.handleIncomingMessage({
-        instanceName,
-        senderNumber,
-        messageBody,
-        messageType,
+        senderNumber: inbound.fromNumber,
+        messageBody: inbound.body || (inbound.media.length ? `[${inbound.messageType}]` : ''),
+        messageType: inbound.messageType,
         imageBuffer,
-        timestamp: data.messageTimestamp ? Number(data.messageTimestamp) * 1000 : Date.now(),
       }).catch(err => {
-        console.error('[API] Error in async message handler:', err);
+        console.error('[Twilio Webhook] Error in async message handler:', err);
       });
-
     } catch (error) {
-      console.error('[API] Error processing AI webhook:', error);
-      res.status(500).json({ error: 'Failed to process webhook' });
+      console.error('[Twilio Webhook] Error processing webhook:', error);
+      res.status(500).send('Failed to process webhook');
     }
   });
 
+  app.post("/api/twilio/whatsapp/status", async (req, res) => {
+    console.log('[Twilio Status] Message status update:', {
+      messageSid: req.body.MessageSid,
+      messageStatus: req.body.MessageStatus,
+      errorCode: req.body.ErrorCode,
+      errorMessage: req.body.ErrorMessage,
+    });
+    res.status(200).send('ok');
+  });
+
+  app.post("/api/whatsapp/ai-webhook", async (req, res) => {
+    res.status(410).json({
+      error: "Deprecated webhook",
+      message: "Use /api/twilio/whatsapp/webhook for official Twilio WhatsApp webhooks.",
+    });
+  });
   // Get patient messages by patient ID
   app.get("/api/messages/patient/:patientId", requireAuth, requireActiveSubscription, async (req, res) => {
     try {
@@ -926,52 +819,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // WhatsApp routes (Baileys)
+  // WhatsApp routes (Twilio)
   app.get("/api/whatsapp/qrcode/:nutritionistId", requireAuth, requireActiveSubscription, async (req, res) => {
-    try {
-      if (req.params.nutritionistId !== req.session.user.nutritionistId) {
-        return res.status(403).json({ error: "Access denied" });
-      }
-
-      const userToken = req.session.user.accessToken;
-      const nutritionist = await storage.getNutritionist(req.params.nutritionistId, userToken);
-      
-      if (!nutritionist) {
-        return res.status(404).json({ error: "Nutritionist not found" });
-      }
-
-      const whatsappNumber = nutritionist.whatsappIA || nutritionist.whatsappNumber || "";
-      if (!whatsappNumber) {
-        return res.status(400).json({ error: "No WhatsApp number configured for this nutritionist" });
-      }
-      const { baileysService } = await import('./baileys-service.js');
-
-      await baileysService.startSession(req.params.nutritionistId, whatsappNumber);
-
-      const maxWait = 10;
-      let qrCode: string | null = null;
-      let status = baileysService.getStatus(req.params.nutritionistId);
-
-      for (let i = 0; i < maxWait; i++) {
-        qrCode = baileysService.getQRCode(req.params.nutritionistId);
-        status = baileysService.getStatus(req.params.nutritionistId);
-        if (qrCode || status.instance.state === "open") break;
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-
-      if (status.instance.state === "open") {
-        return res.json({ base64: null, connected: true });
-      }
-
-      if (!qrCode) {
-        return res.status(202).json({ base64: null, message: "QR code is being generated, please try again in a few seconds." });
-      }
-
-      res.json({ base64: qrCode });
-    } catch (error: any) {
-      console.error("Error getting QR code:", error);
-      res.status(500).json({ error: error.message || "Failed to generate QR code" });
-    }
+    res.status(410).json({
+      error: "QR code is not used with Twilio",
+      message: "WhatsApp is now managed by the global official Twilio sender.",
+    });
   });
 
   app.get("/api/whatsapp/status/:nutritionistId", requireAuth, requireActiveSubscription, async (req, res) => {
@@ -980,10 +833,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Access denied" });
       }
 
-      const { baileysService } = await import('./baileys-service.js');
-
-      const statusResponse = baileysService.getStatus(req.params.nutritionistId);
-      const qrCode = baileysService.getQRCode(req.params.nutritionistId);
+      const statusResponse = twilioWhatsAppService.getStatus();
       
       const timestamp = Date.now();
       const uniqueETag = `"${timestamp}-${Math.random()}"`;
@@ -999,7 +849,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json({
         ...statusResponse,
-        qrCode: qrCode || null,
+        qrCode: null,
         _timestamp: timestamp,
         _cache_buster: Math.random()
       });
@@ -1013,16 +863,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/stats", async (req, res) => {
     try {
       const nutritionists = await storage.listNutritionists();
-      const instances = await storage.listWhatsappInstances();
-      const messagesCount = await storage.getMessagesCount();
-      
-      const connectedInstances = instances.filter((i: any) => i.status === "connected").length;
-      
+      const status = twilioWhatsAppService.getStatus();
+
       res.json({
         nutritionists: nutritionists.length,
-        connectedWhatsapp: connectedInstances,
-        messages: messagesCount,
-        responseRate: "97.2%" // This would be calculated from actual data
+        connectedWhatsapp: status.instance.state === "open" ? 1 : 0,
+        messages: 0,
+        responseRate: "97.2%"
       });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch statistics" });
@@ -1046,15 +893,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Nutritionist not found" });
       }
       const patients = await storage.getPatientsByNutritionist(nutritionist.id, userToken);
-      const whatsappInstance = await storage.getWhatsappInstanceByNutritionist(nutritionist.id, userToken);
-      const messages = whatsappInstance ? await storage.getMessagesByInstance(whatsappInstance.id) : [];
+      // ponytail: recent sample only; add aggregate query if exact total becomes necessary.
+      const messages = (await Promise.all(
+        patients.slice(-5).map((patient: any) => storage.getPatientMessages(patient.id, 10).catch(() => []))
+      )).flat();
+      const whatsappStatus = twilioWhatsAppService.getStatus();
       
       const stats = {
         totalPatients: patients.length,
         activePatients: patients.filter((p: any) => p.status === 'active').length,
         totalConsultations: patients.reduce((total: any, patient: any) => total + (patient.consultationCount || 0), 0),
         totalMessages: messages.length,
-        whatsappConnected: whatsappInstance?.status === 'connected',
+        whatsappConnected: whatsappStatus.instance.state === 'open',
         responseRate: "95%"
       };
       
@@ -1080,15 +930,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Nutritionist profile not found" });
       }
       const patients = await storage.getPatientsByNutritionist(nutritionist.id, userToken);
-      const whatsappInstance = await storage.getWhatsappInstanceByNutritionist(nutritionist.id, userToken);
-      const messages = whatsappInstance ? await storage.getMessagesByInstance(whatsappInstance.id) : [];
+      // ponytail: recent sample only; add aggregate query if exact total becomes necessary.
+      const messages = (await Promise.all(
+        patients.slice(-5).map((patient: any) => storage.getPatientMessages(patient.id, 10).catch(() => []))
+      )).flat();
+      const whatsappStatus = twilioWhatsAppService.getStatus();
       
       const stats = {
         totalPatients: patients.length,
         activePatients: patients.filter((p: any) => p.status === 'active').length,
         totalConsultations: patients.reduce((total: any, patient: any) => total + (patient.consultationCount || 0), 0),
         totalMessages: messages.length,
-        whatsappConnected: whatsappInstance?.status === 'connected',
+        whatsappConnected: whatsappStatus.instance.state === 'open',
         responseRate: "95%"
       };
       
@@ -1272,8 +1125,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('[Auth] Nutritionist data:', {
         id: nutritionist.id,
         fullName: nutritionist.fullName,
-        evolutionInstanceName: nutritionist.evolutionInstanceName,
-        whatsappIA: nutritionist.whatsappIA,
         status_pagamento: nutritionist.status_pagamento,
       });
 
@@ -1303,74 +1154,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Evolution API proxy endpoints (now backed by Baileys)
+  // Deprecated WhatsApp provider proxy endpoints
   app.post("/api/evolution/generate-qr/:instanceId", requireAuth, async (req, res) => {
-    try {
-      const { instanceId } = req.params;
-      const { baileysService } = await import('./baileys-service.js');
-      
-      const match = instanceId.match(/^nutri_(.+)$/);
-      const nutritionistId = match ? match[1] : instanceId;
-      
-      if (nutritionistId !== req.session.user?.nutritionistId) {
-        return res.status(403).json({ error: "Access denied" });
-      }
-      
-      const nutritionist = await storage.getNutritionist(nutritionistId);
-      const whatsappNumber = nutritionist?.whatsappIA || nutritionist?.whatsappNumber || "";
-      await baileysService.startSession(nutritionistId, whatsappNumber);
-
-      let qrCode: string | null = null;
-      for (let i = 0; i < 10; i++) {
-        qrCode = baileysService.getQRCode(nutritionistId);
-        if (qrCode) break;
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-      
-      res.json({
-        qrCode: qrCode || null,
-        instanceId,
-        status: qrCode ? "waiting_for_connection" : "connecting"
-      });
-    } catch (error) {
-      const { instanceId } = req.params;
-      console.error('Baileys QR generation error:', error);
-      res.json({
-        qrCode: null,
-        instanceId,
-        status: "error"
-      });
-    }
+    res.status(410).json({
+      error: "Deprecated endpoint",
+      message: "QR code generation was removed. Use the global Twilio WhatsApp sender.",
+    });
   });
 
   app.get("/api/evolution/status/:instanceId", requireAuth, async (req, res) => {
-    try {
-      const { instanceId } = req.params;
-      const { baileysService } = await import('./baileys-service.js');
-      
-      const match = instanceId.match(/^nutri_(.+)$/);
-      const nutritionistId = match ? match[1] : instanceId;
-      
-      if (nutritionistId !== req.session.user?.nutritionistId) {
-        return res.status(403).json({ error: "Access denied" });
-      }
-      
-      const statusData = baileysService.getStatus(nutritionistId);
-      
-      res.json({
-        instanceId,
-        status: statusData.instance.state === "open" ? "connected" : "disconnected",
-        phoneNumber: null
-      });
-    } catch (error) {
-      const { instanceId } = req.params;
-      console.error('Baileys status check error:', error);
-      res.json({
-        instanceId,
-        status: "disconnected",
-        phoneNumber: null
-      });
-    }
+    res.status(410).json({
+      error: "Deprecated endpoint",
+      message: "Use /api/whatsapp/status/:nutritionistId for Twilio status.",
+    });
   });
 
   // AI Consultation endpoints
@@ -1562,7 +1358,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Test endpoint to check WhatsApp connection (migrated from Evolution Redis to Baileys)
+  // Test endpoint to check official Twilio WhatsApp connection
   app.get("/api/ai/test-connection/:nutritionistId", requireAuth, async (req, res) => {
     try {
       const { nutritionistId } = req.params;
@@ -1571,8 +1367,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Access denied" });
       }
       
-      const { baileysService } = await import('./baileys-service.js');
-      const statusData = baileysService.getStatus(nutritionistId);
+      const statusData = twilioWhatsAppService.getStatus();
       
       res.json({
         connected: statusData.instance.state === 'open',
@@ -1611,6 +1406,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const data = await response.json();
+      const whatsappStatus = twilioWhatsAppService.getStatus();
       
       // Transform Directus users to nutritionist format
       const nutritionists = data.data.map((user: any) => ({
@@ -1628,8 +1424,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         createdAt: user.date_created,
         updatedAt: user.date_updated,
         lastAccess: user.last_access,
-        evolutionInstance: user.Instancia_Evolution,
-        whatsappIA: user.Whatsapp_IA
+        twilioSender: whatsappStatus.sender
       }));
 
       console.log(`[Admin] Found ${nutritionists.length} nutritionists`);
@@ -1662,6 +1457,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const data = await response.json();
       const user = data.data;
+      const whatsappStatus = twilioWhatsAppService.getStatus();
       
       // Transform Directus user to nutritionist format
       const nutritionist = {
@@ -1679,8 +1475,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         createdAt: user.date_created,
         updatedAt: user.date_updated,
         lastAccess: user.last_access,
-        evolutionInstance: user.Instancia_Evolution,
-        whatsappIA: user.Whatsapp_IA
+        twilioSender: whatsappStatus.sender
       };
 
       res.json(nutritionist);
@@ -3366,10 +3161,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const userToken = req.session.user.accessToken;
-      const nutritionist = await storage.getNutritionist(req.session.user.nutritionistId, userToken);
-      
-      if (!nutritionist?.evolutionInstanceName) {
-        return res.status(400).json({ error: "WhatsApp instance not configured" });
+      await storage.getNutritionist(req.session.user.nutritionistId, userToken);
+
+      if (!twilioWhatsAppService.isConfigured()) {
+        return res.status(400).json({ error: "Twilio WhatsApp is not configured" });
       }
 
       const patient = await storage.getPatient(existingSchedule.patient_id.toString(), userToken);
@@ -3381,7 +3176,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         scheduleService.getDefaultMessage(existingSchedule.type, patient.fullName);
 
       const result = await scheduleService.sendScheduledMessage(
-        nutritionist.evolutionInstanceName,
         patient.whatsappNumber,
         message,
         scheduleId,

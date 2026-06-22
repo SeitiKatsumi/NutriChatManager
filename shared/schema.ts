@@ -38,10 +38,6 @@ export const nutritionistSchema = z.object({
   workingHours: z.string().default("commercial"),
   status: z.string().default("active"), // active, inactive, pending
   status_pagamento: z.enum(["pendente", "ativo", "cancelado", "expirado"]).default("pendente"), // Payment status
-  // Evolution API integration fields
-  evolutionInstanceName: z.string().optional(), // Instancia_Evolution in Directus
-  evolutionToken: z.string().optional(),        // Token_Evolution in Directus  
-  whatsappIA: z.string().optional(),            // Whatsapp_IA in Directus (clean format: 5511983283363)
   // AI Agent customization fields
   mensagem_inicial: z.string().optional(),      // Initial greeting message from AI agent
   nome_do_agente: z.string().optional(),        // AI agent name
@@ -57,51 +53,6 @@ export const insertNutritionistSchema = nutritionistSchema.omit({
 
 export type Nutritionist = z.infer<typeof nutritionistSchema>;
 export type InsertNutritionist = z.infer<typeof insertNutritionistSchema>;
-
-// WhatsApp Instance schema
-export const whatsappInstanceSchema = z.object({
-  id: z.string(),
-  nutritionistId: z.string(),
-  instanceId: z.string(), // Evolution API instance ID
-  instanceName: z.string().optional(),
-  qrCode: z.string().optional(),
-  status: z.string().default("disconnected"), // connected, disconnected, connecting
-  phoneNumber: z.string().optional(),
-  agentName: z.string().default("Assistente NutriBot"),
-  autoResponse: z.boolean().default(true),
-  config: z.any().optional(), // JSON config object
-  createdAt: z.date(),
-  updatedAt: z.date(),
-});
-
-export const insertWhatsappInstanceSchema = whatsappInstanceSchema.omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export type WhatsappInstance = z.infer<typeof whatsappInstanceSchema>;
-export type InsertWhatsappInstance = z.infer<typeof insertWhatsappInstanceSchema>;
-
-// Message schema
-export const messageSchema = z.object({
-  id: z.string(),
-  instanceId: z.string(),
-  fromNumber: z.string(),
-  toNumber: z.string(),
-  message: z.string(),
-  messageType: z.string().default("text"), // text, image, audio, etc.
-  isFromBot: z.boolean().default(false),
-  createdAt: z.date(),
-});
-
-export const insertMessageSchema = messageSchema.omit({
-  id: true,
-  createdAt: true,
-});
-
-export type Message = z.infer<typeof messageSchema>;
-export type InsertMessage = z.infer<typeof insertMessageSchema>;
 
 // WhatsApp Message schema - matches Directus collection "whatsapp_messages"
 export const whatsappMessageSchema = z.object({
@@ -293,6 +244,7 @@ export const whatsappScheduleLogSchema = z.object({
   patient_id: z.number(), // Reference to Cadastro_de_Pacientes
   sent_at: z.string(), // ISO datetime
   status: z.enum(['success', 'failed']),
+  // ponytail: Directus field name is legacy; value now stores Twilio Message SID.
   evolution_message_id: z.string().optional().nullable(),
   error_message: z.string().optional().nullable(),
   message_sent: z.string().optional().nullable(), // The actual message that was sent

@@ -9,8 +9,6 @@ import type { Patient, Nutritionist } from "@shared/schema";
 // Directus field mappings for collections
 const PATIENTS_COLLECTION = "Cadastro_de_Pacientes";
 const USERS_COLLECTION = "users";
-const WHATSAPP_INSTANCES_COLLECTION = "whatsapp_instances";
-const MESSAGES_COLLECTION = "messages";
 const CONSULTATIONS_COLLECTION = "consultations";
 
 // Types for Directus collections - using exact Portuguese field names from collection
@@ -67,7 +65,7 @@ export interface DirectusUser {
   whatsapp_number?: string;
   welcome_message?: string;
   working_hours?: string;
-  // Evolution API fields
+  // Legacy Directus sender fields kept for schema compatibility only.
   Token_Evolution?: string;
   Instancia_Evolution?: string;
   Whatsapp_IA?: string;
@@ -85,30 +83,6 @@ export interface DirectusUser {
   trial_end_date?: string; // ISO date string
   date_created?: Date;
   date_updated?: Date;
-}
-
-export interface DirectusWhatsappInstance {
-  id?: string;
-  nutritionist_id?: string;
-  instance_name?: string;
-  qr_code?: string;
-  status?: string;
-  phone_number?: string;
-  agent_name?: string;
-  auto_response?: boolean;
-  config?: any;
-  date_created?: Date;
-  date_updated?: Date;
-}
-
-export interface DirectusMessage {
-  id?: string;
-  instance_id?: string;
-  sender: string;
-  content: string;
-  message_type?: string;
-  is_from_bot?: boolean;
-  date_created?: Date;
 }
 
 export interface DirectusConsultation {
@@ -137,6 +111,14 @@ function mapStripeStatusToPagamento(stripeStatus: string | null): 'pendente' | '
     default:
       return 'pendente';
   }
+}
+
+function cleanWhatsAppNumber(value: string | undefined): string {
+  const cleaned = (value || '').replace(/\D/g, '');
+  if ((cleaned.length === 10 || cleaned.length === 11) && !cleaned.startsWith('55')) {
+    return `55${cleaned}`;
+  }
+  return cleaned;
 }
 
 // Transform functions between local types and Directus types
@@ -192,8 +174,8 @@ function transformPatientToDirectus(patient: PatientInput): DirectusPatient {
   }
 
   const transformed: DirectusPatient = {
-    Nutricionista_responsavel: patient.nutritionistId,
-    Nome_Completo: patient.fullName,
+    Nutricionista_responsavel: patient.nutritionistId || '',
+    Nome_Completo: patient.fullName || '',
     Email: patient.email ?? undefined,
     Telefone: patient.phone ?? undefined,
     Whatsapp: formattedWhatsapp,
@@ -206,7 +188,9 @@ function transformPatientToDirectus(patient: PatientInput): DirectusPatient {
     Restricoes_alimentares: patient.dietaryRestrictions ?? undefined,
     Metas_e_objetivos: patient.goals ?? undefined,
     Etapas: patient.status || 'Aguardando agendamento',
-    Ultima_consulta: patient.lastConsultation ?? undefined,
+    Ultima_consulta: patient.lastConsultation instanceof Date
+      ? patient.lastConsultation.toISOString()
+      : patient.lastConsultation ?? undefined,
     Observacoes: patient.notes ?? undefined,
   };
 
@@ -291,9 +275,6 @@ function transformUserToDirectus(nutritionist: any): DirectusUser {
     lastName = nameParts.slice(1).join(' ') || '';
   }
   
-  // When whatsappIA is provided (from settings update), sync it to both fields
-  const whatsappValue = nutritionist.whatsappIA || nutritionist.whatsappNumber;
-  
   return {
     email: nutritionist.email,
     password: nutritionist.password,
@@ -307,13 +288,9 @@ function transformUserToDirectus(nutritionist: any): DirectusUser {
     whatsapp_clinica: nutritionist.whatsapp_clinica,
     address: nutritionist.address,
     specialization: nutritionist.specialization,
-    whatsapp_number: whatsappValue, // Keep both in sync
+    whatsapp_number: nutritionist.whatsappNumber,
     welcome_message: nutritionist.welcomeMessage,
     working_hours: nutritionist.workingHours,
-    // Evolution API fields
-    Token_Evolution: nutritionist.evolutionToken,
-    Instancia_Evolution: nutritionist.evolutionInstanceName,
-    Whatsapp_IA: whatsappValue, // Keep both in sync
     // AI Agent customization fields
     mensagem_inicial: nutritionist.mensagem_inicial,
     nome_do_agente: nutritionist.nome_do_agente,
@@ -344,10 +321,6 @@ function transformUserFromDirectus(directusUser: any): any {
     welcomeMessage: directusUser.welcome_message,
     workingHours: directusUser.working_hours,
     status: directusUser.status,
-    // Evolution API fields
-    evolutionToken: directusUser.Token_Evolution,
-    evolutionInstanceName: directusUser.Instancia_Evolution,
-    whatsappIA: directusUser.Whatsapp_IA,
     // AI Agent customization fields
     mensagem_inicial: directusUser.mensagem_inicial,
     nome_do_agente: directusUser.nome_do_agente,
@@ -776,8 +749,7 @@ export class DirectusStorage implements IStorage {
     
     try {
       console.log('[Nutritionist Creation] Starting user creation process...');
-      
-      // Step 1: Create user in Directus (without Evolution fields first)
+
       const directusUser = transformUserToDirectus(insertNutritionist);
       const userResponse = await this.client.request('/users', {
         method: 'POST',
@@ -786,29 +758,7 @@ export class DirectusStorage implements IStorage {
       
       createdUserId = userResponse.data.id;
       console.log(`[Nutritionist Creation] User created in Directus with ID: ${createdUserId}`);
-      
-      // Step 2: Set up WhatsApp instance fields (Baileys-based)
-      const { BaileysService } = await import('./baileys-service.js');
-      const cleanWhatsApp = BaileysService.cleanWhatsAppNumber(insertNutritionist.whatsappNumber);
-      const instanceName = `nutri_${createdUserId}`;
-      
-      console.log(`[Baileys] Setting up instance for user ${createdUserId} with WhatsApp: ${cleanWhatsApp}`);
-      
-      const whatsappUpdate = {
-        Instancia_Evolution: instanceName,
-        Whatsapp_IA: cleanWhatsApp
-      };
-      
-      console.log('[Nutritionist Creation] Updating user with WhatsApp data:', whatsappUpdate);
-      
-      await this.client.request(`/users/${createdUserId}`, {
-        method: 'PATCH',
-        body: JSON.stringify(whatsappUpdate),
-      });
-      
-      console.log('[Nutritionist Creation] User updated successfully with WhatsApp data');
-      
-      // Step 3: Return the complete user data
+
       const finalUserResponse = await this.client.request(`/users/${createdUserId}?fields=*`);
       return transformUserFromDirectus(finalUserResponse.data);
       
@@ -1020,116 +970,6 @@ export class DirectusStorage implements IStorage {
         console.error('Error deleting patient with admin token:', adminError.message);
         throw adminError;
       }
-    }
-  }
-
-  // WhatsApp Instances (placeholder - you can implement Directus collection later)
-  async getWhatsappInstance(id: string, userToken?: string) {
-    try {
-      const client = this.getUserClient(userToken);
-      const response = await client.request(`/items/${WHATSAPP_INSTANCES_COLLECTION}/${id}?fields=*`);
-      return response.data;
-    } catch (error) {
-      console.error('Error getting WhatsApp instance:', error);
-      return undefined;
-    }
-  }
-
-  async getWhatsappInstanceByNutritionist(nutritionistId: string, userToken?: string) {
-    try {
-      const client = this.getUserClient(userToken);
-      const response = await client.request(`/items/${WHATSAPP_INSTANCES_COLLECTION}?filter[nutritionist_id][_eq]=${nutritionistId}&fields=*`);
-      const instances = response.data || [];
-      return instances[0] || undefined;
-    } catch (error) {
-      console.error('Error getting WhatsApp instance by nutritionist:', error);
-      return undefined;
-    }
-  }
-
-  async createWhatsappInstance(insertInstance: any, userToken?: string) {
-    try {
-      const client = this.getUserClient(userToken);
-      const response = await client.request(`/items/${WHATSAPP_INSTANCES_COLLECTION}`, {
-        method: 'POST',
-        body: JSON.stringify(insertInstance),
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Error creating WhatsApp instance:', error);
-      throw error;
-    }
-  }
-
-  async updateWhatsappInstance(id: string, updateData: any, userToken?: string) {
-    try {
-      const client = this.getUserClient(userToken);
-      const response = await client.request(`/items/${WHATSAPP_INSTANCES_COLLECTION}/${id}`, {
-        method: 'PATCH',
-        body: JSON.stringify(updateData),
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Error updating WhatsApp instance:', error);
-      return undefined;
-    }
-  }
-
-  async listWhatsappInstances(userToken?: string) {
-    try {
-      const client = this.getUserClient(userToken);
-      const response = await client.request(`/items/${WHATSAPP_INSTANCES_COLLECTION}?fields=*`);
-      return response.data || [];
-    } catch (error) {
-      console.error('Error listing WhatsApp instances:', error);
-      return [];
-    }
-  }
-
-  async deleteWhatsappInstance(id: string, userToken?: string) {
-    try {
-      const client = this.getUserClient(userToken);
-      await client.request(`/items/${WHATSAPP_INSTANCES_COLLECTION}/${id}`, {
-        method: 'DELETE',
-      });
-      return true;
-    } catch (error) {
-      console.error('Error deleting WhatsApp instance:', error);
-      return false;
-    }
-  }
-
-  // Messages (placeholder)
-  async createMessage(insertMessage: any) {
-    try {
-      const response = await this.client.request(`/items/${MESSAGES_COLLECTION}`, {
-        method: 'POST',
-        body: JSON.stringify(insertMessage),
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Error creating message:', error);
-      throw error;
-    }
-  }
-
-  async getMessagesByInstance(instanceId: string) {
-    try {
-      const response = await this.client.request(`/items/${MESSAGES_COLLECTION}?filter[instance_id][_eq]=${instanceId}&fields=*`);
-      return response.data || [];
-    } catch (error) {
-      console.error('Error getting messages by instance:', error);
-      return [];
-    }
-  }
-
-  async getMessagesCount() {
-    try {
-      const response = await this.client.request(`/items/${MESSAGES_COLLECTION}?aggregate[count]=*`);
-      return response.data?.[0]?.count || 0;
-    } catch (error) {
-      console.error('Error getting messages count:', error);
-      return 0;
     }
   }
 
@@ -1482,20 +1322,35 @@ export class DirectusStorage implements IStorage {
     }
   }
 
-  async getNutritionistByInstanceName(instanceName: string): Promise<Nutritionist | undefined> {
+  async getPatientByWhatsappAny(whatsappNumber: string): Promise<Patient | undefined> {
     try {
-      const response = await this.client.request(
-        `/users?filter[Instancia_Evolution][_eq]=${encodeURIComponent(instanceName)}&fields=*&limit=1`
-      );
-      const users = response.data || [];
-      if (users.length > 0) {
-        return transformUserFromDirectus(users[0]);
+      const cleanNumber = cleanWhatsAppNumber(whatsappNumber);
+      const fields = 'id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,Suplementos_e_medicamentos,Restricoes_alimentares,Etapas,IMC,Idade,Feedbacks,Cafe_da_manha,Lanche_da_manha,Almoco,Lanche_da_tarde,Janta,Ceia,ultima_analise_ia,data_ultima_analise,date_created,date_updated';
+
+      const searchVariants = [cleanNumber];
+      if (cleanNumber.startsWith('55') && cleanNumber.length === 13) {
+        searchVariants.push(cleanNumber.substring(2));
+      } else if (cleanNumber.length === 11) {
+        searchVariants.push(`55${cleanNumber}`);
       }
 
-      console.log(`[DirectusStorage] No nutritionist found for instance ${instanceName}`);
+      for (const variant of Array.from(new Set(searchVariants))) {
+        const response = await this.client.request(
+          `/items/${PATIENTS_COLLECTION}?filter[Whatsapp][_eq]=${variant}&fields=${fields}&sort=-date_updated&limit=2`
+        );
+        const patients = response.data || [];
+        if (patients.length > 0) {
+          if (patients.length > 1) {
+            console.warn(`[DirectusStorage] Multiple patients found for WhatsApp ${variant}; using the most recently updated record`);
+          }
+          return transformPatientFromDirectus(patients[0]);
+        }
+      }
+
+      console.log(`[DirectusStorage] No patient found globally for WhatsApp ${cleanNumber}`);
       return undefined;
     } catch (error: any) {
-      console.error('[DirectusStorage] Error finding nutritionist by instance:', error.message);
+      console.error('[DirectusStorage] Error finding global patient by WhatsApp:', error.message);
       return undefined;
     }
   }

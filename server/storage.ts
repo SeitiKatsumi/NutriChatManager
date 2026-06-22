@@ -1,4 +1,4 @@
-import { type Nutritionist, type InsertNutritionist, type WhatsappInstance, type InsertWhatsappInstance, type Message, type InsertMessage, type Patient, type InsertPatient, type Consultation, type InsertConsultation, type WhatsappMessage, type InsertWhatsappMessage } from "@shared/schema";
+import { type Nutritionist, type InsertNutritionist, type Patient, type InsertPatient, type Consultation, type InsertConsultation, type WhatsappMessage, type InsertWhatsappMessage } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
 
@@ -11,28 +11,13 @@ export interface IStorage {
   listNutritionists(): Promise<Nutritionist[]>;
   deleteNutritionist(id: string): Promise<boolean>;
 
-  // WhatsApp Instances
-  getWhatsappInstance(id: string): Promise<WhatsappInstance | undefined>;
-  getWhatsappInstanceByNutritionist(nutritionistId: string): Promise<WhatsappInstance | undefined>;
-  createWhatsappInstance(instance: InsertWhatsappInstance): Promise<WhatsappInstance>;
-  updateWhatsappInstance(id: string, instance: Partial<InsertWhatsappInstance>): Promise<WhatsappInstance | undefined>;
-  listWhatsappInstances(): Promise<WhatsappInstance[]>;
-  deleteWhatsappInstance(id: string): Promise<boolean>;
-
-  // Messages
-  createMessage(message: InsertMessage): Promise<Message>;
-  getMessagesByInstance(instanceId: string): Promise<Message[]>;
-  getMessagesCount(): Promise<number>;
-
   // WhatsApp Messages (Directus collection)
   saveWhatsappMessage(message: InsertWhatsappMessage): Promise<WhatsappMessage>;
   getPatientMessages(patientId: string, limit?: number): Promise<WhatsappMessage[]>;
 
   // Patient lookup by WhatsApp number
   getPatientByWhatsapp(whatsappNumber: string, nutritionistId: string): Promise<Patient | undefined>;
-
-  // Nutritionist lookup by Evolution instance name
-  getNutritionistByInstanceName(instanceName: string): Promise<Nutritionist | undefined>;
+  getPatientByWhatsappAny(whatsappNumber: string): Promise<Patient | undefined>;
 
   // Patients
   getPatient(id: string): Promise<Patient | undefined>;
@@ -73,15 +58,11 @@ export interface IStorage {
 
 export class MemStorage implements IStorage {
   private nutritionists: Map<string, Nutritionist>;
-  private whatsappInstances: Map<string, WhatsappInstance>;
-  private messages: Map<string, Message>;
   private patients: Map<string, Patient>;
   private consultations: Map<string, Consultation>;
 
   constructor() {
     this.nutritionists = new Map();
-    this.whatsappInstances = new Map();
-    this.messages = new Map();
     this.patients = new Map();
     this.consultations = new Map();
   }
@@ -149,84 +130,6 @@ export class MemStorage implements IStorage {
     return this.nutritionists.delete(id);
   }
 
-  // WhatsApp Instances
-  async getWhatsappInstance(id: string): Promise<WhatsappInstance | undefined> {
-    return this.whatsappInstances.get(id);
-  }
-
-  async getWhatsappInstanceByNutritionist(nutritionistId: string): Promise<WhatsappInstance | undefined> {
-    return Array.from(this.whatsappInstances.values()).find(
-      (instance) => instance.nutritionistId === nutritionistId,
-    );
-  }
-
-  async createWhatsappInstance(insertInstance: InsertWhatsappInstance): Promise<WhatsappInstance> {
-    const id = randomUUID();
-    const now = new Date();
-    const instance: WhatsappInstance = {
-      ...insertInstance,
-      id,
-      createdAt: now,
-      updatedAt: now,
-      nutritionistId: insertInstance.nutritionistId ?? undefined,
-      instanceName: insertInstance.instanceName ?? undefined,
-      qrCode: insertInstance.qrCode ?? undefined,
-      status: insertInstance.status ?? undefined,
-      phoneNumber: insertInstance.phoneNumber ?? undefined,
-      agentName: insertInstance.agentName ?? undefined,
-      autoResponse: insertInstance.autoResponse ?? undefined,
-      config: insertInstance.config ?? undefined,
-    };
-    this.whatsappInstances.set(id, instance);
-    return instance;
-  }
-
-  async updateWhatsappInstance(id: string, updateData: Partial<InsertWhatsappInstance>): Promise<WhatsappInstance | undefined> {
-    const existing = this.whatsappInstances.get(id);
-    if (!existing) return undefined;
-
-    const updated: WhatsappInstance = {
-      ...existing,
-      ...updateData,
-      updatedAt: new Date(),
-    };
-    this.whatsappInstances.set(id, updated);
-    return updated;
-  }
-
-  async listWhatsappInstances(): Promise<WhatsappInstance[]> {
-    return Array.from(this.whatsappInstances.values());
-  }
-
-  async deleteWhatsappInstance(id: string): Promise<boolean> {
-    return this.whatsappInstances.delete(id);
-  }
-
-  // Messages
-  async createMessage(insertMessage: InsertMessage): Promise<Message> {
-    const id = randomUUID();
-    const message: Message = {
-      ...insertMessage,
-      id,
-      createdAt: new Date(),
-      instanceId: insertMessage.instanceId ?? null,
-      messageType: insertMessage.messageType ?? null,
-      isFromBot: insertMessage.isFromBot ?? null,
-    };
-    this.messages.set(id, message);
-    return message;
-  }
-
-  async getMessagesByInstance(instanceId: string): Promise<Message[]> {
-    return Array.from(this.messages.values()).filter(
-      (message) => message.instanceId === instanceId,
-    );
-  }
-
-  async getMessagesCount(): Promise<number> {
-    return this.messages.size;
-  }
-
   // WhatsApp Messages (Directus collection) - Not implemented in MemStorage
   async saveWhatsappMessage(message: InsertWhatsappMessage): Promise<WhatsappMessage> {
     throw new Error('WhatsApp messages are only supported in DirectusStorage');
@@ -242,9 +145,12 @@ export class MemStorage implements IStorage {
     );
   }
 
-  async getNutritionistByInstanceName(instanceName: string): Promise<Nutritionist | undefined> {
-    const userId = instanceName.replace('nutri_', '');
-    return this.nutritionists.get(userId);
+  async getPatientByWhatsappAny(whatsappNumber: string): Promise<Patient | undefined> {
+    const cleanNumber = whatsappNumber.replace(/\D/g, '');
+    return Array.from(this.patients.values()).find((patient) => {
+      const patientNumber = (patient.whatsappNumber || '').replace(/\D/g, '');
+      return patientNumber === cleanNumber;
+    });
   }
 
   // Patients

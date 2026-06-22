@@ -1,5 +1,6 @@
 import { storage } from './storage';
 import { openaiService } from './openai-service';
+import { twilioWhatsAppService } from './twilio-whatsapp-service';
 import type { Patient, WhatsappMessage } from '@shared/schema';
 
 function cleanWhatsAppNumber(whatsappNumber: string): string {
@@ -11,7 +12,8 @@ function cleanWhatsAppNumber(whatsappNumber: string): string {
 }
 
 export interface IncomingWhatsAppMessage {
-  instanceName: string;
+  instanceName?: string;
+  nutritionistId?: string;
   senderNumber: string;
   messageBody: string;
   messageType: 'text' | 'image' | 'audio' | 'video' | 'document';
@@ -76,19 +78,34 @@ export class WhatsAppMessageHandler {
   }
 
   async handleIncomingMessage(message: IncomingWhatsAppMessage): Promise<void> {
-    const { instanceName, senderNumber, messageBody, messageType, imageBuffer } = message;
+    const { instanceName, nutritionistId: explicitNutritionistId, senderNumber, messageBody, messageType, imageBuffer } = message;
+    const channelIdentity = instanceName || 'twilio-global-whatsapp';
 
-    console.log(`[MessageHandler] Processing message from ${senderNumber} via instance ${instanceName}`);
+    console.log(`[MessageHandler] Processing message from ${senderNumber} via ${channelIdentity}`);
 
     try {
-      const nutritionist = await storage.getNutritionistByInstanceName(instanceName);
+      const cleanNumber = cleanWhatsAppNumber(senderNumber);
+
+      let nutritionist: any | undefined;
+      let resolvedPatient: Patient | undefined;
+
+      if (explicitNutritionistId) {
+        nutritionist = await storage.getNutritionist(explicitNutritionistId);
+      } else {
+        resolvedPatient = await storage.getPatientByWhatsappAny(cleanNumber);
+        if (resolvedPatient?.nutritionistId) {
+          nutritionist = await storage.getNutritionist(resolvedPatient.nutritionistId);
+        } else if (process.env.TWILIO_DEFAULT_NUTRITIONIST_ID) {
+          nutritionist = await storage.getNutritionist(process.env.TWILIO_DEFAULT_NUTRITIONIST_ID);
+        }
+      }
+
       if (!nutritionist) {
-        console.error(`[MessageHandler] No nutritionist found for instance ${instanceName}`);
+        console.error(`[MessageHandler] No nutritionist found for ${channelIdentity}. Configure TWILIO_DEFAULT_NUTRITIONIST_ID for new contacts.`);
         return;
       }
 
       const nutritionistId = nutritionist.id;
-      const cleanNumber = cleanWhatsAppNumber(senderNumber);
 
       if (!this.isValidPhoneNumber(cleanNumber)) {
         console.log(`[MessageHandler] Ignoring message from invalid/non-Brazilian number: ${cleanNumber}`);
@@ -98,7 +115,7 @@ export class WhatsAppMessageHandler {
       const lockKey = `${nutritionistId}:${cleanNumber}`;
 
       await this.withPatientLock(lockKey, async () => {
-        await this.processMessage(nutritionist, cleanNumber, instanceName, messageBody, messageType, imageBuffer);
+        await this.processMessage(nutritionist, cleanNumber, channelIdentity, messageBody, messageType, imageBuffer, resolvedPatient);
       });
 
     } catch (error) {
@@ -109,14 +126,15 @@ export class WhatsAppMessageHandler {
   private async processMessage(
     nutritionist: any,
     cleanNumber: string,
-    instanceName: string,
+    channelIdentity: string,
     messageBody: string,
     messageType: 'text' | 'image' | 'audio' | 'video' | 'document',
-    imageBuffer?: Buffer
+    imageBuffer?: Buffer,
+    resolvedPatient?: Patient
   ): Promise<void> {
       const nutritionistId = nutritionist.id;
 
-      let patient = await storage.getPatientByWhatsapp(cleanNumber, nutritionistId);
+      let patient = resolvedPatient || await storage.getPatientByWhatsapp(cleanNumber, nutritionistId);
       let isNewPatient = false;
 
       if (!patient) {
@@ -128,6 +146,9 @@ export class WhatsAppMessageHandler {
           status: 'Anamnese Inicial',
         });
         isNewPatient = true;
+        if (!patient) {
+          throw new Error(`Failed to create patient for WhatsApp ${cleanNumber}`);
+        }
         console.log(`[MessageHandler] Patient created with ID: ${patient.id}`);
       }
 
@@ -213,11 +234,10 @@ export class WhatsAppMessageHandler {
       });
 
       try {
-        const { baileysService } = await import('./baileys-service.js');
-        await baileysService.sendTextByInstanceName(instanceName, cleanNumber, aiResponse);
-        console.log(`[MessageHandler] Response sent via Baileys to ${cleanNumber}`);
+        await twilioWhatsAppService.sendWhatsAppText(cleanNumber, aiResponse);
+        console.log(`[MessageHandler] Response sent via Twilio to ${cleanNumber} (${channelIdentity})`);
       } catch (sendErr) {
-        console.error(`[MessageHandler] Failed to send message via Baileys to ${cleanNumber}:`, sendErr);
+        console.error(`[MessageHandler] Failed to send message via Twilio to ${cleanNumber}:`, sendErr);
       }
   }
 
@@ -356,15 +376,15 @@ export class WhatsAppMessageHandler {
 
   private cleanOldCacheEntries(): void {
     const now = Date.now();
-    for (const [patientId, messages] of this.conversationCache.entries()) {
-      const fresh = messages.filter(m => now - m.timestamp < WhatsAppMessageHandler.CACHE_TTL_MS);
+    for (const [patientId, messages] of Array.from(this.conversationCache.entries())) {
+      const fresh = messages.filter((m: CachedMessage) => now - m.timestamp < WhatsAppMessageHandler.CACHE_TTL_MS);
       if (fresh.length === 0) {
         this.conversationCache.delete(patientId);
       } else {
         this.conversationCache.set(patientId, fresh);
       }
     }
-    for (const [patientId, entry] of this.patientStageCache.entries()) {
+    for (const [patientId, entry] of Array.from(this.patientStageCache.entries())) {
       if (now - entry.updatedAt > WhatsAppMessageHandler.STAGE_CACHE_TTL_MS) {
         this.patientStageCache.delete(patientId);
       }

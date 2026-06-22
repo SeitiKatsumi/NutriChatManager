@@ -1,27 +1,18 @@
-import { useState, useEffect } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MessageCircle, QrCode, Settings, CheckCircle, RefreshCw, Loader2, Smartphone, AlertCircle, CreditCard } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle, CheckCircle, CreditCard, MessageCircle, RefreshCw, Settings } from "lucide-react";
 import { Link } from "wouter";
 
 export default function WhatsApp() {
-  const { toast } = useToast();
-  const [qrCode, setQrCode] = useState("");
-  const [showQRCode, setShowQRCode] = useState(false);
-
-  // Get current user info
   const { data: userInfo } = useQuery<any>({
     queryKey: ["/api/auth/me"],
   });
 
-  // Get current nutritionist data (self-only after security fix)
   const { data: nutritionists, isLoading: loadingNutritionist } = useQuery<any[]>({
     queryKey: ["/api/nutritionists"],
     enabled: !!userInfo,
@@ -29,115 +20,38 @@ export default function WhatsApp() {
 
   const currentNutritionist = nutritionists?.[0];
 
-  const { data: whatsappStatus, isLoading: statusLoading, refetch: refetchStatus } = useQuery<any>({
+  const {
+    data: whatsappStatus,
+    isLoading: statusLoading,
+    refetch: refetchStatus,
+    error: statusError,
+  } = useQuery<any>({
     queryKey: ["/api/whatsapp/status", currentNutritionist?.id],
     enabled: !!currentNutritionist?.id,
-    refetchInterval: showQRCode ? 3000 : 5000,
+    refetchInterval: 15000,
   });
-
-  // Generate QR Code mutation
-  const qrCodeMutation = useMutation({
-    mutationFn: async () => {
-      if (!currentNutritionist?.id) {
-        throw new Error("Nutricionista não encontrado. Faça login novamente.");
-      }
-      
-      const response = await fetch(`/api/whatsapp/qrcode/${currentNutritionist?.id}`, {
-        credentials: "include",
-      });
-      const data = await response.json();
-      
-      if (data.connected) {
-        return { connected: true, base64: null, pending: false };
-      }
-      
-      if (!data.base64) {
-        return { connected: false, base64: null, pending: true };
-      }
-      
-      return { ...data, connected: false, pending: false };
-    },
-    onSuccess: (data) => {
-      if (data.connected) {
-        refetchStatus();
-        toast({
-          title: "WhatsApp já conectado!",
-          description: "Seu WhatsApp já está conectado e pronto para uso.",
-        });
-        return;
-      }
-      if (data.pending) {
-        toast({
-          title: "Aguarde...",
-          description: "O QR Code está sendo gerado. Tente novamente em alguns segundos.",
-        });
-        return;
-      }
-      setQrCode(data.base64);
-      setShowQRCode(true);
-      toast({
-        title: "QR Code gerado!",
-        description: "Escaneie o código com seu WhatsApp para conectar.",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Erro ao gerar QR Code",
-        description: error.message || "Tente novamente mais tarde.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const handleGenerateQRCode = () => {
-    setShowQRCode(false); // Hide old QR code
-    setQrCode(""); // Clear old QR code
-    qrCodeMutation.mutate();
-  };
-
-  const handleRefreshStatus = () => {
-    refetchStatus();
-  };
 
   const connectionState = whatsappStatus?.instance?.state?.toLowerCase();
-  const isConnected = connectionState === "open" || connectionState === "connected";
-  const isReconnecting = connectionState === "connecting";
-  const hasWhatsAppSetup = !!currentNutritionist?.whatsappIA || !!currentNutritionist?.whatsappNumber;
+  const isConfigured = connectionState === "open";
+  const sender = whatsappStatus?.sender || "Nao configurado";
 
-  useEffect(() => {
-    if (whatsappStatus?.qrCode && showQRCode) {
-      setQrCode(whatsappStatus.qrCode);
-    }
-    if (isConnected && showQRCode) {
-      setShowQRCode(false);
-      setQrCode("");
-    }
-  }, [whatsappStatus?.qrCode, isConnected, showQRCode]);
-
-  const { error: statusError } = useQuery<any>({
-    queryKey: ["/api/whatsapp/status", currentNutritionist?.id],
-    enabled: false,
-  });
-
-  // Check subscription status using BOTH fields (status_pagamento and subscriptionStatus)
-  // User is considered inactive only if BOTH indicate inactive/canceled
   const hasActivePaymentStatus = currentNutritionist?.status_pagamento === "ativo";
   const hasActiveSubscription = currentNutritionist?.subscriptionStatus === "active";
   const isSubscriptionActive = hasActivePaymentStatus || hasActiveSubscription;
-  
-  const isSubscriptionError = (statusError && (statusError as any)?.status === 402) || 
+
+  const isSubscriptionError =
+    (statusError && (statusError as any)?.status === 402) ||
     (!isSubscriptionActive && currentNutritionist?.subscriptionStatus === "canceled");
 
   return (
     <main className="p-6">
       <div className="max-w-4xl mx-auto">
-        {/* WhatsApp Header */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-foreground mb-2" data-testid="whatsapp-title">
-            Integração WhatsApp
+            Integracao WhatsApp
           </h1>
           <p className="text-muted-foreground">
-            Configure e gerencie sua conexão WhatsApp
+            Comunicacao oficial via Twilio para todos os nutricionistas
           </p>
         </div>
 
@@ -149,8 +63,7 @@ export default function WhatsApp() {
             </AlertTitle>
             <AlertDescription className="text-orange-400">
               <p className="mb-3">
-                Para continuar utilizando o WhatsApp e todos os recursos da plataforma, 
-                renove sua assinatura.
+                Para continuar utilizando o WhatsApp e todos os recursos da plataforma, renove sua assinatura.
               </p>
               <Link href="/dashboard/assinatura">
                 <Button variant="outline" className="border-orange-500 text-orange-500 hover:bg-orange-500/20">
@@ -162,166 +75,89 @@ export default function WhatsApp() {
           </Alert>
         )}
 
-        {/* Main QR Code and Status Section */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* QR Code Section */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <QrCode className="w-5 h-5" />
-                Conexão WhatsApp
+                <MessageCircle className="w-5 h-5" />
+                Sender oficial
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {loadingNutritionist ? (
+              {loadingNutritionist || statusLoading ? (
                 <div className="flex items-center justify-center p-8">
-                  <Loader2 className="w-6 h-6 animate-spin" />
-                  <span className="ml-2">Carregando dados...</span>
+                  <RefreshCw className="w-6 h-6 animate-spin" />
+                  <span className="ml-2">Verificando Twilio...</span>
                 </div>
-              ) : !hasWhatsAppSetup ? (
-                <div className="text-center p-6 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
-                  <AlertCircle className="w-16 h-16 mx-auto mb-4 text-yellow-600" />
-                  <p className="font-medium text-yellow-800 dark:text-yellow-200">Instância não configurada</p>
-                  <p className="text-sm text-yellow-600 mt-2">
-                    Sua conta precisa ser reconfigurada para usar o WhatsApp.
-                    Entre em contato com o suporte.
+              ) : isConfigured ? (
+                <div className="text-center p-6 rounded-lg border bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
+                  <CheckCircle className="w-16 h-16 mx-auto mb-4 text-green-600" />
+                  <p className="font-medium text-green-800 dark:text-green-200">
+                    Twilio WhatsApp ativo
                   </p>
-                </div>
-              ) : isConnected || isReconnecting ? (
-                <div className={`text-center p-6 rounded-lg border ${
-                  isReconnecting 
-                    ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800' 
-                    : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
-                }`}>
-                  {isReconnecting ? (
-                    <Loader2 className="w-16 h-16 mx-auto mb-4 text-yellow-600 animate-spin" />
-                  ) : (
-                    <CheckCircle className="w-16 h-16 mx-auto mb-4 text-green-600" />
-                  )}
-                  <p className={`font-medium ${isReconnecting ? 'text-yellow-800 dark:text-yellow-200' : 'text-green-800 dark:text-green-200'}`}>
-                    {isReconnecting ? 'Reconectando...' : 'WhatsApp Conectado!'}
+                  <p className="text-sm mt-2 text-green-600">
+                    O bot responde pelo sender global oficial configurado no servidor.
                   </p>
-                  <p className={`text-sm mt-2 ${isReconnecting ? 'text-yellow-600' : 'text-green-600'}`}>
-                    {isReconnecting ? 'Conexão temporariamente instável. Reconectando automaticamente...' : 'Seu bot está ativo e pronto para atender pacientes.'}
-                  </p>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={handleRefreshStatus}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => refetchStatus()}
                     disabled={statusLoading}
                     className="mt-4"
                     data-testid="button-refresh-status"
                   >
-                    <RefreshCw className={`w-4 h-4 mr-2 ${statusLoading ? 'animate-spin' : ''}`} />
+                    <RefreshCw className={`w-4 h-4 mr-2 ${statusLoading ? "animate-spin" : ""}`} />
                     Atualizar Status
                   </Button>
                 </div>
-              ) : showQRCode && qrCode ? (
-                <div className="text-center">
-                  <img 
-                    src={qrCode} 
-                    alt="QR Code WhatsApp" 
-                    className="mx-auto mb-4 border rounded-lg max-w-64 w-full" 
-                    data-testid="qr-code-image"
-                  />
-                  <p className="text-sm text-muted-foreground mb-2">
-                    Escaneie este código com seu WhatsApp
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    O código expira em alguns minutos. Atualize a página se necessário.
-                  </p>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={handleRefreshStatus}
-                    disabled={statusLoading}
-                    className="mt-4"
-                  >
-                    <RefreshCw className={`w-4 h-4 mr-2 ${statusLoading ? 'animate-spin' : ''}`} />
-                    Verificar Conexão
-                  </Button>
-                </div>
               ) : (
-                <div className="text-center text-muted-foreground p-6">
-                  <Smartphone className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                  <p className="font-medium">Conecte seu WhatsApp</p>
-                  <p className="text-sm mt-2 mb-4">
-                    Gere um QR Code para conectar seu número ao sistema
+                <div className="text-center p-6 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                  <AlertCircle className="w-16 h-16 mx-auto mb-4 text-yellow-600" />
+                  <p className="font-medium text-yellow-800 dark:text-yellow-200">Twilio nao configurado</p>
+                  <p className="text-sm text-yellow-600 mt-2">
+                    Configure as credenciais Twilio e o WhatsApp sender global nas variaveis de ambiente.
                   </p>
-                  <Button 
-                    onClick={handleGenerateQRCode} 
-                    disabled={qrCodeMutation.isPending}
-                    className="min-w-48"
-                    data-testid="button-generate-qr"
-                  >
-                    {qrCodeMutation.isPending ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Gerando QR Code...
-                      </>
-                    ) : (
-                      <>
-                        <QrCode className="w-4 h-4 mr-2" />
-                        Gerar QR Code
-                      </>
-                    )}
-                  </Button>
                 </div>
               )}
             </CardContent>
           </Card>
 
-          {/* Status and Info Section */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Settings className="w-5 h-5" />
-                Status da Conexão
+                Status da conexao
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Estado:</span>
                 <div className="flex items-center space-x-2">
-                  <div className={`w-2 h-2 rounded-full ${
-                    statusLoading ? 'bg-yellow-500' :
-                    isConnected ? 'bg-green-500' : 
-                    isReconnecting ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'
-                  }`} />
-                  <Badge variant={isConnected || isReconnecting ? "default" : "secondary"}>
-                    {statusLoading ? "Verificando..." : 
-                     isConnected ? "Conectado" : 
-                     isReconnecting ? "Reconectando..." : "Desconectado"}
+                  <div className={`w-2 h-2 rounded-full ${isConfigured ? "bg-green-500" : "bg-yellow-500"}`} />
+                  <Badge variant={isConfigured ? "default" : "secondary"}>
+                    {statusLoading ? "Verificando..." : isConfigured ? "Conectado" : "Pendente"}
                   </Badge>
                 </div>
               </div>
-              
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Número do Bot:</span>
-                <span className="text-sm text-foreground">
-                  {currentNutritionist?.whatsappIA ? 
-                    `+${currentNutritionist.whatsappIA.replace(/(\d{2})(\d{2})(\d{5})(\d{4})/, '$1 $2 $3-$4')}` : 
-                    "Não configurado"
-                  }
-                </span>
+
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-muted-foreground">Numero global:</span>
+                <span className="text-sm text-foreground break-all text-right">{sender}</span>
               </div>
 
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Agente de IA:</span>
-                <span className="text-sm text-foreground">
-                  {currentNutritionist?.agentName || "Nutri ChatBot"}
-                </span>
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-muted-foreground">Provider:</span>
+                <span className="text-sm text-foreground">Twilio Official API</span>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Configuration Section */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <MessageCircle className="w-5 h-5" />
-              Configuração do Agente de IA
+              Configuracao do agente
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -329,7 +165,7 @@ export default function WhatsApp() {
               <div>
                 <Label>Nome do Agente</Label>
                 <Input
-                  value={currentNutritionist?.agentName || "Nutri ChatBot"}
+                  value={currentNutritionist?.nome_do_agente || "Nutri ChatBot"}
                   readOnly
                   className="bg-muted"
                   data-testid="text-agent-name"
@@ -337,9 +173,9 @@ export default function WhatsApp() {
               </div>
 
               <div>
-                <Label>Mensagem de Boas-vindas</Label>
+                <Label>Mensagem de boas-vindas</Label>
                 <Input
-                  value={currentNutritionist?.welcomeMessage || "Não configurado"}
+                  value={currentNutritionist?.mensagem_inicial || currentNutritionist?.welcomeMessage || "Nao configurado"}
                   readOnly
                   className="bg-muted"
                   data-testid="text-welcome-message"
@@ -348,7 +184,7 @@ export default function WhatsApp() {
 
               <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
                 <p className="text-sm text-blue-800 dark:text-blue-200">
-                  <strong>Informação:</strong> As configurações do agente podem ser alteradas na página de Configurações.
+                  <strong>Webhook Twilio:</strong> /api/twilio/whatsapp/webhook
                 </p>
               </div>
             </div>

@@ -98,69 +98,8 @@ app.use((req, res, next) => {
     port,
     host: "0.0.0.0",
     reusePort: true,
-  }, async () => {
+  }, () => {
     log(`serving on port ${port}`);
-
-    try {
-      const { baileysService } = await import('./baileys-service.js');
-      const { storage } = await import('./storage.js');
-      const { whatsappMessageHandler } = await import('./whatsapp-message-handler.js');
-
-      baileysService.on('message', async (event: { nutritionistId: string; from: string; text: string; message: Record<string, unknown>; timestamp: unknown }) => {
-        try {
-          const instanceName = `nutri_${event.nutritionistId}`;
-          let messageType: 'text' | 'image' | 'audio' | 'video' | 'document' = 'text';
-          let imageBuffer: Buffer | undefined;
-
-          const baileysMsg = event.message as Record<string, Record<string, unknown>> | undefined;
-          const msgContent = baileysMsg?.message;
-          if (msgContent?.imageMessage) {
-            messageType = 'image';
-            try {
-              const { downloadContentFromMessage } = await import('@whiskeysockets/baileys');
-              const stream = await downloadContentFromMessage(
-                msgContent.imageMessage as { mediaKey: Uint8Array; directPath: string; url: string },
-                'image'
-              );
-              const chunks: Buffer[] = [];
-              for await (const chunk of stream) {
-                chunks.push(chunk as Buffer);
-              }
-              imageBuffer = Buffer.concat(chunks);
-              console.log(`[Baileys] Downloaded image: ${imageBuffer.length} bytes`);
-            } catch (downloadErr) {
-              console.error('[Baileys] Failed to download image:', downloadErr);
-            }
-          } else if (msgContent?.audioMessage) {
-            messageType = 'audio';
-          } else if (msgContent?.videoMessage) {
-            messageType = 'video';
-          } else if (msgContent?.documentMessage) {
-            messageType = 'document';
-          }
-
-          await whatsappMessageHandler.handleIncomingMessage({
-            instanceName,
-            senderNumber: event.from,
-            messageBody: event.text,
-            messageType,
-            imageBuffer,
-          });
-        } catch (err) {
-          console.error('[Baileys] Error handling message event:', err);
-        }
-      });
-
-      await baileysService.autoStartSessions(async () => {
-        const nutritionists = await storage.listNutritionists();
-        return nutritionists.map((n: { id: string; whatsappIA?: string; evolutionInstanceName?: string }) => ({
-          id: n.id,
-          whatsappIA: n.whatsappIA,
-          evolutionInstanceName: n.evolutionInstanceName,
-        }));
-      });
-    } catch (err) {
-      console.error('[Baileys] Auto-start failed:', err);
-    }
+    log("Twilio WhatsApp webhook mode enabled");
   });
 })();

@@ -28,11 +28,6 @@ const profileSchema = z.object({
     const cleaned = val.replace(/\D/g, "");
     return cleaned.length >= 10;
   }, "WhatsApp deve ter no mínimo 10 dígitos (DDD + número)"),
-  whatsappIA: z.string().optional().refine((val) => {
-    if (!val) return true;
-    const cleaned = val.replace(/\D/g, "");
-    return cleaned.length >= 10;
-  }, "WhatsApp deve ter no mínimo 10 dígitos (DDD + número)"),
   address: z.string().optional(),
   specialization: z.string().optional(),
 });
@@ -113,8 +108,6 @@ export default function Settings() {
       email: nutritionist?.email || "",
       phone: formatPhoneNumber(nutritionist?.phone || ""),
       whatsapp_clinica: formatPhoneNumber((nutritionist as any)?.whatsapp_clinica || ""),
-      // Fallback to whatsappNumber for existing users who don't have whatsappIA yet
-      whatsappIA: formatPhoneNumber((nutritionist as any)?.whatsappIA || (nutritionist as any)?.whatsappNumber || ""),
       address: (nutritionist as any)?.address || "",
       specialization: nutritionist?.specialization || "",
     },
@@ -233,7 +226,7 @@ export default function Settings() {
   };
 
   // Handler for phone input changes (applies formatting)
-  const handlePhoneChange = (fieldName: "phone" | "whatsapp_clinica" | "whatsappIA") => (
+  const handlePhoneChange = (fieldName: "phone" | "whatsapp_clinica") => (
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
     const formatted = formatPhoneNumber(e.target.value);
@@ -246,7 +239,6 @@ export default function Settings() {
       ...data,
       phone: cleanPhoneNumber(data.phone),
       whatsapp_clinica: cleanPhoneNumber(data.whatsapp_clinica),
-      whatsappIA: cleanPhoneNumber(data.whatsappIA),
     };
     updateProfileMutation.mutate(cleanedData);
   };
@@ -342,26 +334,6 @@ export default function Settings() {
                   />
                 </div>
 
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="whatsappIA" className="flex items-center gap-2">
-                    WhatsApp do Bot IA
-                    <span className="text-xs font-normal text-muted-foreground">(Número usado pelo assistente virtual)</span>
-                  </Label>
-                  <Input
-                    id="whatsappIA"
-                    value={profileForm.watch("whatsappIA") || ""}
-                    onChange={handlePhoneChange("whatsappIA")}
-                    placeholder="(11) 99999-9999"
-                    data-testid="input-whatsapp-ia"
-                  />
-                  <p className="text-xs text-amber-600 dark:text-amber-500 flex items-start gap-1 mt-1">
-                    <span>⚠️</span>
-                    <span>
-                      <strong>Atenção:</strong> Alterar este número pode afetar o funcionamento do bot WhatsApp. 
-                      Certifique-se de que o novo número esteja disponível e configurado antes de salvar.
-                    </span>
-                  </p>
-                </div>
 
                 <div className="space-y-2 md:col-span-2">
                   <Label htmlFor="address">Endereço do Consultório</Label>

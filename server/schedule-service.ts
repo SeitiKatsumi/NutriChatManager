@@ -1,4 +1,4 @@
-import { baileysService, BaileysService } from "./baileys-service";
+import { twilioWhatsAppService } from "./twilio-whatsapp-service";
 import type { WhatsappSchedule, InsertWhatsappSchedule, WhatsappScheduleLog } from "@shared/schema";
 
 const DIRECTUS_URL = process.env.DIRECTUS_URL || "https://nutrichatbot.app.11mind.com.br";
@@ -315,7 +315,7 @@ export class ScheduleService {
       {
         field: "evolution_message_id",
         type: "string",
-        meta: { interface: "input", note: "Evolution API message ID" },
+        meta: { interface: "input", note: "Provider message ID (Twilio SID)" },
         schema: { is_nullable: true }
       },
       {
@@ -596,28 +596,27 @@ export class ScheduleService {
   }
 
   async sendScheduledMessage(
-    instanceName: string,
     phoneNumber: string,
     message: string,
     scheduleId: number,
     patientId: number
   ): Promise<{ success: boolean; messageId?: string; error?: string }> {
     try {
-      console.log(`[Schedule] Sending message to ${phoneNumber} via ${instanceName}`);
+      console.log(`[Schedule] Sending scheduled WhatsApp message to ${phoneNumber} via Twilio`);
       
-      const result = await baileysService.sendTextByInstanceName(instanceName, phoneNumber, message);
+      const result = await twilioWhatsAppService.sendScheduledWhatsAppText(phoneNumber, message);
       
       await this.createScheduleLog({
         schedule_id: scheduleId,
         patient_id: patientId,
         sent_at: new Date().toISOString(),
         status: "success",
-        evolution_message_id: result.key?.id || null,
+        evolution_message_id: result.sid || null,
         message_sent: message,
         error_message: null,
       });
 
-      return { success: true, messageId: result.key?.id };
+      return { success: true, messageId: result.sid };
     } catch (error: any) {
       console.error("[Schedule] Error sending message:", error);
       
@@ -883,13 +882,21 @@ export class ScheduleService {
           processed++;
           
           const nutritionist = await this.getNutritionistForSchedule(schedule.nutritionist_id);
-          if (!nutritionist?.evolutionInstanceName) {
-            // Restaurar status
+          if (!nutritionist) {
             await this.request(`/items/${SCHEDULES_COLLECTION}/${schedule.id}`, {
               method: "PATCH",
               body: JSON.stringify({ status: "enabled" }),
             });
-            console.warn(`[Scheduler] Nutritionist ${schedule.nutritionist_id} has no WhatsApp instance, skipping`);
+            console.warn(`[Scheduler] Nutritionist ${schedule.nutritionist_id} not found, skipping`);
+            continue;
+          }
+
+          if (!twilioWhatsAppService.isConfigured()) {
+            await this.request(`/items/${SCHEDULES_COLLECTION}/${schedule.id}`, {
+              method: "PATCH",
+              body: JSON.stringify({ status: "enabled" }),
+            });
+            console.warn("[Scheduler] Twilio WhatsApp is not configured, skipping");
             continue;
           }
 
@@ -910,7 +917,6 @@ export class ScheduleService {
           console.log(`[Scheduler] Sending ${schedule.type} message to patient ${schedule.patient_id}`);
 
           const result = await this.sendScheduledMessage(
-            nutritionist.evolutionInstanceName,
             patient.whatsappNumber,
             message,
             schedule.id,
@@ -997,11 +1003,10 @@ export class ScheduleService {
 
   private async getNutritionistForSchedule(nutritionistId: string): Promise<any> {
     try {
-      const result = await this.request(`/users/${nutritionistId}?fields=id,first_name,last_name,Instancia_Evolution`);
+      const result = await this.request(`/users/${nutritionistId}?fields=id,first_name,last_name`);
       return {
         id: result.data?.id,
         fullName: `${result.data?.first_name || ''} ${result.data?.last_name || ''}`.trim(),
-        evolutionInstanceName: result.data?.Instancia_Evolution,
       };
     } catch (error) {
       console.error(`[Scheduler] Error fetching nutritionist ${nutritionistId}:`, error);

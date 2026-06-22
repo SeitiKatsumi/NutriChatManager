@@ -359,26 +359,6 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {!nutritionist?.evolutionInstanceName && (
-                <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
-                  <div className="flex items-start gap-3">
-                    <AlertCircle className="h-5 w-5 text-yellow-500 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-medium text-foreground">
-                        Configure o WhatsApp
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Conecte seu WhatsApp para habilitar mensagens automáticas.
-                      </p>
-                      <Link href="/whatsapp">
-                        <Button variant="link" size="sm" className="p-0 h-auto text-yellow-600">
-                          Configurar agora →
-                        </Button>
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              )}
             </CardContent>
           </Card>
         </div>
