@@ -42,6 +42,8 @@ interface PatientUpdateData {
   status?: string;
 }
 
+type ExtractedPatientData = Awaited<ReturnType<typeof openaiService.extractPatientData>>;
+
 interface CachedMessage {
   role: 'user' | 'assistant';
   content: string;
@@ -323,6 +325,15 @@ export class WhatsAppMessageHandler {
           } catch (e) {}
         }
 
+        const missingFields = this.getMissingRequiredAnamnesisFields(patient, extractedData, updateData);
+        if (missingFields.length > 0) {
+          if (Object.keys(updateData).length > 0) {
+            await storage.updatePatient(patient.id, updateData);
+          }
+          console.log(`[MessageHandler] Anamnesis completion blocked for patient ${patient.id}; missing fields: ${missingFields.join(', ')}`);
+          return this.buildMissingAnamnesisMessage(missingFields);
+        }
+
         updateData.status = 'Acompanhamento';
 
         await storage.updatePatient(patient.id, updateData);
@@ -334,6 +345,35 @@ export class WhatsAppMessageHandler {
     }
 
     return result.response;
+  }
+
+  private getMissingRequiredAnamnesisFields(
+    patient: Patient,
+    extractedData: ExtractedPatientData,
+    updateData: PatientUpdateData
+  ): string[] {
+    const patientName = String(patient.fullName || '').trim();
+    const hasUsableExistingName = !!patientName && !/^Paciente\s+\d+$/i.test(patientName);
+
+    const required: Array<[boolean, string]> = [
+      [!!(extractedData.Nome_Completo || updateData.fullName || hasUsableExistingName), 'nome completo'],
+      [!!(extractedData.Data_de_nascimento || updateData.dateOfBirth || patient.dateOfBirth), 'data de nascimento'],
+      [!!(extractedData.Sexo || updateData.gender || patient.gender), 'sexo'],
+      [!!(extractedData.Peso || updateData.weight || patient.weight), 'peso atual'],
+      [!!(extractedData.Altura || updateData.height || patient.height), 'altura'],
+      [!!(extractedData.Cafe_da_manha || updateData.cafe_da_manha || patient.cafe_da_manha), 'café da manhã'],
+      [!!(extractedData.Lanche_da_manha || updateData.lanche_da_manha || patient.lanche_da_manha), 'lanche da manhã'],
+      [!!(extractedData.Almoco || updateData.almoco || patient.almoco), 'almoço'],
+      [!!(extractedData.Lanche_da_tarde || updateData.lanche_da_tarde || patient.lanche_da_tarde), 'lanche da tarde'],
+      [!!(extractedData.Janta || updateData.janta || patient.janta), 'jantar'],
+    ];
+
+    return required.filter(([hasValue]) => !hasValue).map(([, label]) => label);
+  }
+
+  private buildMissingAnamnesisMessage(missingFields: string[]): string {
+    const fields = missingFields.join(', ');
+    return `Quase lá. Antes de finalizar a anamnese, preciso completar: ${fields}.\n\nPode me mandar esses dados em uma única mensagem?`;
   }
 
   private async handleFollowUp(
