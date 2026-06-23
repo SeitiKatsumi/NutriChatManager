@@ -274,10 +274,13 @@ export class WhatsAppMessageHandler {
         if (extractedData.Sexo) updateData.gender = extractedData.Sexo;
         if (extractedData.Peso) updateData.weight = String(extractedData.Peso);
         if (extractedData.Altura) updateData.height = String(extractedData.Altura);
-        if (extractedData.Anamise_inicial) updateData.medicalHistory = extractedData.Anamise_inicial;
+        const anamnesisParts = [
+          extractedData.Anamise_inicial,
+          extractedData.Metas_e_objetivos ? `Objetivos nutricionais: ${extractedData.Metas_e_objetivos}` : undefined,
+        ].filter(Boolean);
+        if (anamnesisParts.length) updateData.medicalHistory = anamnesisParts.join('\n\n');
         if (extractedData.Restricoes_alimentares) updateData.dietaryRestrictions = extractedData.Restricoes_alimentares;
         if (extractedData.Suplementos_e_medicamentos) updateData.suplementos_medicamentos = extractedData.Suplementos_e_medicamentos;
-        if (extractedData.Metas_e_objetivos) updateData.goals = extractedData.Metas_e_objetivos;
         if (extractedData.Cafe_da_manha) updateData.cafe_da_manha = extractedData.Cafe_da_manha;
         if (extractedData.Lanche_da_manha) updateData.lanche_da_manha = extractedData.Lanche_da_manha;
         if (extractedData.Almoco) updateData.almoco = extractedData.Almoco;

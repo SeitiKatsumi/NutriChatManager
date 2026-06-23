@@ -28,7 +28,6 @@ export interface DirectusPatient {
   Anamise_inicial?: string;
   Suplementos_e_medicamentos?: string;
   Restricoes_alimentares?: string; // Dietary restrictions field
-  Metas_e_objetivos?: string;
   Etapas?: string;
   Ultima_consulta?: string;
   Observacoes?: string;
@@ -186,7 +185,6 @@ function transformPatientToDirectus(patient: PatientInput): DirectusPatient {
     Anamise_inicial: patient.medicalHistory || patient.anamnese_inicial || undefined,
     Suplementos_e_medicamentos: patient.suplementos_medicamentos ?? undefined,
     Restricoes_alimentares: patient.dietaryRestrictions ?? undefined,
-    Metas_e_objetivos: patient.goals ?? undefined,
     Etapas: patient.status || 'Aguardando agendamento',
     Ultima_consulta: patient.lastConsultation instanceof Date
       ? patient.lastConsultation.toISOString()
@@ -244,7 +242,6 @@ function transformPatientUpdateToDirectus(patient: PatientInput): Partial<Direct
   }
   if (patient.suplementos_medicamentos !== undefined) transformed.Suplementos_e_medicamentos = patient.suplementos_medicamentos ?? undefined;
   if (patient.dietaryRestrictions !== undefined) transformed.Restricoes_alimentares = patient.dietaryRestrictions ?? undefined;
-  if (patient.goals !== undefined) transformed.Metas_e_objetivos = patient.goals ?? undefined;
   if (patient.status !== undefined) transformed.Etapas = patient.status || undefined;
   if (patient.lastConsultation !== undefined) {
     transformed.Ultima_consulta = patient.lastConsultation instanceof Date
@@ -298,7 +295,7 @@ function transformPatientFromDirectus(directusPatient: any): any {
     medicalHistory: directusPatient.Anamise_inicial,
     // Use Restricoes_alimentares only (separate from supplements)
     dietaryRestrictions: directusPatient.Restricoes_alimentares,
-    goals: directusPatient.Metas_e_objetivos,
+    goals: null,
     status: directusPatient.Etapas,
     lastConsultation: directusPatient.Ultima_consulta,
     notes: directusPatient.Observacoes,
