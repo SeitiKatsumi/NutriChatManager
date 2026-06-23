@@ -32,7 +32,7 @@ export class PatientHistoryDirectusService {
         let messageType: 'text' | 'image' | 'audio' | 'unknown' = 'text';
         if (msg.message_type === 'image') messageType = 'image';
         else if (msg.message_type === 'audio') messageType = 'audio';
-        else if (msg.message_type !== 'text') messageType = 'unknown';
+        else if (msg.message_type && msg.message_type !== 'text') messageType = 'unknown';
         
         return {
           id: String(msg.id || `msg_${index}`),

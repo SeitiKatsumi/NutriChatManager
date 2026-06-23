@@ -1423,7 +1423,6 @@ export class DirectusStorage implements IStorage {
           patient_id: message.patient_id,
           message_body: message.message_body,
           from_me: message.from_me,
-          message_type: message.message_type || 'text',
         }),
       });
 
