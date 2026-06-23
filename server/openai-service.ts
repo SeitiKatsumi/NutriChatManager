@@ -410,7 +410,18 @@ DADOS DO PACIENTE:
           {
             role: 'user',
             content: [
-              { type: 'text', text: 'Analise esta imagem de refeição e me dê as informações nutricionais estimadas.' },
+              {
+                type: 'text',
+                text: [
+                  'Analise esta imagem de refeicao.',
+                  'Responda em portugues brasileiro e inclua obrigatoriamente:',
+                  '1. Alimentos identificados',
+                  '2. Estimativa calorica total em kcal, usando faixa se necessario',
+                  '3. Macros estimados em gramas: proteinas, carboidratos e gorduras',
+                  '4. Observacoes nutricionais praticas',
+                  'Nao omita calorias nem macros quando houver comida visivel.',
+                ].join('\n'),
+              },
               { type: 'image_url', image_url: { url: dataUrl, detail: 'high' } }
             ]
           }
