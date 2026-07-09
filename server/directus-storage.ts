@@ -1398,14 +1398,19 @@ export class DirectusStorage implements IStorage {
 
       for (const variant of Array.from(new Set(searchVariants))) {
         const response = await this.client.request(
-          `/items/${PATIENTS_COLLECTION}?filter[Whatsapp][_eq]=${variant}&fields=${fields}&sort=-date_updated&limit=2`
+          `/items/${PATIENTS_COLLECTION}?filter[Whatsapp][_eq]=${variant}&fields=${fields}&limit=20`
         );
         const patients = response.data || [];
         if (patients.length > 0) {
           if (patients.length > 1) {
-            console.warn(`[DirectusStorage] Multiple patients found for WhatsApp ${variant}; using the most recently updated record`);
+            console.warn(`[DirectusStorage] Multiple patients found for WhatsApp ${variant}; using the most recent record`);
           }
-          return transformPatientFromDirectus(patients[0]);
+          const [selectedPatient] = patients.sort((a: any, b: any) => {
+            const aTime = Date.parse(a.date_updated || a.date_created || '') || 0;
+            const bTime = Date.parse(b.date_updated || b.date_created || '') || 0;
+            return bTime - aTime;
+          });
+          return transformPatientFromDirectus(selectedPatient);
         }
       }
 
