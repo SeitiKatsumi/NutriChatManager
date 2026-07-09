@@ -1364,7 +1364,9 @@ export class DirectusStorage implements IStorage {
       const searchVariants = [cleanNumber];
       if (cleanNumber.startsWith('55') && cleanNumber.length === 13) {
         const withoutCountryCode = cleanNumber.substring(2);
+        const withoutLeadingZeroes = withoutCountryCode.replace(/^0+/, '');
         searchVariants.push(withoutCountryCode, withoutCountryCode.slice(-10));
+        if (withoutLeadingZeroes.length >= 2) searchVariants.push(withoutLeadingZeroes);
       } else if (cleanNumber.length === 11) {
         searchVariants.push('55' + cleanNumber, cleanNumber.slice(-10));
       }
@@ -1400,7 +1402,9 @@ export class DirectusStorage implements IStorage {
       const searchVariants = [cleanNumber];
       if (cleanNumber.startsWith('55') && cleanNumber.length === 13) {
         const withoutCountryCode = cleanNumber.substring(2);
+        const withoutLeadingZeroes = withoutCountryCode.replace(/^0+/, '');
         searchVariants.push(withoutCountryCode, withoutCountryCode.slice(-10));
+        if (withoutLeadingZeroes.length >= 2) searchVariants.push(withoutLeadingZeroes);
       } else if (cleanNumber.length === 11) {
         searchVariants.push(`55${cleanNumber}`, cleanNumber.slice(-10));
       }
