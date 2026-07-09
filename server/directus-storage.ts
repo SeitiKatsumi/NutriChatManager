@@ -1360,20 +1360,22 @@ export class DirectusStorage implements IStorage {
       const cleanNumber = whatsappNumber.replace(/\D/g, '');
       const fields = 'id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,Suplementos_e_medicamentos,Restricoes_alimentares,Etapas,IMC,Idade,Feedbacks,Cafe_da_manha,Lanche_da_manha,Almoco,Lanche_da_tarde,Janta,Ceia,ultima_analise_ia,data_ultima_analise,date_created,date_updated';
 
+      const targetNumber = cleanWhatsAppNumber(cleanNumber);
       const searchVariants = [cleanNumber];
       if (cleanNumber.startsWith('55') && cleanNumber.length === 13) {
-        searchVariants.push(cleanNumber.substring(2));
+        const withoutCountryCode = cleanNumber.substring(2);
+        searchVariants.push(withoutCountryCode, withoutCountryCode.slice(-10));
       } else if (cleanNumber.length === 11) {
-        searchVariants.push('55' + cleanNumber);
+        searchVariants.push('55' + cleanNumber, cleanNumber.slice(-10));
       }
 
-      for (const variant of searchVariants) {
+      for (const variant of Array.from(new Set(searchVariants))) {
         const encodedVariant = encodeURIComponent(variant);
         const response = await this.client.request(
           `/items/${PATIENTS_COLLECTION}?search=${encodedVariant}&filter[Nutricionista_responsavel][_eq]=${encodeURIComponent(nutritionistId)}&fields=${fields}&limit=20`
         );
         const patients = (response.data || []).filter((directusPatient: any) => (
-          cleanWhatsAppNumber(directusPatient.Whatsapp) === cleanWhatsAppNumber(variant)
+          cleanWhatsAppNumber(directusPatient.Whatsapp) === targetNumber
         ));
         if (patients.length > 0) {
           console.log(`[DirectusStorage] Found patient by WhatsApp ${variant}`);
@@ -1394,11 +1396,13 @@ export class DirectusStorage implements IStorage {
       const cleanNumber = cleanWhatsAppNumber(whatsappNumber);
       const fields = 'id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,Suplementos_e_medicamentos,Restricoes_alimentares,Etapas,IMC,Idade,Feedbacks,Cafe_da_manha,Lanche_da_manha,Almoco,Lanche_da_tarde,Janta,Ceia,ultima_analise_ia,data_ultima_analise,date_created,date_updated';
 
+      const targetNumber = cleanWhatsAppNumber(cleanNumber);
       const searchVariants = [cleanNumber];
       if (cleanNumber.startsWith('55') && cleanNumber.length === 13) {
-        searchVariants.push(cleanNumber.substring(2));
+        const withoutCountryCode = cleanNumber.substring(2);
+        searchVariants.push(withoutCountryCode, withoutCountryCode.slice(-10));
       } else if (cleanNumber.length === 11) {
-        searchVariants.push(`55${cleanNumber}`);
+        searchVariants.push(`55${cleanNumber}`, cleanNumber.slice(-10));
       }
 
       for (const variant of Array.from(new Set(searchVariants))) {
@@ -1407,7 +1411,7 @@ export class DirectusStorage implements IStorage {
           `/items/${PATIENTS_COLLECTION}?search=${encodedVariant}&fields=${fields}&limit=20`
         );
         const patients = (response.data || []).filter((directusPatient: any) => (
-          cleanWhatsAppNumber(directusPatient.Whatsapp) === cleanWhatsAppNumber(variant)
+          cleanWhatsAppNumber(directusPatient.Whatsapp) === targetNumber
         ));
         if (patients.length > 0) {
           if (patients.length > 1) {
