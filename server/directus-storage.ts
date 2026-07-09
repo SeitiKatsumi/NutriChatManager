@@ -10,6 +10,7 @@ import type { Patient, Nutritionist } from "@shared/schema";
 const PATIENTS_COLLECTION = "Cadastro_de_Pacientes";
 const USERS_COLLECTION = "users";
 const CONSULTATIONS_COLLECTION = "consultations";
+const NUTRITIONIST_LIST_FIELDS = "id,email,first_name,last_name,full_name,role,status,mensagem_inicial,nome_do_agente,status_pagamento,subscription_status";
 
 // Types for Directus collections - using exact Portuguese field names from collection
 export interface DirectusPatient {
@@ -789,7 +790,7 @@ export class DirectusStorage implements IStorage {
 
   async getNutritionistByEmail(email: string) {
     try {
-      const response = await this.client.request(`/users?filter[email][_eq]=${encodeURIComponent(email)}&fields=*`);
+      const response = await this.client.request(`/users?filter[email][_eq]=${encodeURIComponent(email)}&fields=${NUTRITIONIST_LIST_FIELDS}`);
       const users = response.data || [];
       const nutritionist = users.find((user: any) => user.role === '90ce89ef-abe3-4359-9fc0-3e882127775a');
       return nutritionist ? transformUserFromDirectus(nutritionist) : undefined;
@@ -862,7 +863,7 @@ export class DirectusStorage implements IStorage {
   async listNutritionists(userToken?: string) {
     try {
       const client = this.getUserClient(userToken);
-      const response = await client.request(`/users?filter[role][_eq]=90ce89ef-abe3-4359-9fc0-3e882127775a&fields=*`);
+      const response = await client.request(`/users?filter[role][_eq]=90ce89ef-abe3-4359-9fc0-3e882127775a&fields=${NUTRITIONIST_LIST_FIELDS}`);
       const users = response.data || [];
       return users.map(transformUserFromDirectus);
     } catch (error) {
