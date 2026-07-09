@@ -2,6 +2,11 @@ import { storage } from './storage';
 import { openaiService } from './openai-service';
 import { twilioWhatsAppService } from './twilio-whatsapp-service';
 import type { Patient, WhatsappMessage } from '@shared/schema';
+import { randomUUID } from 'crypto';
+
+const GHOST_NUTRITIONIST_EMAIL = 'nutricionista.fantasma@nutrichatbot.local';
+const GHOST_NUTRITIONIST_NAME = 'Nutricionista Fantasma';
+const GHOST_GREETING = 'Oi! Você já tem um nutricionista responsável vinculado ao NutriChatbot? Se souber, me diga o nome dele. Se não souber ou ainda não tiver, tudo bem: vou continuar seu cadastro por aqui.';
 
 function cleanWhatsAppNumber(whatsappNumber: string): string {
   const cleaned = whatsappNumber.replace(/\D/g, '');
@@ -97,14 +102,11 @@ export class WhatsAppMessageHandler {
         resolvedPatient = await storage.getPatientByWhatsappAny(cleanNumber);
         if (resolvedPatient?.nutritionistId) {
           nutritionist = await storage.getNutritionist(resolvedPatient.nutritionistId);
-        } else if (process.env.TWILIO_DEFAULT_NUTRITIONIST_ID) {
-          nutritionist = await storage.getNutritionist(process.env.TWILIO_DEFAULT_NUTRITIONIST_ID);
         }
       }
 
       if (!nutritionist) {
-        console.error(`[MessageHandler] No nutritionist found for ${channelIdentity}. Configure TWILIO_DEFAULT_NUTRITIONIST_ID for new contacts.`);
-        return;
+        nutritionist = await this.getGhostNutritionist();
       }
 
       const nutritionistId = nutritionist.id;
@@ -154,12 +156,28 @@ export class WhatsAppMessageHandler {
         console.log(`[MessageHandler] Patient created with ID: ${patient.id}`);
       }
 
+      if (!patient) {
+        throw new Error(`Failed to resolve patient for WhatsApp ${cleanNumber}`);
+      }
+
+      let activePatient: Patient = patient;
+
+      if (activePatient.nutritionistId === nutritionistId && this.isGhostNutritionist(nutritionist) && messageType === 'text') {
+        const matchedNutritionist = await this.findNutritionistByName(messageBody);
+        if (matchedNutritionist) {
+          const updatedPatient = await storage.updatePatient(activePatient.id, { nutritionistId: matchedNutritionist.id });
+          activePatient = updatedPatient || { ...activePatient, nutritionistId: matchedNutritionist.id };
+          nutritionist = matchedNutritionist;
+          console.log(`[MessageHandler] Patient ${activePatient.id} assigned to nutritionist ${matchedNutritionist.id} from WhatsApp message`);
+        }
+      }
+
       let aiResponse: string;
 
       if (messageType === 'image' && imageBuffer) {
-        console.log(`[MessageHandler] Processing food image for patient ${patient.id}`);
+        console.log(`[MessageHandler] Processing food image for patient ${activePatient.id}`);
         await storage.saveWhatsappMessage({
-          patient_id: patient.id,
+          patient_id: activePatient.id,
           message_body: messageBody || '[Imagem]',
           from_me: false,
           message_type: 'image',
@@ -172,7 +190,7 @@ export class WhatsAppMessageHandler {
         }
       } else if (messageType === 'image' && !imageBuffer) {
         await storage.saveWhatsappMessage({
-          patient_id: patient.id,
+          patient_id: activePatient.id,
           message_body: messageBody || '[Imagem sem dados]',
           from_me: false,
           message_type: 'image',
@@ -180,45 +198,46 @@ export class WhatsAppMessageHandler {
         aiResponse = 'Recebi sua imagem, mas não consegui processá-la. Pode tentar enviar novamente?';
       } else if (messageType === 'audio') {
         await storage.saveWhatsappMessage({
-          patient_id: patient.id,
+          patient_id: activePatient.id,
           message_body: '[Áudio]',
           from_me: false,
           message_type: 'audio',
         });
         aiResponse = 'Desculpe, ainda não consigo processar áudios. Pode enviar sua mensagem em texto? 😊';
       } else {
-        const conversationHistory = await this.buildConversationHistory(patient.id);
+        const conversationHistory = await this.buildConversationHistory(activePatient.id);
 
         await storage.saveWhatsappMessage({
-          patient_id: patient.id,
+          patient_id: activePatient.id,
           message_body: messageBody || `[${messageType}]`,
           from_me: false,
           message_type: messageType,
         });
-        this.addToCache(patient.id, 'user', messageBody || `[${messageType}]`);
+        this.addToCache(activePatient.id, 'user', messageBody || `[${messageType}]`);
 
-        let etapas = patient.status || '';
-        const cachedStage = this.patientStageCache.get(patient.id);
+        let etapas = activePatient.status || '';
+        const cachedStage = this.patientStageCache.get(activePatient.id);
         if (cachedStage && (Date.now() - cachedStage.updatedAt) < WhatsAppMessageHandler.STAGE_CACHE_TTL_MS) {
           if (cachedStage.stage === 'Acompanhamento' && etapas === 'Anamnese Inicial') {
-            console.log(`[MessageHandler] Overriding Directus stage "${etapas}" with cached stage "${cachedStage.stage}" for patient ${patient.id}`);
+            console.log(`[MessageHandler] Overriding Directus stage "${etapas}" with cached stage "${cachedStage.stage}" for patient ${activePatient.id}`);
             etapas = cachedStage.stage;
           }
         }
         const agentName = nutritionist.nome_do_agente || 'Nutri Chatbot';
+        const customGreeting = this.isGhostNutritionist(nutritionist) ? GHOST_GREETING : nutritionist.mensagem_inicial;
 
         if (etapas === 'Anamnese Inicial' || isNewPatient) {
           aiResponse = await this.handleAnamnesis(
-            patient,
+            activePatient,
             conversationHistory,
             messageBody,
             isNewPatient,
             agentName,
-            nutritionist.mensagem_inicial
+            customGreeting
           );
         } else {
           aiResponse = await this.handleFollowUp(
-            patient,
+            activePatient,
             conversationHistory,
             messageBody,
             agentName
@@ -226,10 +245,10 @@ export class WhatsAppMessageHandler {
         }
       }
 
-      this.addToCache(patient.id, 'assistant', aiResponse);
+      this.addToCache(activePatient.id, 'assistant', aiResponse);
 
       await storage.saveWhatsappMessage({
-        patient_id: patient.id,
+        patient_id: activePatient.id,
         message_body: aiResponse,
         from_me: true,
         message_type: 'text',
@@ -345,6 +364,51 @@ export class WhatsAppMessageHandler {
     }
 
     return result.response;
+  }
+
+  private async getGhostNutritionist(): Promise<any> {
+    const existing = await storage.getNutritionistByEmail(GHOST_NUTRITIONIST_EMAIL);
+    if (existing) return existing;
+
+    return storage.createNutritionist({
+      fullName: GHOST_NUTRITIONIST_NAME,
+      email: GHOST_NUTRITIONIST_EMAIL,
+      password: randomUUID(),
+      cpfCnpj: '00000000000',
+      status: 'active',
+      status_pagamento: 'ativo',
+      subscriptionStatus: 'active',
+      nome_do_agente: 'NutriChatbot',
+      mensagem_inicial: GHOST_GREETING,
+    } as any);
+  }
+
+  private isGhostNutritionist(nutritionist: any): boolean {
+    return nutritionist?.email === GHOST_NUTRITIONIST_EMAIL;
+  }
+
+  private async findNutritionistByName(messageBody: string): Promise<any | undefined> {
+    const wanted = this.normalizeName(messageBody);
+    if (wanted.length < 4 || /^(nao|não|n sei|nao sei|não sei|nenhum|nao tenho|não tenho)\b/.test(wanted)) {
+      return undefined;
+    }
+
+    const nutritionists = await storage.listNutritionists();
+    return nutritionists.find((n: any) => {
+      if (this.isGhostNutritionist(n)) return false;
+      const name = this.normalizeName(n.fullName || '');
+      return name.length >= 4 && (wanted.includes(name) || name.includes(wanted));
+    });
+  }
+
+  private normalizeName(value: string): string {
+    return value
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9 ]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
   private getMissingRequiredAnamnesisFields(
