@@ -1371,8 +1371,9 @@ export class DirectusStorage implements IStorage {
       }
 
       for (const variant of searchVariants) {
+        const encodedVariant = encodeURIComponent(variant);
         const response = await this.client.request(
-          `/items/${PATIENTS_COLLECTION}?filter[Whatsapp][_contains]=${variant}&filter[Nutricionista_responsavel][_eq]=${encodeURIComponent(nutritionistId)}&fields=${fields}&limit=20`
+          `/items/${PATIENTS_COLLECTION}?search=${encodedVariant}&filter[Nutricionista_responsavel][_eq]=${encodeURIComponent(nutritionistId)}&fields=${fields}&limit=20`
         );
         const patients = (response.data || []).filter((directusPatient: any) => (
           cleanWhatsAppNumber(directusPatient.Whatsapp) === cleanWhatsAppNumber(variant)
@@ -1407,8 +1408,9 @@ export class DirectusStorage implements IStorage {
       }
 
       for (const variant of Array.from(new Set(searchVariants))) {
+        const encodedVariant = encodeURIComponent(variant);
         const response = await this.client.request(
-          `/items/${PATIENTS_COLLECTION}?filter[Whatsapp][_contains]=${variant}&fields=${fields}&limit=20`
+          `/items/${PATIENTS_COLLECTION}?search=${encodedVariant}&fields=${fields}&limit=20`
         );
         const patients = (response.data || []).filter((directusPatient: any) => (
           cleanWhatsAppNumber(directusPatient.Whatsapp) === cleanWhatsAppNumber(variant)
