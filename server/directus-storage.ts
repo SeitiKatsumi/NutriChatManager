@@ -1362,10 +1362,7 @@ export class DirectusStorage implements IStorage {
 
       const searchVariants = [cleanNumber];
       if (cleanNumber.startsWith('55') && cleanNumber.length === 13) {
-        const withoutCountryCode = cleanNumber.substring(2);
-        if (!withoutCountryCode.startsWith('0')) {
-          searchVariants.push(withoutCountryCode);
-        }
+        searchVariants.push(cleanNumber.substring(2));
       } else if (cleanNumber.length === 11) {
         searchVariants.push('55' + cleanNumber);
       }
@@ -1399,10 +1396,7 @@ export class DirectusStorage implements IStorage {
 
       const searchVariants = [cleanNumber];
       if (cleanNumber.startsWith('55') && cleanNumber.length === 13) {
-        const withoutCountryCode = cleanNumber.substring(2);
-        if (!withoutCountryCode.startsWith('0')) {
-          searchVariants.push(withoutCountryCode);
-        }
+        searchVariants.push(cleanNumber.substring(2));
       } else if (cleanNumber.length === 11) {
         searchVariants.push(`55${cleanNumber}`);
       }
