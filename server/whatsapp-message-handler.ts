@@ -4,7 +4,7 @@ import { twilioWhatsAppService } from './twilio-whatsapp-service';
 import type { Patient, WhatsappMessage } from '@shared/schema';
 import { randomUUID } from 'crypto';
 
-const GHOST_NUTRITIONIST_EMAIL = 'nutricionista.fantasma@nutrichatbot.local';
+const GHOST_NUTRITIONIST_EMAIL = 'nutricionista.fantasma@nutrichatbot.com.br';
 const GHOST_NUTRITIONIST_NAME = 'Nutricionista Fantasma';
 const GHOST_GREETING = 'Oi! Você já tem um nutricionista responsável vinculado ao NutriChatbot? Se souber, me diga o nome dele. Se não souber ou ainda não tiver, tudo bem: vou continuar seu cadastro por aqui.';
 
