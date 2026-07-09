@@ -121,6 +121,14 @@ function cleanWhatsAppNumber(value: string | undefined): string {
   return cleaned;
 }
 
+function selectMostRecentDirectusPatient(patients: any[]): any | undefined {
+  return patients.sort((a: any, b: any) => {
+    const aTime = Date.parse(a.date_updated || a.date_created || '') || 0;
+    const bTime = Date.parse(b.date_updated || b.date_created || '') || 0;
+    return bTime - aTime;
+  })[0];
+}
+
 // Transform functions between local types and Directus types
 interface PatientInput {
   nutritionistId?: string;
@@ -1364,12 +1372,14 @@ export class DirectusStorage implements IStorage {
 
       for (const variant of searchVariants) {
         const response = await this.client.request(
-          `/items/${PATIENTS_COLLECTION}?filter[Whatsapp][_eq]=${variant}&filter[Nutricionista_responsavel][_eq]=${encodeURIComponent(nutritionistId)}&fields=${fields}&limit=1`
+          `/items/${PATIENTS_COLLECTION}?filter[Whatsapp][_contains]=${variant}&filter[Nutricionista_responsavel][_eq]=${encodeURIComponent(nutritionistId)}&fields=${fields}&limit=20`
         );
-        const patients = response.data || [];
+        const patients = (response.data || []).filter((directusPatient: any) => (
+          cleanWhatsAppNumber(directusPatient.Whatsapp) === cleanWhatsAppNumber(variant)
+        ));
         if (patients.length > 0) {
           console.log(`[DirectusStorage] Found patient by WhatsApp ${variant}`);
-          return transformPatientFromDirectus(patients[0]);
+          return transformPatientFromDirectus(selectMostRecentDirectusPatient(patients));
         }
       }
 
@@ -1398,19 +1408,16 @@ export class DirectusStorage implements IStorage {
 
       for (const variant of Array.from(new Set(searchVariants))) {
         const response = await this.client.request(
-          `/items/${PATIENTS_COLLECTION}?filter[Whatsapp][_eq]=${variant}&fields=${fields}&limit=20`
+          `/items/${PATIENTS_COLLECTION}?filter[Whatsapp][_contains]=${variant}&fields=${fields}&limit=20`
         );
-        const patients = response.data || [];
+        const patients = (response.data || []).filter((directusPatient: any) => (
+          cleanWhatsAppNumber(directusPatient.Whatsapp) === cleanWhatsAppNumber(variant)
+        ));
         if (patients.length > 0) {
           if (patients.length > 1) {
             console.warn(`[DirectusStorage] Multiple patients found for WhatsApp ${variant}; using the most recent record`);
           }
-          const [selectedPatient] = patients.sort((a: any, b: any) => {
-            const aTime = Date.parse(a.date_updated || a.date_created || '') || 0;
-            const bTime = Date.parse(b.date_updated || b.date_created || '') || 0;
-            return bTime - aTime;
-          });
-          return transformPatientFromDirectus(selectedPatient);
+          return transformPatientFromDirectus(selectMostRecentDirectusPatient(patients));
         }
       }
 
