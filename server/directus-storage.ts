@@ -1361,6 +1361,15 @@ export class DirectusStorage implements IStorage {
       const fields = 'id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,Suplementos_e_medicamentos,Restricoes_alimentares,Etapas,IMC,Idade,Feedbacks,Cafe_da_manha,Lanche_da_manha,Almoco,Lanche_da_tarde,Janta,Ceia,ultima_analise_ia,data_ultima_analise,date_created,date_updated';
 
       const targetNumber = cleanWhatsAppNumber(cleanNumber);
+      const cacheBuster = Date.now();
+      const exactResponse = await this.client.request(
+        `/items/${PATIENTS_COLLECTION}?filter[Whatsapp][_eq]=${encodeURIComponent(targetNumber)}&filter[Nutricionista_responsavel][_eq]=${encodeURIComponent(nutritionistId)}&fields=${fields}&limit=20&_cb=${cacheBuster}`
+      );
+      const exactPatients = exactResponse.data || [];
+      if (exactPatients.length > 0) {
+        return transformPatientFromDirectus(selectMostRecentDirectusPatient(exactPatients));
+      }
+
       const searchVariants = [cleanNumber];
       if (cleanNumber.startsWith('55') && cleanNumber.length === 13) {
         const withoutCountryCode = cleanNumber.substring(2);
@@ -1374,7 +1383,7 @@ export class DirectusStorage implements IStorage {
       for (const variant of Array.from(new Set(searchVariants))) {
         const encodedVariant = encodeURIComponent(variant);
         const response = await this.client.request(
-          `/items/${PATIENTS_COLLECTION}?search=${encodedVariant}&filter[Nutricionista_responsavel][_eq]=${encodeURIComponent(nutritionistId)}&fields=${fields}&limit=20`
+          `/items/${PATIENTS_COLLECTION}?search=${encodedVariant}&filter[Nutricionista_responsavel][_eq]=${encodeURIComponent(nutritionistId)}&fields=${fields}&limit=20&_cb=${cacheBuster}`
         );
         const patients = (response.data || []).filter((directusPatient: any) => (
           cleanWhatsAppNumber(directusPatient.Whatsapp) === targetNumber
@@ -1399,6 +1408,18 @@ export class DirectusStorage implements IStorage {
       const fields = 'id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,Suplementos_e_medicamentos,Restricoes_alimentares,Etapas,IMC,Idade,Feedbacks,Cafe_da_manha,Lanche_da_manha,Almoco,Lanche_da_tarde,Janta,Ceia,ultima_analise_ia,data_ultima_analise,date_created,date_updated';
 
       const targetNumber = cleanWhatsAppNumber(cleanNumber);
+      const cacheBuster = Date.now();
+      const exactResponse = await this.client.request(
+        `/items/${PATIENTS_COLLECTION}?filter[Whatsapp][_eq]=${encodeURIComponent(targetNumber)}&fields=${fields}&limit=20&_cb=${cacheBuster}`
+      );
+      const exactPatients = exactResponse.data || [];
+      if (exactPatients.length > 0) {
+        if (exactPatients.length > 1) {
+          console.warn(`[DirectusStorage] Multiple patients found for exact WhatsApp ${targetNumber}; using the most recent record`);
+        }
+        return transformPatientFromDirectus(selectMostRecentDirectusPatient(exactPatients));
+      }
+
       const searchVariants = [cleanNumber];
       if (cleanNumber.startsWith('55') && cleanNumber.length === 13) {
         const withoutCountryCode = cleanNumber.substring(2);
@@ -1412,7 +1433,7 @@ export class DirectusStorage implements IStorage {
       for (const variant of Array.from(new Set(searchVariants))) {
         const encodedVariant = encodeURIComponent(variant);
         const response = await this.client.request(
-          `/items/${PATIENTS_COLLECTION}?search=${encodedVariant}&fields=${fields}&limit=20`
+          `/items/${PATIENTS_COLLECTION}?search=${encodedVariant}&fields=${fields}&limit=20&_cb=${cacheBuster}`
         );
         const patients = (response.data || []).filter((directusPatient: any) => (
           cleanWhatsAppNumber(directusPatient.Whatsapp) === targetNumber
