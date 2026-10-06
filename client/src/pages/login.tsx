@@ -121,17 +121,7 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <div className="mt-6 text-center text-sm text-muted-foreground">
-            <p>Não tem uma conta?</p>
-            <Button 
-              variant="link" 
-              className="p-0 h-auto font-normal"
-              onClick={() => navigate("/register")}
-              data-testid="link-register"
-            >
-              Cadastre-se como nutricionista
-            </Button>
-          </div>
+
         </CardContent>
       </Card>
     </div>

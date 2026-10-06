@@ -4,9 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, CheckCircle, CreditCard, MessageCircle, RefreshCw, Settings } from "lucide-react";
-import { Link } from "wouter";
+import { AlertCircle, CheckCircle, MessageCircle, RefreshCw, Settings } from "lucide-react";
 
 export default function WhatsApp() {
   const { data: userInfo } = useQuery<any>({
@@ -35,14 +33,6 @@ export default function WhatsApp() {
   const isConfigured = connectionState === "open";
   const sender = whatsappStatus?.sender || "Nao configurado";
 
-  const hasActivePaymentStatus = currentNutritionist?.status_pagamento === "ativo";
-  const hasActiveSubscription = currentNutritionist?.subscriptionStatus === "active";
-  const isSubscriptionActive = hasActivePaymentStatus || hasActiveSubscription;
-
-  const isSubscriptionError =
-    (statusError && (statusError as any)?.status === 402) ||
-    (!isSubscriptionActive && currentNutritionist?.subscriptionStatus === "canceled");
-
   return (
     <main className="p-6">
       <div className="max-w-4xl mx-auto">
@@ -55,25 +45,7 @@ export default function WhatsApp() {
           </p>
         </div>
 
-        {isSubscriptionError && (
-          <Alert variant="destructive" className="mb-6 border-orange-500 bg-orange-500/10">
-            <AlertCircle className="h-5 w-5 text-orange-500" />
-            <AlertTitle className="text-orange-500 font-semibold">
-              Sua assinatura expirou
-            </AlertTitle>
-            <AlertDescription className="text-orange-400">
-              <p className="mb-3">
-                Para continuar utilizando o WhatsApp e todos os recursos da plataforma, renove sua assinatura.
-              </p>
-              <Link href="/dashboard/assinatura">
-                <Button variant="outline" className="border-orange-500 text-orange-500 hover:bg-orange-500/20">
-                  <CreditCard className="w-4 h-4 mr-2" />
-                  Renovar Assinatura
-                </Button>
-              </Link>
-            </AlertDescription>
-          </Alert>
-        )}
+
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           <Card>

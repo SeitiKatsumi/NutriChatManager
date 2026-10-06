@@ -14,6 +14,8 @@ import { whatsappMessageHandler } from "./whatsapp-message-handler";
 import { twilioWhatsAppService } from "./twilio-whatsapp-service";
 import { getAllAIConfigs, getAIConfig, updateAIConfig, resetAIConfig, getDefaultConfig, VALID_AGENT_TYPES, AVAILABLE_MODELS, getAgentTypeLabel, initAIConfigStore, type AgentType } from "./ai-config-store";
 import Stripe from "stripe";
+import { SINGLE_NUTRITIONIST_ID } from "@shared/clinic-mode";
+import { requireClinicAuth, disableBilling } from "./clinic-access";
 
 // Extend session type to include user
 declare module 'express-session' {
@@ -22,27 +24,10 @@ declare module 'express-session' {
   }
 }
 
-// Initialize Stripe
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error('Missing required Stripe secret: STRIPE_SECRET_KEY');
-}
-
-// Validate that the Stripe key is a SECRET key, not a public key
-if (!process.env.STRIPE_SECRET_KEY.startsWith('sk_')) {
-  console.error('🚨 CONFIGURATION ERROR:');
-  console.error('STRIPE_SECRET_KEY must start with "sk_" (secret key), not "pk_" (public key)');
-  console.error('Current key starts with:', process.env.STRIPE_SECRET_KEY.substring(0, 3));
-  console.error('Please update your environment variables in Replit Secrets:');
-  console.error('1. Go to your Replit workspace');
-  console.error('2. Open Secrets tab (lock icon in sidebar)');
-  console.error('3. Update STRIPE_SECRET_KEY with your secret key (sk_test_... or sk_live_...)');
-  console.error('4. Restart your application');
-  throw new Error('STRIPE_SECRET_KEY must be a secret key starting with "sk_", not a public key starting with "pk_"');
-}
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+// Billing routes are disabled; no Stripe key or API request is required for clinic access.
+const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: "2024-06-20" as any,
-});
+}) : undefined;
 
 // Subscription validation schemas
 const createSubscriptionSchema = z.object({
@@ -94,10 +79,10 @@ const STRIPE_PRICE_TO_PLAN_MAP: Record<string, string> = {
 // Initialize price mapping from Stripe products
 const initializePriceMapping = async () => {
   try {
-    const products = await stripe.products.list({ limit: 100 });
+    const products = await stripe!.products.list({ limit: 100 });
     for (const product of products.data) {
       if (product.metadata?.planId) {
-        const prices = await stripe.prices.list({ product: product.id, limit: 100 });
+        const prices = await stripe!.prices.list({ product: product.id, limit: 100 });
         for (const price of prices.data) {
           STRIPE_PRICE_TO_PLAN_MAP[price.id] = product.metadata.planId;
         }
@@ -156,16 +141,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize AI config store (seed defaults into DB if needed)
   await initAIConfigStore();
   
-  // Initialize price mapping for security
-  await initializePriceMapping();
+  // ponytail: keep the billing implementation for the next strategy, without accepting new billing operations.
+  app.use(['/api/stripe', '/api/subscription'], disableBilling);
 
-  // Middleware to check authentication
-  const requireAuth = (req: any, res: any, next: any) => {
-    if (!req.session.user) {
-      return res.status(401).json({ error: "Authentication required" });
-    }
-    next();
-  };
+  const requireAuth = requireClinicAuth;
 
   const requireAdmin = (req: any, res: any, next: any) => {
     if (!req.session.user) {
@@ -185,66 +164,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const getSessionDirectusToken = (req: any) =>
     req.session.user?.isAdmin ? process.env.DIRECTUS_TOKEN : req.session.user?.accessToken;
 
-  // Middleware to check if user has active subscription
-  const requireActiveSubscription = async (req: any, res: any, next: any) => {
-    if (!req.session.user) {
-      return res.status(401).json({ error: "Authentication required" });
-    }
-
-    try {
-      // Fast path: check session-cached subscription status first (avoids Directus query)
-      const sessionStatusPagamento = req.session.user.status_pagamento;
-      const sessionSubscriptionStatus = req.session.user.subscription_status;
-      
-      const sessionIsActive = sessionStatusPagamento === 'ativo' || 
-                              sessionSubscriptionStatus === 'active' || 
-                              sessionSubscriptionStatus === 'trialing';
-
-      if (sessionIsActive) {
-        console.log(`[Subscription Middleware] Session fast-path: status_pagamento=${sessionStatusPagamento}, subscription_status=${sessionSubscriptionStatus} → ACTIVE`);
-        return next();
-      }
-
-      // Session has no cached status or shows inactive — verify with Directus as fallback
-      const userId = req.session.user.id;
-      const hasActive = await storage.hasActiveSubscription(userId);
-      
-      if (hasActive) {
-        // Update session cache with active status
-        req.session.user.status_pagamento = 'ativo';
-        return next();
-      }
-
-      const subscriptionStatus = await storage.getSubscriptionStatus(userId);
-      
-      let errorMessage = "Active subscription required";
-      let errorCode = "SUBSCRIPTION_REQUIRED";
-      
-      if (subscriptionStatus === 'past_due') {
-        errorMessage = "Payment overdue. Please update your payment method.";
-        errorCode = "PAYMENT_OVERDUE";
-      } else if (subscriptionStatus === 'canceled') {
-        errorMessage = "Subscription canceled. Reactivate to continue using the app.";
-        errorCode = "SUBSCRIPTION_CANCELED";
-      } else if (subscriptionStatus === 'incomplete') {
-        errorMessage = "Complete your subscription setup to access the app.";
-        errorCode = "SUBSCRIPTION_INCOMPLETE";
-      } else if (!subscriptionStatus) {
-        errorMessage = "No active subscription found. Subscribe to access the app.";
-        errorCode = "NO_SUBSCRIPTION";
-      }
-
-      return res.status(402).json({ 
-        error: errorMessage,
-        code: errorCode,
-        subscriptionStatus: subscriptionStatus,
-        redirectTo: "/subscription/plans"
-      });
-    } catch (error) {
-      console.error('[Subscription Middleware] Error checking subscription:', error);
-      return res.status(500).json({ error: "Error verifying subscription" });
-    }
-  };
+  const requireActiveSubscription = requireAuth;
 
   // Test endpoint to verify webhook is reachable
   app.get("/api/stripe/webhook-test", (req, res) => {
@@ -294,7 +214,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).send('Webhook secret not configured');
       }
 
-      event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+      event = stripe!.webhooks.constructEvent(req.body, sig, webhookSecret);
       console.log(`[Stripe Webhook] Received event: ${event.type}`);
     } catch (err: any) {
       console.error('[Stripe Webhook] Webhook signature verification failed:', err.message);
@@ -310,7 +230,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           if (session.mode === 'subscription') {
             // Get the subscription details
-            const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
+            const subscription = await stripe!.subscriptions.retrieve(session.subscription as string);
             const customerId = session.customer as string;
             
             console.log(`[Stripe Webhook] Processing subscription: ${subscription.id} for customer: ${customerId}`);
@@ -396,7 +316,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (subscriptionId) {
             try {
               // Get the latest subscription details to ensure accurate status
-              const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+              const subscription = await stripe!.subscriptions.retrieve(subscriptionId);
               
               console.log(`[Stripe Webhook] Retrieved subscription ${subscriptionId} with status: ${subscription.status}`);
               
@@ -488,25 +408,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/nutritionists", async (req, res) => {
-    try {
-      const validatedData = insertNutritionistSchema.parse(req.body);
-      
-      // Check if email already exists
-      const existing = await storage.getNutritionistByEmail(validatedData.email);
-      if (existing) {
-        return res.status(409).json({ error: "Email already registered" });
-      }
+    return res.status(403).json({ error: 'O cadastro de novos nutricionistas está temporariamente desativado.' });
 
-      // Create nutritionist using DirectusStorage (which handles Directus user creation)
-      const nutritionist = await storage.createNutritionist(validatedData);
-
-      res.status(201).json(nutritionist);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid data", details: error.errors });
-      }
-      res.status(500).json({ error: "Failed to create nutritionist" });
-    }
   });
 
   app.put("/api/nutritionists/:id", requireAuth, async (req, res) => {
@@ -974,6 +877,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Get user details from Directus
       const directusUser = await directusClient.getMe(loginResponse.data.access_token);
+
+      if (directusUser.data.id !== SINGLE_NUTRITIONIST_ID) {
+        await directusClient.logout(loginResponse.data.refresh_token);
+        return res.status(403).json({ error: 'Acesso disponível apenas para Daniel Lessa.' });
+      }
       
       // Check if user has nutritionist role
       if (directusUser.data.role !== '90ce89ef-abe3-4359-9fc0-3e882127775a') {
@@ -1616,35 +1524,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Check user subscription status
   app.get("/api/subscription/status", requireAuth, async (req, res) => {
-    try {
-      const userId = req.session.user.id;
-      const userToken = req.session.user.accessToken;
-      const user = await storage.getNutritionist(userId, userToken);
-      
-      if (!user) {
-        return res.status(404).json({ error: "User not found" });
-      }
+    return res.json({ billingRequired: false, needsSubscription: false, hasActiveSubscription: false, subscriptionStatus: 'disabled', planId: null });
 
-      // Check if user has an active subscription
-      const hasActiveSubscription = Boolean(
-        user.subscriptionStatus === 'active' &&
-        user.subscriptionId &&
-        user.planId
-      );
-
-      res.json({
-        hasActiveSubscription,
-        subscriptionStatus: user.subscriptionStatus || 'none',
-        planId: user.planId || null,
-        subscriptionStartDate: user.subscriptionStartDate || null,
-        subscriptionEndDate: user.subscriptionEndDate || null,
-        stripeCustomerId: user.stripeCustomerId || null,
-        needsSubscription: !hasActiveSubscription
-      });
-    } catch (error: any) {
-      console.error('[Subscription Status] Error:', error);
-      res.status(500).json({ error: "Failed to get subscription status" });
-    }
   });
 
   // DIAGNOSTIC ENDPOINTS FOR WEBHOOK DEBUGGING
@@ -1661,12 +1542,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`[Webhook Test] Simulating ${eventType} for customer: ${customerId}`);
       
       // Get customer and subscription info from Stripe
-      const customer = await stripe.customers.retrieve(customerId);
+      const customer = await stripe!.customers.retrieve(customerId);
       if (!customer || customer.deleted) {
         return res.status(404).json({ error: "Customer not found in Stripe" });
       }
 
-      const subscriptions = await stripe.subscriptions.list({
+      const subscriptions = await stripe!.subscriptions.list({
         customer: customerId,
         limit: 10
       });
@@ -1734,7 +1615,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`[Self Sync] Found customer ID: ${stripeCustomerId}`);
       
       // Fetch current subscription status from Stripe - prefer active subscriptions
-      const activeSubscriptions = await stripe.subscriptions.list({
+      const activeSubscriptions = await stripe!.subscriptions.list({
         customer: stripeCustomerId,
         status: 'active',
         limit: 1,
@@ -1747,7 +1628,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`[Self Sync] Found active subscription: ${subscription.id}`);
       } else {
         // Fallback to most recent subscription of any status
-        const allSubscriptions = await stripe.subscriptions.list({
+        const allSubscriptions = await stripe!.subscriptions.list({
           customer: stripeCustomerId,
           status: 'all',
           limit: 1,
@@ -1860,7 +1741,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Verify customer exists in Stripe
       try {
-        const customer = await stripe.customers.retrieve(customerId);
+        const customer = await stripe!.customers.retrieve(customerId);
         const customerEmail = (customer as any).email || 'No email';
         const maskedEmail = maskEmail(customerEmail);
         console.log(`[Manual Sync] Customer verified: ${customer.id} (${maskedEmail})`);
@@ -1874,7 +1755,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Get customer subscription from Stripe
-      const subscriptions = await stripe.subscriptions.list({
+      const subscriptions = await stripe!.subscriptions.list({
         customer: customerId,
         status: 'all',
         limit: 10
@@ -1894,7 +1775,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`[Manual Sync] No subscriptions found, checking payment intents...`);
         
         // Check payment intents for this customer
-        const paymentIntents = await stripe.paymentIntents.list({
+        const paymentIntents = await stripe!.paymentIntents.list({
           customer: customerId,
           limit: 10
         });
@@ -2122,7 +2003,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Step 2: Fetch all subscriptions from Stripe
       console.log(`[Manual Sync Enhanced] Fetching subscriptions for customer: ${stripeCustomerId}`);
       
-      const subscriptions = await stripe.subscriptions.list({
+      const subscriptions = await stripe!.subscriptions.list({
         customer: stripeCustomerId,
         status: 'all',
         limit: 10
@@ -2143,7 +2024,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`[Manual Sync Enhanced] No subscriptions found, checking payment intents...`);
         
         // Check payment intents as fallback
-        const paymentIntents = await stripe.paymentIntents.list({
+        const paymentIntents = await stripe!.paymentIntents.list({
           customer: stripeCustomerId,
           limit: 10
         });
@@ -2297,7 +2178,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`[Payment Search] Looking for payment intent: ${paymentIntentId}`);
       
       // Retrieve specific payment intent
-      const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+      const paymentIntent = await stripe!.paymentIntents.retrieve(paymentIntentId);
       
       console.log(`[Payment Search] Found payment intent: ${paymentIntent.id}`);
       console.log(`[Payment Search] Status: ${paymentIntent.status}`);
@@ -2390,7 +2271,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Verify payment intent if provided
       if (paymentIntentId) {
-        const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+        const paymentIntent = await stripe!.paymentIntents.retrieve(paymentIntentId);
         console.log(`[Customer Fix] Verified payment intent ${paymentIntentId}: status=${paymentIntent.status}`);
         
         if (paymentIntent.status === 'succeeded' && paymentIntent.metadata.type === 'subscription') {
@@ -2459,7 +2340,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       for (const plan of plans) {
         // Check if product exists
-        const products = await stripe.products.list({
+        const products = await stripe!.products.list({
           limit: 100
         });
         
@@ -2467,7 +2348,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         if (!product) {
           // Creating product
-          product = await stripe.products.create({
+          product = await stripe!.products.create({
             name: plan.name,
             description: `Assinatura mensal do ${plan.name}`,
             metadata: { planId: plan.id }
@@ -2475,7 +2356,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         // Check if price exists for this product
-        const prices = await stripe.prices.list({ 
+        const prices = await stripe!.prices.list({
           product: product.id,
           limit: 100
         });
@@ -2483,7 +2364,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         if (!price) {
           // Creating price
-          price = await stripe.prices.create({
+          price = await stripe!.prices.create({
             currency: 'brl',
             unit_amount: plan.amount,
             recurring: { interval: 'month' },
@@ -2548,7 +2429,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('[Stripe] Creating customer for user:', userId);
         // Creating customer
         try {
-          const customer = await stripe.customers.create({
+          const customer = await stripe!.customers.create({
             email: user.email,
             name: user.fullName,
             metadata: {
@@ -2589,7 +2470,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Creating checkout session
       let session;
       try {
-        session = await stripe.checkout.sessions.create({
+        session = await stripe!.checkout.sessions.create({
           customer: stripeCustomerId,
           payment_method_types: ['card'],
           line_items: [{
@@ -2693,7 +2574,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!stripeCustomerId) {
         console.log('[Stripe Embedded] Creating customer for user:', userId);
         try {
-          const customer = await stripe.customers.create({
+          const customer = await stripe!.customers.create({
             email: user.email,
             name: user.fullName,
             metadata: {
@@ -2719,7 +2600,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       try {
         // Create subscription with incomplete payment behavior
-        const subscription = await stripe.subscriptions.create({
+        const subscription = await stripe!.subscriptions.create({
           customer: stripeCustomerId,
           items: [{
             price: plan.priceId,
@@ -2822,7 +2703,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // If user has a Stripe subscription, get fresh data
       if (user.subscriptionId) {
         try {
-          const subscription = await stripe.subscriptions.retrieve(user.subscriptionId);
+          const subscription = await stripe!.subscriptions.retrieve(user.subscriptionId);
           subscriptionData.status = subscription.status;
           subscriptionData.startDate = new Date(subscription.start_date * 1000).toISOString();
           subscriptionData.endDate = (subscription as any).current_period_end ? new Date((subscription as any).current_period_end * 1000).toISOString() : null;
@@ -2857,7 +2738,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Cancel subscription at period end
-      const subscription = await stripe.subscriptions.update(user.subscriptionId, {
+      const subscription = await stripe!.subscriptions.update(user.subscriptionId, {
         cancel_at_period_end: true
       });
 
@@ -2897,7 +2778,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const baseUrl = req.get('origin') || 'http://localhost:5000';
-      const session = await stripe.billingPortal.sessions.create({
+      const session = await stripe!.billingPortal.sessions.create({
         customer: user.stripeCustomerId,
         return_url: `${baseUrl}/dashboard`,
       });
@@ -2924,7 +2805,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Retrieve the checkout session from Stripe
-      const session = await stripe.checkout.sessions.retrieve(session_id);
+      const session = await stripe!.checkout.sessions.retrieve(session_id);
       
       // Get user ID from Stripe session metadata (secure verification)
       const sessionUserId = session.metadata?.userId || session.metadata?.nutritionistId;
@@ -2975,7 +2856,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (session.payment_status === 'paid') {
         // Get subscription details
         const subscriptionId = session.subscription as string;
-        const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+        const subscription = await stripe!.subscriptions.retrieve(subscriptionId);
         
         // Activate the user's subscription in Directus
         await storage.updateUserSubscription(userId, {

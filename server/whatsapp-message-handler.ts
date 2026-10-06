@@ -3,6 +3,7 @@ import { openaiService } from './openai-service';
 import { twilioWhatsAppService } from './twilio-whatsapp-service';
 import type { Patient, WhatsappMessage } from '@shared/schema';
 import { randomUUID } from 'crypto';
+import { SINGLE_NUTRITIONIST_ID } from '@shared/clinic-mode';
 
 const GHOST_NUTRITIONIST_EMAIL = 'nutricionista.fantasma@nutrichatbot.com.br';
 const GHOST_NUTRITIONIST_NAME = 'Nutricionista Fantasma';
@@ -85,7 +86,7 @@ export class WhatsAppMessageHandler {
   }
 
   async handleIncomingMessage(message: IncomingWhatsAppMessage): Promise<void> {
-    const { instanceName, nutritionistId: explicitNutritionistId, senderNumber, messageBody, messageType, imageBuffer } = message;
+    const { instanceName, senderNumber, messageBody, messageType, imageBuffer } = message;
     const channelIdentity = instanceName || 'twilio-global-whatsapp';
 
     console.log(`[MessageHandler] Processing message from ${senderNumber} via ${channelIdentity}`);
@@ -93,20 +94,12 @@ export class WhatsAppMessageHandler {
     try {
       const cleanNumber = cleanWhatsAppNumber(senderNumber);
 
-      let nutritionist: any | undefined;
-      let resolvedPatient: Patient | undefined;
-
-      if (explicitNutritionistId) {
-        nutritionist = await storage.getNutritionist(explicitNutritionistId);
-      } else {
-        resolvedPatient = await storage.getPatientByWhatsappAny(cleanNumber);
-        if (resolvedPatient?.nutritionistId) {
-          nutritionist = await storage.getNutritionist(resolvedPatient.nutritionistId);
-        }
-      }
-
-      if (!nutritionist) {
-        nutritionist = await this.getGhostNutritionist();
+      const nutritionist = await storage.getNutritionist(SINGLE_NUTRITIONIST_ID);
+      if (!nutritionist) throw new Error('Daniel Lessa não foi encontrado; paciente não será criado sem responsável.');
+      let resolvedPatient = await storage.getPatientByWhatsappAny(cleanNumber);
+      if (resolvedPatient && resolvedPatient.nutritionistId !== SINGLE_NUTRITIONIST_ID) {
+        resolvedPatient = await storage.updatePatient(resolvedPatient.id, { nutritionistId: SINGLE_NUTRITIONIST_ID });
+        if (!resolvedPatient) throw new Error('Não foi possível vincular o paciente ao Daniel Lessa.');
       }
 
       const nutritionistId = nutritionist.id;

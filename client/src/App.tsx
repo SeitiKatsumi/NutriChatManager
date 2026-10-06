@@ -1,4 +1,4 @@
-import { Switch, Route, useLocation } from "wouter";
+import { Switch, Route, useLocation, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -6,7 +6,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/auth-context";
 import { SubscriptionGuard } from "@/components/SubscriptionGuard";
 import NotFound from "@/pages/not-found";
-import Register from "@/pages/register";
 import LoginPage from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
 import Users from "@/pages/users";
@@ -14,9 +13,6 @@ import Patients from "@/pages/patients";
 import WhatsApp from "@/pages/whatsapp";
 import AdminLogin from "@/pages/admin-login";
 import Admin from "@/pages/admin";
-import SubscriptionPlans from "@/pages/subscription-plans";
-import SubscriptionSuccess from "@/pages/subscription-success";
-import DashboardAssinatura from "@/pages/dashboard-assinatura";
 import Settings from "@/pages/settings";
 import ScheduledMessages from "@/pages/scheduled-messages";
 import Header from "@/components/layout/header";
@@ -100,19 +96,11 @@ function Router() {
               <LoginPage />
             </PublicRoute>
           </Route>
-          <Route path="/register">
-            <PublicRoute>
-              <Register />
-            </PublicRoute>
-          </Route>
+          <Route path="/register"><Redirect to="/login" /></Route>
           
           {/* Subscription routes - Public routes handled by SubscriptionGuard */}
-          <Route path="/subscription/plans">
-            <SubscriptionPlans />
-          </Route>
-          <Route path="/subscription/success">
-            <SubscriptionSuccess />
-          </Route>
+          <Route path="/subscription/plans"><Redirect to="/dashboard" /></Route>
+          <Route path="/subscription/success"><Redirect to="/dashboard" /></Route>
           
           {/* Main app routes - Protected by SubscriptionGuard only */}
           <Route path="/">
@@ -135,10 +123,7 @@ function Router() {
             <Header />
             <WhatsApp />
           </Route>
-          <Route path="/dashboard/assinatura">
-            <Header />
-            <DashboardAssinatura />
-          </Route>
+          <Route path="/dashboard/assinatura"><Redirect to="/dashboard" /></Route>
           <Route path="/settings">
             <Header />
             <Settings />

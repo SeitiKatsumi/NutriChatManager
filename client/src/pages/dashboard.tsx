@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { 
   Users, MessageCircle, Phone, Calendar, TrendingUp, Clock, 
   Send, AlertCircle, CheckCircle2, Loader2, RefreshCw, Bot,
-  CalendarClock, BarChart3, Sparkles, CreditCard
+  CalendarClock, BarChart3, Sparkles
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Link } from "wouter";
 import { useAuth } from "@/contexts/auth-context";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import PatientDetailsDialog from "@/components/patients/patient-details-dialog";
 
 interface DashboardStats {
@@ -62,7 +61,6 @@ export default function Dashboard() {
     select: (data: any[]) => data.slice(0, 10),
   });
 
-  const isSubscriptionError = patientsError && (patientsError as any)?.status === 402;
 
   const { data: schedules, isLoading: schedulesLoading } = useQuery({
     queryKey: ["/api/schedules"],
@@ -109,26 +107,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {isSubscriptionError && (
-          <Alert variant="destructive" className="border-orange-500 bg-orange-500/10">
-            <AlertCircle className="h-5 w-5 text-orange-500" />
-            <AlertTitle className="text-orange-500 font-semibold">
-              Sua assinatura expirou
-            </AlertTitle>
-            <AlertDescription className="text-orange-400">
-              <p className="mb-3">
-                Para continuar utilizando todos os recursos da plataforma, 
-                renove sua assinatura.
-              </p>
-              <Link href="/dashboard/assinatura">
-                <Button variant="outline" className="border-orange-500 text-orange-500 hover:bg-orange-500/20">
-                  <CreditCard className="w-4 h-4 mr-2" />
-                  Renovar Assinatura
-                </Button>
-              </Link>
-            </AlertDescription>
-          </Alert>
-        )}
+
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           <Card>
