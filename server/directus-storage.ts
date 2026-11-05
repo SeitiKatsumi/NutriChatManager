@@ -913,7 +913,7 @@ export class DirectusStorage implements IStorage {
     }
   }
 
-  async getPatientsByNutritionist(nutritionistId: string, userToken?: string) {
+  async getPatientsByNutritionist(nutritionistId: string, userToken?: string, strict = false) {
     try {
       // Use admin client for reading due to Directus role permissions on nutritionist_id field
       // Backend validates ownership through session, providing security without Directus field permissions
@@ -924,12 +924,14 @@ export class DirectusStorage implements IStorage {
       
       console.log(`[Directus] Getting patients for nutritionist: ${nutritionistId}`);
       // Using correct Directus field name for nutritionist filter
-      const response = await client.request(`/items/${PATIENTS_COLLECTION}?filter[Nutricionista_responsavel][_eq]=${encodedId}&fields=${fields}`);
+      const response = await client.request(`/items/${PATIENTS_COLLECTION}?filter[Nutricionista_responsavel][_eq]=${encodedId}&fields=${fields}&limit=-1`);
+      if (strict && !Array.isArray(response.data)) throw new Error('Patient metrics unavailable');
       const patients = response.data || [];
       console.log(`[Directus] Found ${patients.length} patients for nutritionist`);
       if (!patients.length) return [];
       const ids = patients.map((patient: any) => patient.id).join(',');
       const history = await client.request(`/items/whatsapp_messages?aggregate[max]=date_created&groupBy[]=patient_id&filter[patient_id][_in]=${encodeURIComponent(ids)}&limit=-1`);
+      if (strict && !Array.isArray(history.data)) throw new Error('Last interactions unavailable');
       const lastInteractions = new Map((history.data || []).map((row: any) => [String(row.patient_id), row.max?.date_created || null]));
       return patients.map((patient: any) => ({
         ...transformPatientFromDirectus(patient),
@@ -942,6 +944,7 @@ export class DirectusStorage implements IStorage {
         status: error.status,
         code: error.code
       });
+      if (strict) throw error;
       return [];
     }
   }
@@ -1492,6 +1495,25 @@ export class DirectusStorage implements IStorage {
   async getMessageMedia(messageId: string): Promise<any> {
     const response = await this.client.request(`/items/whatsapp_messages/${encodeURIComponent(messageId)}?fields=id,patient_id,media`);
     return response.data;
+  }
+
+  async getDashboardMessageActivity(patientIds: (string | number)[], since: Date, until: Date) {
+    if (!patientIds.length) return [];
+    const query = new URLSearchParams({
+      fields: 'id,patient_id,from_me,date_created', sort: 'id', limit: '1000',
+      'filter[patient_id][_in]': patientIds.join(','),
+      'filter[date_created][_gte]': since.toISOString(),
+      'filter[date_created][_lte]': until.toISOString(),
+    });
+    const messages: any[] = [];
+    // ponytail: paginate metadata only; aggregate in Brasília time without loading message contents.
+    for (let offset = 0; ; offset += 1000) {
+      query.set('offset', String(offset));
+      const response = await this.client.request(`/items/whatsapp_messages?${query}`);
+      if (!Array.isArray(response.data)) throw new Error('Message activity unavailable');
+      messages.push(...response.data);
+      if (response.data.length < 1000) return messages;
+    }
   }
 
   async getPatientMessages(patientId: string, limit: number = 200): Promise<any[]> {

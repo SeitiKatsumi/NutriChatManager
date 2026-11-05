@@ -1,0 +1,71 @@
+import assert from 'node:assert/strict';
+import { build } from 'esbuild';
+import { mkdir, rm } from 'node:fs/promises';
+
+const bundle = new URL('../node_modules/.cache/dashboard-test.mjs', import.meta.url);
+await mkdir(new URL('.', bundle), { recursive: true });
+const mocks = {
+  storage: 'export const storage = {}; export class MemStorage {} export async function initializeStorage() {}',
+  'lib/directus.js': 'export const directusClient = {}; export class DirectusClient {} export function getPatientsMode() {return "directus"}',
+  'patient-history-directus': 'export const patientHistoryDirectus = {}',
+  'openai-service': 'export const openaiService = {}',
+  'schedule-service': 'export const scheduleService = {startScheduler() {}}',
+  'whatsapp-message-handler': 'export const whatsappMessageHandler = {}',
+  'twilio-whatsapp-service': 'export const twilioWhatsAppService = {}',
+};
+try {
+  await build({ stdin: { contents: `export * from './shared/dashboard'; export {registerRoutes} from './server/routes'; export {storage} from './server/storage'; export {DirectusStorage} from './server/directus-storage';`, resolveDir: process.cwd() }, bundle: true, platform: 'node', format: 'esm', packages: 'external', outfile: bundle.pathname.replace(/^\/(\w:)/, '$1'), plugins: [{ name: 'mocks', setup(plugin) { plugin.onResolve({ filter: /^\.\// }, args => { const key = args.path.replace(/^\.\/(server\/)?/, ''); if (mocks[key]) return { path: key, namespace: 'mock' }; }); plugin.onLoad({ filter: /.*/, namespace: 'mock' }, args => ({ contents: mocks[args.path] })); } }] });
+  const { buildDashboard, dashboardWindow, registerRoutes, storage, DirectusStorage } = await import(bundle.href);
+  const now = new Date('2026-11-05T15:00:00Z');
+  assert.equal(dashboardWindow(7, now).start.toISOString(), '2026-10-30T03:00:00.000Z');
+  assert.equal(dashboardWindow(30, now).previousStart.toISOString(), '2026-09-07T03:00:00.000Z');
+  const patients = [{ id: 1, fullName: 'QA', status: 'Acompanhamento', medicalHistory: 'Must not leak' }, { id: 2, fullName: 'No messages' }];
+  const message = (date_created, from_me = false, patient_id = 1) => ({ date_created, from_me, patient_id });
+  const report = buildDashboard(patients, [message('2026-10-30T02:59:59Z'), message('2026-10-30T03:00:00Z'), message('2026-10-30T04:00:00Z'), message('2026-11-05T02:59:59Z', true), message('2026-11-05T03:00:00Z', true), message('2026-11-05T16:00:00Z'), message('2026-11-05T04:00:00Z', false, 999), message('2026-10-23T02:59:59Z')], 7, now);
+  assert.deepEqual(report.totals, { patients: 2, activePatients: 1, incoming: 2, outgoing: 2, previousActivePatients: 1, previousIncoming: 1, previousOutgoing: 0 });
+  assert.equal(report.series.length, 7);
+  assert.deepEqual(report.series[0], { date: '2026-10-30', incoming: 2, outgoing: 0 });
+  assert.equal(report.series[5].outgoing, 1);
+  assert.equal(report.series[6].outgoing, 1);
+  assert.equal(report.patients[0].medicalHistory, undefined);
+  assert.equal(buildDashboard([], [], 30, now).series.length, 30);
+  assert.throws(() => buildDashboard(patients, [message('invalid')], 7, now));
+
+  const reader = new DirectusStorage();
+  const calls = [];
+  reader.client = { request: async path => { calls.push(new URL(path, 'https://example.test')); return { data: calls.length === 1 ? Array(1000).fill(message(now.toISOString())) : [message(now.toISOString())] }; } };
+  assert.equal((await reader.getDashboardMessageActivity([1, 2], now, now)).length, 1001);
+  assert.equal(calls[0].searchParams.get('filter[patient_id][_in]'), '1,2');
+  assert.equal(calls[0].searchParams.get('fields'), 'id,patient_id,from_me,date_created');
+  assert.equal(calls[1].searchParams.get('offset'), '1000');
+  assert.deepEqual(await reader.getDashboardMessageActivity([], now, now), []);
+
+  let handlers;
+  const app = Object.fromEntries(['get', 'post', 'put', 'patch', 'delete', 'use'].map(method => [method, (path, ...callbacks) => { if (method === 'get' && path === '/api/dashboard/overview') handlers = callbacks; }]));
+  await registerRoutes(app);
+  const owner = 'c1cc505d-de15-47f9-bea8-330b5d696bc7';
+  let reads = 0;
+  storage.getPatientsByNutritionist = async (id, token, strict) => { assert.equal(id, owner); assert.equal(strict, true); reads++; return patients; };
+  storage.getDashboardMessageActivity = async ids => { assert.deepEqual(ids, [1, 2]); return []; };
+  async function request(days, user = { id: owner, nutritionistId: owner }) {
+    let code = 200, body, cache;
+    const req = { session: { user }, query: days === undefined ? {} : { days } };
+    const res = { status(value) { code = value; return this; }, json(value) { body = value; return this; }, set(key, value) { cache = value; } };
+    let allowed = false;
+    handlers[0](req, res, () => { allowed = true; });
+    if (allowed) await handlers.at(-1)(req, res);
+    return { code, body, cache };
+  }
+  assert.equal((await request('7', null)).code, 401);
+  assert.equal((await request('7', { id: 'another-user', nutritionistId: 'another-user' })).code, 403);
+  for (const days of ['0', '100', '7.0', ['7'], '7&limit=-1']) assert.equal((await request(days)).code, 400);
+  assert.equal(reads, 0);
+  assert.equal((await request('7')).body.series.length, 7);
+  assert.equal((await request()).body.series.length, 30);
+  assert.equal((await request('30')).cache, 'no-store');
+  storage.getDashboardMessageActivity = async () => { throw new Error('Expected test failure'); };
+  assert.equal((await request('7')).code, 503);
+  console.log('Dashboard checks passed: Brasília dates, distinct patients, scope, pagination, periods, authentication and failures.');
+} finally { await rm(bundle, { force: true }); }
+process.exit(0);
+

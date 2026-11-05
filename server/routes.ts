@@ -16,6 +16,7 @@ import { getAllAIConfigs, getAIConfig, updateAIConfig, resetAIConfig, getDefault
 import Stripe from "stripe";
 import { SINGLE_NUTRITIONIST_ID } from "@shared/clinic-mode";
 import { requireClinicAuth, disableBilling } from "./clinic-access";
+import { buildDashboard, dashboardWindow } from "@shared/dashboard";
 
 // Extend session type to include user
 declare module 'express-session' {
@@ -3140,6 +3141,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("[Schedule Route] Error sending message:", error);
       res.status(500).json({ error: "Failed to send message" });
+    }
+  });
+
+  app.get("/api/dashboard/overview", requireAuth, async (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    const days = req.query.days === undefined ? 30 : req.query.days === '7' ? 7 : req.query.days === '30' ? 30 : null;
+    if (!days) return res.status(400).json({ error: 'Use um período de 7 ou 30 dias.' });
+    try {
+      const patients = await storage.getPatientsByNutritionist(req.session.user.nutritionistId, req.session.user.accessToken, true);
+      const now = new Date();
+      const { previousStart } = dashboardWindow(days, now);
+      const activity = await storage.getDashboardMessageActivity(patients.map((patient: any) => patient.id), previousStart, now);
+      res.json(buildDashboard(patients, activity, days, now));
+    } catch (error) {
+      console.error('[Dashboard] Could not load overview:', error);
+      res.status(503).json({ error: 'Não foi possível carregar as métricas. Tente atualizar.' });
     }
   });
 
