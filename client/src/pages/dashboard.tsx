@@ -8,6 +8,7 @@ import { apiRequest } from '@/lib/queryClient';
 import { patientStage, formatLastInteraction, sortPatients } from '@/lib/patient-order';
 import { useToast } from '@/hooks/use-toast';
 import PatientDetailsDialog from '@/components/patients/patient-details-dialog';
+import NutritionDashboard from '@/components/nutrition-dashboard';
 import type { DashboardOverview, DashboardPatient } from '@shared/dashboard';
 
 const number = (value: number) => value.toLocaleString('pt-BR');
@@ -17,6 +18,7 @@ const panel = 'rounded-2xl border border-border bg-card';
 
 export default function Dashboard() {
   const [days, setDays] = useState(30);
+  const [view, setView] = useState<'nutrition' | 'service'>('nutrition');
   const [watchTab, setWatchTab] = useState<'contact' | 'intake'>('contact');
   const [viewingPatient, setViewingPatient] = useState<any>(null);
   const [initialTab, setInitialTab] = useState<'info' | 'conversation'>('info');
@@ -58,14 +60,18 @@ export default function Dashboard() {
         <header className="flex flex-wrap items-end justify-between gap-5">
           <div><p className="mb-2 text-[11px] font-medium uppercase tracking-[0.18em] text-primary">Seu atendimento, em perspectiva</p><h1 className="text-3xl font-semibold tracking-tight sm:text-4xl" data-testid="dashboard-title">Visão geral</h1><p className="mt-2 text-sm text-muted-foreground">Conversas, acompanhamento e os próximos passos da sua carteira.</p></div>
           <div className="flex flex-wrap items-center gap-3">
-            <div className="flex rounded-lg border border-border bg-card p-1" role="group" aria-label="Período das métricas">{[7, 30].map(value => <button key={value} onClick={() => setDays(value)} aria-pressed={days === value} className={`rounded-md px-3 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${days === value ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`} data-testid={`dashboard-period-${value}`}>{value} dias</button>)}</div>
+            {view === 'service' && <div className="flex rounded-lg border border-border bg-card p-1" role="group" aria-label="Período das métricas">{[7, 30].map(value => <button key={value} onClick={() => setDays(value)} aria-pressed={days === value} className={`rounded-md px-3 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${days === value ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`} data-testid={`dashboard-period-${value}`}>{value} dias</button>)}</div>}
             <Button variant="outline" size="sm" className="h-10 gap-2" onClick={() => refetch()} disabled={isFetching} data-testid="btn-refresh"><RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />Atualizar</Button>
           </div>
         </header>
 
+        <div className="flex gap-6 border-b border-border" role="group" aria-label="Visão do dashboard">{([{value:'nutrition',label:'Nutrição'},{value:'service',label:'Atendimento'}] as const).map(tab=><button key={tab.value} aria-pressed={view===tab.value} onClick={()=>setView(tab.value)} className={`border-b-2 px-1 pb-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${view===tab.value?'border-primary text-primary':'border-transparent text-muted-foreground hover:text-foreground'}`} data-testid={`dashboard-view-${tab.value}`}>{tab.label}</button>)}</div>
+
         {isError && <div role="alert" className="rounded-xl border border-destructive/40 p-4 text-sm">{data ? 'Não foi possível atualizar. Os dados abaixo são da última atualização.' : 'Não foi possível carregar as métricas.'} <button className="underline underline-offset-4" onClick={() => refetch()}>Tentar novamente</button></div>}
         {isLoading && <div role="status" className={`${panel} p-8 text-sm text-muted-foreground`}>Carregando os dados do atendimento…</div>}
         {data && totals && <>
+          {view === 'nutrition' && <NutritionDashboard data={data.nutrition} onOpen={id => { const patient = patients.find(person => String(person.id) === String(id)); if (patient) openPatient(patient, 'info'); }} />}
+          {view === 'service' && <>
           <section aria-label="Indicadores do período" className={`${panel} grid divide-y divide-border sm:grid-cols-3 sm:divide-x sm:divide-y-0`}>
             {metrics.map(item => <div key={item.label} className="p-5 lg:p-6"><div className="flex items-center justify-between gap-3"><h2 className="text-xs font-medium text-muted-foreground">{item.label}</h2><item.icon className={`h-4 w-4 ${item.color}`} /></div><div className="mt-3 flex flex-wrap items-baseline gap-2"><p className="text-4xl font-semibold tabular-nums tracking-tight" data-testid={`metric-${item.label}`}>{number(item.value)}</p><span className="text-[11px] text-muted-foreground">{item.note}</span></div><p className="mt-3 text-[11px] text-muted-foreground"><span className="font-medium text-foreground/80">{number(item.previous)}</span> nos {days} dias anteriores</p></div>)}
           </section>
@@ -103,6 +109,7 @@ export default function Dashboard() {
             <section className={`${panel} min-w-0 p-5 lg:p-6`} aria-labelledby="recent-title"><div className="flex items-center gap-2"><Clock3 className="h-4 w-4 text-muted-foreground" /><h2 id="recent-title" className="font-semibold">Últimas interações</h2></div><p className="mt-1 text-xs text-muted-foreground">Quem movimentou o atendimento por último</p><div className="mt-5 space-y-1">{recent.map(patient => <button key={patient.id} onClick={() => openPatient(patient, 'conversation')} disabled={openingPatient !== null} className="group flex w-full items-center gap-3 rounded-lg py-3 text-left hover:bg-background/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary/60" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{patient.fullName}</p><p className="mt-1 text-[11px] text-muted-foreground">{formatLastInteraction(patient.lastInteractionAt)}</p></div><ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground group-hover:text-primary" /></button>)}</div>{!recent.length && <p className="py-10 text-center text-xs text-muted-foreground">As primeiras conversas aparecerão aqui.</p>}</section>
           </div>
           <footer className="flex flex-wrap justify-between gap-2 pb-2 text-[10px] leading-relaxed text-muted-foreground"><p>Fonte: histórico registrado no WhatsApp · datas e horários de Brasília.</p><p>Atualizado em {new Date(data.generatedAt).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })} · atualização a cada minuto</p></footer>
+          </>}
         </>}
       </div>
       <PatientDetailsDialog isOpen={!!viewingPatient} onClose={() => setViewingPatient(null)} patient={viewingPatient} initialTab={initialTab} />

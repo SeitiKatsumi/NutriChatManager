@@ -16,7 +16,7 @@ import { getAllAIConfigs, getAIConfig, updateAIConfig, resetAIConfig, getDefault
 import Stripe from "stripe";
 import { SINGLE_NUTRITIONIST_ID } from "@shared/clinic-mode";
 import { requireClinicAuth, disableBilling } from "./clinic-access";
-import { buildDashboard, dashboardWindow } from "@shared/dashboard";
+import { buildDashboard, dashboardWindow, dashboardDate } from "@shared/dashboard";
 
 // Extend session type to include user
 declare module 'express-session' {
@@ -3144,6 +3144,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post('/api/patients/:id/measurements', requireAuth, async (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    const schema = z.object({
+      id: z.string().uuid(),
+      measured_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
+        const date = new Date(value + 'T12:00:00Z');
+        return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value && value >= '1900-01-01' && value <= dashboardDate(new Date());
+      }),
+      weight: z.number().finite().min(0.1).max(700).multipleOf(0.01),
+      waist: z.number().finite().min(10).max(400).multipleOf(0.01).nullable().default(null),
+    }).strict();
+    const parsed = schema.safeParse(req.body);
+    if (!/^\d+$/.test(req.params.id) || !parsed.success) return res.status(400).json({ error: 'Confira a data e as medidas informadas.' });
+    try {
+      const patient = await storage.getPatient(req.params.id, req.session.user.accessToken);
+      if (!patient) return res.status(404).json({ error: 'Paciente não encontrado.' });
+      if (patient.nutritionistId !== req.session.user.nutritionistId) return res.status(403).json({ error: 'Acesso negado.' });
+      const saved = await storage.saveNutritionMeasurement({ ...parsed.data, patient_id: patient.id });
+      res.status(201).json({ id: saved.id });
+    } catch (error: any) {
+      console.error('[Nutrition] Could not save measurement:', error);
+      res.status(error.status === 409 ? 409 : 503).json({ error: error.status === 409 ? 'Este registro já foi salvo com outros valores. Reabra o formulário para criar outra medição.' : 'Não foi possível confirmar o registro. Tente novamente sem fechar o formulário.' });
+    }
+  });
+
   app.get("/api/dashboard/overview", requireAuth, async (req, res) => {
     res.set('Cache-Control', 'no-store');
     const days = req.query.days === undefined ? 30 : req.query.days === '7' ? 7 : req.query.days === '30' ? 30 : null;
@@ -3152,8 +3177,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const patients = await storage.getPatientsByNutritionist(req.session.user.nutritionistId, req.session.user.accessToken, true);
       const now = new Date();
       const { previousStart } = dashboardWindow(days, now);
-      const activity = await storage.getDashboardMessageActivity(patients.map((patient: any) => patient.id), previousStart, now);
-      res.json(buildDashboard(patients, activity, days, now));
+      const ids = patients.map((patient: any) => patient.id);
+      const [activity, measurements] = await Promise.all([storage.getDashboardMessageActivity(ids, previousStart, now), storage.getNutritionMeasurements(ids)]);
+      res.json(buildDashboard(patients, activity, days, now, measurements));
     } catch (error) {
       console.error('[Dashboard] Could not load overview:', error);
       res.status(503).json({ error: 'Não foi possível carregar as métricas. Tente atualizar.' });

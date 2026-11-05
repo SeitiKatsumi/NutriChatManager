@@ -1516,6 +1516,39 @@ export class DirectusStorage implements IStorage {
     }
   }
 
+  async getNutritionMeasurements(patientIds: (string | number)[]) {
+    if (!patientIds.length) return [];
+    const query = new URLSearchParams({ fields: 'id,patient_id,measured_on,weight,waist,date_created', 'filter[patient_id][_in]': patientIds.join(','), sort: 'measured_on,date_created,id', limit: '1000' });
+    const records: any[] = [];
+    for (let offset = 0; ; offset += 1000) {
+      query.set('offset', String(offset));
+      const response = await this.client.request(`/items/patient_measurements?${query}`);
+      if (!Array.isArray(response.data)) throw new Error('Nutrition measurements unavailable');
+      records.push(...response.data);
+      if (response.data.length < 1000) return records;
+    }
+  }
+
+  async saveNutritionMeasurement(record: { id: string; patient_id: string | number; measured_on: string; weight: number; waist: number | null }) {
+    const find = async () => (await this.client.request(`/items/patient_measurements?filter[id][_eq]=${encodeURIComponent(record.id)}&limit=1`)).data?.[0];
+    const matching = (existing: any) => {
+      if (String(existing.patient_id) !== String(record.patient_id) || existing.measured_on !== record.measured_on || Number(existing.weight) !== record.weight || (existing.waist == null ? null : Number(existing.waist)) !== record.waist) {
+        throw Object.assign(new Error('Registro já existe com outros valores.'), { status: 409 });
+      }
+      return existing;
+    };
+    const existing = await find();
+    if (existing) return matching(existing);
+    try {
+      return (await this.client.request('/items/patient_measurements', { method: 'POST', body: JSON.stringify(record) })).data;
+    } catch (error) {
+      // ponytail: a stable UUID makes retries safe after an uncertain network response.
+      const saved = await find();
+      if (saved) return matching(saved);
+      throw error;
+    }
+  }
+
   async getPatientMessages(patientId: string, limit: number = 200): Promise<any[]> {
     try {
       console.log(`[DirectusStorage] Getting messages for patient ${patientId}, limit: ${limit}`);

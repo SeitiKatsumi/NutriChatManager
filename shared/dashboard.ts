@@ -1,3 +1,4 @@
+import { buildNutrition, type NutritionFields, type Measurement } from './nutrition';
 const DAY = 86_400_000;
 export const dashboardDate = (date: Date) => date.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
 
@@ -6,7 +7,7 @@ export function dashboardWindow(days: number, now: Date) {
   return { start, previousStart: new Date(start.getTime() - days * DAY) };
 }
 
-export interface DashboardPatient {
+export interface DashboardPatient extends NutritionFields {
   id: string | number;
   fullName: string;
   status?: string | null;
@@ -14,7 +15,7 @@ export interface DashboardPatient {
 }
 interface MessageActivity { patient_id: string | number; from_me: boolean; date_created: string }
 
-export function buildDashboard(patients: DashboardPatient[], messages: MessageActivity[], days: number, now = new Date()) {
+export function buildDashboard(patients: DashboardPatient[], messages: MessageActivity[], days: number, now = new Date(), measurements: Measurement[] = []) {
   const { start, previousStart } = dashboardWindow(days, now);
   const ids = new Set(patients.map(p => String(p.id)));
   const series = Array.from({ length: days }, (_, index) => ({
@@ -41,6 +42,7 @@ export function buildDashboard(patients: DashboardPatient[], messages: MessageAc
     days, generatedAt: now.toISOString(), start: start.toISOString(), previousStart: previousStart.toISOString(),
     totals: { patients: patients.length, activePatients: active.size, incoming, outgoing, previousActivePatients: previousActive.size, previousIncoming, previousOutgoing },
     series,
+    nutrition: buildNutrition(patients, measurements),
     patients: patients.map(({ id, fullName, status, lastInteractionAt }) => ({ id, fullName, status, lastInteractionAt })),
   };
 }

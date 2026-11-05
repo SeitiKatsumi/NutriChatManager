@@ -30,6 +30,18 @@ try {
   assert.equal(report.patients[0].medicalHistory, undefined);
   assert.equal(buildDashboard([], [], 30, now).series.length, 30);
   assert.throws(() => buildDashboard(patients, [message('invalid')], 7, now));
+  const clinical = [{id:1,fullName:'QA',weight:'75,5',height:'175',medicalHistory:'Anamnese',cafe_da_manha:'Não faz',dietaryRestrictions:'Não possui'}, {id:2,fullName:'Missing',weight:'0',height:'não informado'}];
+  const measurement = {id:'a',patient_id:1,measured_on:'2026-01-01',weight:'76.25',waist:null};
+  const nutrition = buildDashboard(clinical, [], 7, now, [measurement,{...measurement,id:'b',measured_on:'2026-02-01',weight:'75.25',waist:'80.5'},{...measurement,id:'foreign',patient_id:999}]).nutrition;
+  assert.equal(nutrition.measurements.length,2);
+  assert.equal(nutrition.withEvolution,1);
+  assert.equal(nutrition.patients[0].weight,75.25);
+  assert.equal(nutrition.patients[1].weight,null);
+  assert.equal(nutrition.meals[0].count,1);
+  assert.equal(nutrition.coverage[3].count,1);
+  assert.deepEqual(nutrition.patients[1].missing,['Peso','Altura','Anamnese','Registro alimentar']);
+  assert.equal(buildDashboard(clinical,[],7,now,[measurement,{...measurement,id:'c'}]).nutrition.withEvolution,0);
+  assert.equal(buildDashboard(clinical,[],7,now).nutrition.patients[0].weight,75.5);
 
   const reader = new DirectusStorage();
   const calls = [];
@@ -40,13 +52,14 @@ try {
   assert.equal(calls[1].searchParams.get('offset'), '1000');
   assert.deepEqual(await reader.getDashboardMessageActivity([], now, now), []);
 
-  let handlers;
-  const app = Object.fromEntries(['get', 'post', 'put', 'patch', 'delete', 'use'].map(method => [method, (path, ...callbacks) => { if (method === 'get' && path === '/api/dashboard/overview') handlers = callbacks; }]));
+  let handlers, measurementHandlers;
+  const app = Object.fromEntries(['get', 'post', 'put', 'patch', 'delete', 'use'].map(method => [method, (path, ...callbacks) => { if (method === 'get' && path === '/api/dashboard/overview') handlers = callbacks; if(method==='post' && path==='/api/patients/:id/measurements') measurementHandlers=callbacks; }]));
   await registerRoutes(app);
   const owner = 'c1cc505d-de15-47f9-bea8-330b5d696bc7';
   let reads = 0;
   storage.getPatientsByNutritionist = async (id, token, strict) => { assert.equal(id, owner); assert.equal(strict, true); reads++; return patients; };
   storage.getDashboardMessageActivity = async ids => { assert.deepEqual(ids, [1, 2]); return []; };
+  storage.getNutritionMeasurements = async ids => {assert.deepEqual(ids,[1,2]);return [];};
   async function request(days, user = { id: owner, nutritionistId: owner }) {
     let code = 200, body, cache;
     const req = { session: { user }, query: days === undefined ? {} : { days } };
@@ -65,6 +78,36 @@ try {
   assert.equal((await request('30')).cache, 'no-store');
   storage.getDashboardMessageActivity = async () => { throw new Error('Expected test failure'); };
   assert.equal((await request('7')).code, 503);
+  let writes=0;
+  storage.getPatient = async id => id==='999' ? undefined : {id,nutritionistId:id==='2'?'another-user':owner};
+  storage.saveNutritionMeasurement = async record => {writes++;return record;};
+  const valid = {id:'5544c98c-70da-4893-bb0b-2f101de5d4f2',measured_on:'2026-01-01',weight:70.25,waist:null};
+  async function save(body=valid,id='1',user={id:owner,nutritionistId:owner}) {
+    let code=200,result,allowed=false;
+    const req={session:{user},body,params:{id}};
+    const res={status(value){code=value;return this;},json(value){result=value;return this;},set(){}};
+    measurementHandlers[0](req,res,()=>{allowed=true;});
+    if(allowed) await measurementHandlers.at(-1)(req,res);
+    return {code,result};
+  }
+  assert.equal((await save(valid,'1',null)).code,401);
+  assert.equal((await save(valid,'2')).code,403);
+  assert.equal((await save(valid,'999')).code,404);
+  assert.equal((await save(valid,'1&patient=2')).code,400);
+  for(const body of [{...valid,weight:0},{...valid,weight:700.1},{...valid,weight:70.255},{...valid,waist:-1},{...valid,measured_on:'2026-02-30'},{...valid,measured_on:'2999-01-01'},{...valid,id:'invalid'},{...valid,patient_id:2}]) assert.equal((await save(body)).code,400);
+  assert.equal(writes,0);
+  assert.equal((await save()).code,201);
+  assert.equal(writes,1);
+  let persisted, attempts=0;
+  reader.client={request:async(path,options={})=>{
+    if(options.method==='POST'){attempts++;persisted=JSON.parse(options.body);throw new Error('Unknown network outcome');}
+    return {data:persisted?[persisted]:[]};
+  }};
+  const record={...valid,patient_id:1};
+  assert.equal((await reader.saveNutritionMeasurement(record)).id,valid.id);
+  assert.equal((await reader.saveNutritionMeasurement(record)).id,valid.id);
+  assert.equal(attempts,1);
+  await assert.rejects(reader.saveNutritionMeasurement({...record,weight:71}),error=>error.status===409);
   console.log('Dashboard checks passed: Brasília dates, distinct patients, scope, pagination, periods, authentication and failures.');
 } finally { await rm(bundle, { force: true }); }
 process.exit(0);
