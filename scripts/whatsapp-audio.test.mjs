@@ -8,7 +8,7 @@ globalThis.audioTest = { transcript: 'No almoço comi arroz, feijão e frango.',
 const originalFetch = globalThis.fetch;
 try {
   await build({
-    stdin: { contents: `export {whatsappMessageHandler as handler} from './server/whatsapp-message-handler'; export {storage} from './server/storage'; export {openaiService as ai} from './server/openai-service'; export {twilioWhatsAppService as twilio} from './server/twilio-whatsapp-service';`, resolveDir: process.cwd() },
+    stdin: { contents: `export {whatsappMessageHandler as handler} from './server/whatsapp-message-handler'; export {storage} from './server/storage'; export {PatientHistoryDirectusService} from './server/patient-history-directus'; export {openaiService as ai} from './server/openai-service'; export {twilioWhatsAppService as twilio} from './server/twilio-whatsapp-service';`, resolveDir: process.cwd() },
     bundle: true, platform: 'node', format: 'esm', packages: 'external', outfile: path.pathname.replace(/^\/([A-Z]:)/, '$1'),
     plugins: [{ name: 'offline', setup(b) {
       b.onResolve({ filter: /^(\.\/storage|\.\/server\/storage)$/ }, () => ({ path: 'storage', namespace: 'offline' }));
@@ -23,7 +23,7 @@ try {
           } } };
           chat = { completions: { create: async request => {
             globalThis.audioTest.chat.push(request);
-            return {choices: [{message: {content: 'Entendi a sua mensagem de áudio.'}}]};
+            return {choices: [{message: {content: globalThis.audioTest.responseContent || 'Entendi a sua mensagem de áudio.'}}]};
           } } };
         }` }));
     } }],
@@ -64,6 +64,24 @@ try {
   await assert.rejects(() => twilio.downloadMedia('http://api.twilio.com/audio.ogg'));
   globalThis.fetch = async () => new Response('x', { headers: { 'content-length': String(26 * 1024 * 1024) } });
   await assert.rejects(() => twilio.downloadMedia(inbound.media[0].url));
+  storage.getPatientMessages=async()=>[{id:1,message_body:'Relato do paciente',from_me:false,date_created:new Date()},{id:2,message_body:'Resposta da IA',from_me:true,date_created:new Date()}];
+  const {PatientHistoryDirectusService}=await import(path.href);
+  const history=await new PatientHistoryDirectusService().getPatientMessages('1');
+  assert.equal(history[0].fromMe,false);assert.equal(history[1].fromMe,true);
+  state.responseContent=JSON.stringify({Anamnese_estruturada:{hidratacao:'Bebe 2 litros por dia',sono:42,extra:'não guardar'},Peso:75.55});
+  const extracted=await ai.extractPatientData([{role:'user',content:'Bebo 2 litros por dia.'}]);
+  assert.equal(extracted.Anamnese_estruturada.hidratacao,'Bebe 2 litros por dia');
+  assert.equal(extracted.Anamnese_estruturada.sono,undefined);assert.equal(extracted.Anamnese_estruturada.extra,undefined);
+  assert.match(state.chat.at(-1).messages[0].content,/Anamnese_estruturada/);
+  let profileUpdate;
+  storage.updatePatient=async(id,update)=>{profileUpdate=update;return update;};
+  ai.runAnamnesisAgent=async()=>({isComplete:true,response:'Obrigado'});
+  ai.extractPatientData=async()=>({Anamise_inicial:'Novo resumo',Anamnese_estruturada:{hidratacao:'2 litros'},Metas_e_objetivos:'Melhorar FTP'});
+  await handler.handleAnamnesis({...patient,medicalHistory:'Relato original preservado',anamnesisSections:{sono:'7 horas'}},[],'Bebo 2 litros',false);
+  assert.equal(profileUpdate.medicalHistory,undefined);
+  assert.equal(profileUpdate.anamnesisSections.sono,'7 horas');
+  assert.equal(profileUpdate.anamnesisSections.hidratacao,'2 litros');
+  assert.equal(profileUpdate.anamnesisSections.objetivos,'Melhorar FTP');
   console.log('WhatsApp audio: Ogg/Opus parsing, authenticated download, transcription, Luna response, chat history and failure/size/URL handling passed (offline).');
 } finally {
   globalThis.fetch = originalFetch;

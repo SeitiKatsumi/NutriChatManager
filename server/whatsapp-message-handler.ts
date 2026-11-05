@@ -4,6 +4,7 @@ import { twilioWhatsAppService, type TwilioInboundMedia } from './twilio-whatsap
 import type { Patient, WhatsappMessage } from '@shared/schema';
 import { randomUUID } from 'crypto';
 import { SINGLE_NUTRITIONIST_ID } from '@shared/clinic-mode';
+import { readAnamnesisSections, type AnamnesisSections } from '@shared/patient-profile';
 
 const GHOST_NUTRITIONIST_EMAIL = 'nutricionista.fantasma@nutrichatbot.com.br';
 const GHOST_NUTRITIONIST_NAME = 'Nutricionista Fantasma';
@@ -38,6 +39,7 @@ interface PatientUpdateData {
   imc?: string;
   idade?: string;
   medicalHistory?: string;
+  anamnesisSections?: AnamnesisSections;
   dietaryRestrictions?: string;
   suplementos_medicamentos?: string;
   goals?: string;
@@ -310,7 +312,10 @@ export class WhatsAppMessageHandler {
           extractedData.Anamise_inicial,
           extractedData.Metas_e_objetivos ? `Objetivos nutricionais: ${extractedData.Metas_e_objetivos}` : undefined,
         ].filter(Boolean);
-        if (anamnesisParts.length) updateData.medicalHistory = anamnesisParts.join('\n\n');
+        if (anamnesisParts.length && !(patient.medicalHistory || patient.anamnese_inicial)) updateData.medicalHistory = anamnesisParts.join('\n\n');
+        const sections = readAnamnesisSections(extractedData.Anamnese_estruturada);
+        if (extractedData.Metas_e_objetivos) sections.objetivos = extractedData.Metas_e_objetivos;
+        if (Object.keys(sections).length) updateData.anamnesisSections = { ...readAnamnesisSections(patient.anamnesisSections), ...sections };
         if (extractedData.Restricoes_alimentares) updateData.dietaryRestrictions = extractedData.Restricoes_alimentares;
         if (extractedData.Suplementos_e_medicamentos) updateData.suplementos_medicamentos = extractedData.Suplementos_e_medicamentos;
         if (extractedData.Cafe_da_manha) updateData.cafe_da_manha = extractedData.Cafe_da_manha;

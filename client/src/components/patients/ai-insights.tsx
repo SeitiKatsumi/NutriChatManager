@@ -1,4 +1,5 @@
 import { useState } from "react";
+import ReadableText from "@/components/readable-text";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -192,7 +193,7 @@ export default function AIInsights({ patient }: AIInsightsProps) {
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2 text-lg">
-            <Brain className="w-5 h-5 text-blue-600" />
+            <Brain className="w-5 h-5 text-primary" />
             Insights de IA
           </CardTitle>
           {insights && !loadingInsights && (
@@ -259,7 +260,7 @@ export default function AIInsights({ patient }: AIInsightsProps) {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-sm leading-relaxed" data-testid="insights-summary">{(insights as QuickInsights).summary}</p>
+                <div data-testid="insights-summary"><ReadableText text={(insights as QuickInsights).summary}/></div>
               </CardContent>
             </Card>
 
@@ -511,20 +512,18 @@ export default function AIInsights({ patient }: AIInsightsProps) {
 
         {/* Resposta da IA */}
         {askMutation.data && (
-          <Card className="bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800" data-testid="ai-response-card">
+          <Card className="border-primary/20 bg-card" data-testid="ai-response-card">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2 text-blue-900 dark:text-blue-100">
-                <Brain className="w-4 h-4 text-blue-600" />
+              <CardTitle className="text-base flex items-center gap-2 text-foreground">
+                <Brain className="w-4 h-4 text-primary" />
                 Resposta da IA
-                <Badge variant="outline" className="text-xs ml-auto text-[#000000]" data-testid="confidence-badge">
-                  Confiança: {Math.round(askMutation.data.confidence * 100)}%
-                </Badge>
+
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="prose prose-sm max-w-none">
                 <div className="whitespace-pre-wrap leading-relaxed" data-testid="ai-response-text">
-                  {askMutation.data.answer}
+                  <ReadableText text={askMutation.data.answer}/>
                 </div>
               </div>
 

@@ -1,6 +1,8 @@
 // @ts-ignore - directus.js doesn't have type declarations
 import { DirectusClient, directusClient, getPatientsMode } from "./lib/directus.js";
 import bcrypt from "bcrypt";
+import { nutritionNumber } from "@shared/nutrition";
+import { readAnamnesisSections, type AnamnesisSections } from '@shared/patient-profile';
 import { randomUUID } from "crypto";
 import type { IStorage } from "./storage";
 import { MemStorage } from "./storage";
@@ -27,6 +29,7 @@ export interface DirectusPatient {
   IMC?: number; // Body Mass Index
   Idade?: number; // Age
   Anamise_inicial?: string;
+  anamnese_blocos?: AnamnesisSections;
   Suplementos_e_medicamentos?: string;
   Restricoes_alimentares?: string; // Dietary restrictions field
   Etapas?: string;
@@ -144,6 +147,7 @@ interface PatientInput {
   idade?: string | null;
   medicalHistory?: string | null;
   anamnese_inicial?: string | null;
+  anamnesisSections?: AnamnesisSections | null;
   suplementos_medicamentos?: string | null;
   dietaryRestrictions?: string | null;
   goals?: string | null;
@@ -189,8 +193,8 @@ function transformPatientToDirectus(patient: PatientInput): DirectusPatient {
     Whatsapp: formattedWhatsapp,
     Data_de_nascimento: formattedDate,
     Sexo: patient.gender ?? undefined,
-    Peso: patient.weight ? parseInt(patient.weight, 10) : undefined,
-    Altura: patient.height ? parseInt(patient.height, 10) : undefined,
+    Peso: patient.weight ? nutritionNumber(patient.weight) ?? undefined : undefined,
+    Altura: patient.height ? nutritionNumber(patient.height) ?? undefined : undefined,
     Anamise_inicial: patient.medicalHistory || patient.anamnese_inicial || undefined,
     Suplementos_e_medicamentos: patient.suplementos_medicamentos ?? undefined,
     Restricoes_alimentares: patient.dietaryRestrictions ?? undefined,
@@ -205,6 +209,7 @@ function transformPatientToDirectus(patient: PatientInput): DirectusPatient {
     const imcNum = patient.imc ? parseFloat(patient.imc) : undefined;
     transformed.IMC = imcNum && !isNaN(imcNum) ? imcNum : undefined;
   }
+  if (patient.anamnesisSections !== undefined) transformed.anamnese_blocos = readAnamnesisSections(patient.anamnesisSections);
   if (patient.idade !== undefined) {
     const idadeNum = patient.idade ? parseInt(patient.idade, 10) : undefined;
     transformed.Idade = idadeNum && !isNaN(idadeNum) ? idadeNum : undefined;
@@ -244,8 +249,9 @@ function transformPatientUpdateToDirectus(patient: PatientInput): Partial<Direct
     }
   }
   if (patient.gender !== undefined) transformed.Sexo = patient.gender ?? undefined;
-  if (patient.weight !== undefined) transformed.Peso = patient.weight ? parseInt(patient.weight, 10) : undefined;
-  if (patient.height !== undefined) transformed.Altura = patient.height ? parseInt(patient.height, 10) : undefined;
+  if (patient.weight !== undefined) transformed.Peso = patient.weight ? nutritionNumber(patient.weight) ?? undefined : undefined;
+  if (patient.height !== undefined) transformed.Altura = patient.height ? nutritionNumber(patient.height) ?? undefined : undefined;
+  if (patient.anamnesisSections !== undefined) transformed.anamnese_blocos = readAnamnesisSections(patient.anamnesisSections);
   if (patient.medicalHistory !== undefined || patient.anamnese_inicial !== undefined) {
     transformed.Anamise_inicial = patient.medicalHistory || patient.anamnese_inicial || undefined;
   }
@@ -310,6 +316,7 @@ function transformPatientFromDirectus(directusPatient: any): any {
     notes: directusPatient.Observacoes,
     // Novos campos da IA
     anamnese_inicial: directusPatient.Anamise_inicial,
+    anamnesisSections: readAnamnesisSections(directusPatient.anamnese_blocos),
     suplementos_medicamentos: directusPatient.Suplementos_e_medicamentos,
     feedbacks: directusPatient.Feedbacks,
     recordatorio_24h: recordatorio || null,
@@ -901,7 +908,7 @@ export class DirectusStorage implements IStorage {
       const client = this.client; // Using admin client temporarily
       
       // Explicit field list using all available Directus collection fields (including meal fields, dietary restrictions, and AI cache)
-      const fields = 'id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,Suplementos_e_medicamentos,Restricoes_alimentares,Etapas,IMC,Idade,Feedbacks,Cafe_da_manha,Lanche_da_manha,Almoco,Lanche_da_tarde,Janta,Ceia,ultima_analise_ia,data_ultima_analise,date_created,date_updated';
+      const fields = 'id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,anamnese_blocos,Suplementos_e_medicamentos,Restricoes_alimentares,Etapas,IMC,Idade,Feedbacks,Cafe_da_manha,Lanche_da_manha,Almoco,Lanche_da_tarde,Janta,Ceia,ultima_analise_ia,data_ultima_analise,date_created,date_updated';
       
       console.log(`[Directus] Getting patient: ${id}`);
       const response = await client.request(`/items/${PATIENTS_COLLECTION}/${id}?fields=${fields}`);
@@ -920,7 +927,7 @@ export class DirectusStorage implements IStorage {
       const client = this.client; // Using admin client temporarily
       const encodedId = encodeURIComponent(nutritionistId);
       
-      const fields = 'id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,Suplementos_e_medicamentos,Restricoes_alimentares,Etapas,IMC,Idade,Feedbacks,Cafe_da_manha,Lanche_da_manha,Almoco,Lanche_da_tarde,Janta,Ceia,ultima_analise_ia,data_ultima_analise,date_created,date_updated';
+      const fields = 'id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,anamnese_blocos,Suplementos_e_medicamentos,Restricoes_alimentares,Etapas,IMC,Idade,Feedbacks,Cafe_da_manha,Lanche_da_manha,Almoco,Lanche_da_tarde,Janta,Ceia,ultima_analise_ia,data_ultima_analise,date_created,date_updated';
       
       console.log(`[Directus] Getting patients for nutritionist: ${nutritionistId}`);
       // Using correct Directus field name for nutritionist filter
@@ -1368,7 +1375,7 @@ export class DirectusStorage implements IStorage {
   async getPatientByWhatsapp(whatsappNumber: string, nutritionistId: string): Promise<Patient | undefined> {
     try {
       const cleanNumber = whatsappNumber.replace(/\D/g, '');
-      const fields = 'id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,Suplementos_e_medicamentos,Restricoes_alimentares,Etapas,IMC,Idade,Feedbacks,Cafe_da_manha,Lanche_da_manha,Almoco,Lanche_da_tarde,Janta,Ceia,ultima_analise_ia,data_ultima_analise,date_created,date_updated';
+      const fields = 'id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,anamnese_blocos,Suplementos_e_medicamentos,Restricoes_alimentares,Etapas,IMC,Idade,Feedbacks,Cafe_da_manha,Lanche_da_manha,Almoco,Lanche_da_tarde,Janta,Ceia,ultima_analise_ia,data_ultima_analise,date_created,date_updated';
 
       const targetNumber = cleanWhatsAppNumber(cleanNumber);
       const cacheBuster = Date.now();
@@ -1415,7 +1422,7 @@ export class DirectusStorage implements IStorage {
   async getPatientByWhatsappAny(whatsappNumber: string): Promise<Patient | undefined> {
     try {
       const cleanNumber = cleanWhatsAppNumber(whatsappNumber);
-      const fields = 'id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,Suplementos_e_medicamentos,Restricoes_alimentares,Etapas,IMC,Idade,Feedbacks,Cafe_da_manha,Lanche_da_manha,Almoco,Lanche_da_tarde,Janta,Ceia,ultima_analise_ia,data_ultima_analise,date_created,date_updated';
+      const fields = 'id,Nutricionista_responsavel,Nome_Completo,Whatsapp,Data_de_nascimento,Sexo,Peso,Altura,Anamise_inicial,anamnese_blocos,Suplementos_e_medicamentos,Restricoes_alimentares,Etapas,IMC,Idade,Feedbacks,Cafe_da_manha,Lanche_da_manha,Almoco,Lanche_da_tarde,Janta,Ceia,ultima_analise_ia,data_ultima_analise,date_created,date_updated';
 
       const targetNumber = cleanWhatsAppNumber(cleanNumber);
       const cacheBuster = Date.now();

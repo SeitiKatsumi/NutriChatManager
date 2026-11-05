@@ -1,360 +1,51 @@
-import { useEffect, useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  UserCheck, 
-  Mail, 
-  Phone, 
-  Calendar, 
-  Scale, 
-  Ruler, 
-  FileText, 
-  Clock,
-  Pill,
-  MessageSquare,
-  Activity,
-  CalendarClock,
-  Sparkles,
-  Maximize2,
-  Minimize2
-} from "lucide-react";
-import { Patient } from "@shared/schema";
-import AIInsights from "./ai-insights";
-import PatientSchedules from "./patient-schedules";
-import PatientConversation from "./patient-conversation";
+import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { UserCheck, Phone, Calendar, MessageSquare, CalendarClock, Sparkles, Maximize2, Minimize2, ChartNoAxesCombined } from 'lucide-react';
+import type { Patient } from '@shared/schema';
+import type { NutritionOverview } from '@shared/nutrition';
+import { patientPhone, patientStage } from '@/lib/patient-order';
+import AIInsights from './ai-insights';
+import PatientSchedules from './patient-schedules';
+import PatientConversation from './patient-conversation';
+import PatientProfileInfo from './patient-profile-info';
+import NutritionDashboard from '@/components/nutrition-dashboard';
 
-interface PatientDetailsDialogProps {
-  isOpen: boolean;
-  onClose: () => void;
-  patient: Patient | null;
-  initialTab?: 'info' | 'conversation';
-}
-
-export default function PatientDetailsDialog({ 
-  isOpen, 
-  onClose, 
-  patient,
-  initialTab = 'info'
-}: PatientDetailsDialogProps) {
-  const [expanded, setExpanded] = useState(false);
-  useEffect(() => { setExpanded(false); }, [isOpen, patient?.id]);
-  if (!patient) return null;
-
-  const getStatusColor = (status: string) => {
-    const colors = {
-      "active": "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
-      "inactive": "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300",
-      "completed": "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
-      "Aguardando agendamento": "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
-    };
-    return colors[status as keyof typeof colors] || colors.active;
-  };
-
-  const formatDate = (date: Date | string | null) => {
-    if (!date) return "Não informado";
-    const d = typeof date === 'string' ? new Date(date) : date;
-    return d.toLocaleDateString('pt-BR');
-  };
-
-  // Função para processar texto com quebras de linha em bullets
-  const formatTextAsBullets = (text: string | null) => {
-    if (!text) return null;
-    
-    const lines = text.split('\n').filter(line => line.trim());
-    
-    return (
-      <ul className="space-y-2">
-        {lines.map((line, index) => (
-          <li key={index} className="flex items-start gap-2">
-            <span className="w-1.5 h-1.5 bg-primary rounded-full mt-2 flex-shrink-0" />
-            <span className="text-sm">{line.trim()}</span>
-          </li>
-        ))}
-      </ul>
-    );
-  };
-
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className={expanded ? "h-[100dvh] max-h-[100dvh] w-screen max-w-none content-start overflow-y-auto rounded-none sm:rounded-none" : "max-w-4xl max-h-[90vh] overflow-y-auto"} data-testid="patient-details-card">
-        <button type="button" onClick={() => setExpanded(value => !value)} aria-label={expanded ? "Restaurar tamanho do card" : "Expandir card para tela cheia"} title={expanded ? "Restaurar tamanho" : "Tela cheia"} aria-pressed={expanded} className="absolute right-12 top-3 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" data-testid="toggle-patient-fullscreen">
-          {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-        </button>
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 pr-16">
-            <UserCheck className="w-5 h-5" />
-            Detalhes do Paciente
-          </DialogTitle>
-        </DialogHeader>
-
-        <Tabs key={`${patient.id}-${initialTab}`} defaultValue={initialTab} className="w-full">
-          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4">
-            <TabsTrigger value="info" className="gap-2 px-2">
-              <UserCheck className="h-4 w-4 shrink-0" />
-              Informações
-            </TabsTrigger>
-            <TabsTrigger value="conversation" className="gap-2 px-2" data-testid="patient-tab-conversation">
-              <MessageSquare className="h-4 w-4 shrink-0" />
-              Conversa
-            </TabsTrigger>
-            <TabsTrigger value="schedules" className="gap-2">
-              <CalendarClock className="h-4 w-4" />
-              Automações
-            </TabsTrigger>
-            <TabsTrigger value="ai" className="gap-2">
-              <Sparkles className="h-4 w-4" />
-              IA
-            </TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="info" className="space-y-6 mt-6">
-          {/* Informações Básicas */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Informações Pessoais</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <UserCheck className="w-4 h-4 text-muted-foreground" />
-                    <span className="font-medium">Nome:</span>
-                    <span>{patient.fullName}</span>
-                  </div>
-                  
-                  {patient.whatsappNumber && (
-                    <div className="flex items-center gap-2" data-testid="patient-detail-whatsapp">
-                      <Phone className="w-4 h-4 text-muted-foreground" />
-                      <span className="font-medium">WhatsApp:</span>
-                      <span>{patient.whatsappNumber}</span>
-                    </div>
-                  )}
-                  
-                  {patient.phone && (
-                    <div className="flex items-center gap-2" data-testid="patient-detail-phone">
-                      <Phone className="w-4 h-4 text-muted-foreground" />
-                      <span className="font-medium">Telefone:</span>
-                      <span>{patient.phone}</span>
-                    </div>
-                  )}
-                  
-                  {patient.email && (
-                    <div className="flex items-center gap-2" data-testid="patient-detail-email">
-                      <Mail className="w-4 h-4 text-muted-foreground" />
-                      <span className="font-medium">Email:</span>
-                      <span>{patient.email}</span>
-                    </div>
-                  )}
-                  
-                  {patient.dateOfBirth && (
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-muted-foreground" />
-                      <span className="font-medium">Data de Nascimento:</span>
-                      <span>{formatDate(patient.dateOfBirth)}</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-3">
-                  {patient.gender && (
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">Gênero:</span>
-                      <span>{patient.gender}</span>
-                    </div>
-                  )}
-                  
-                  {patient.age && (
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-muted-foreground" />
-                      <span className="font-medium">Idade:</span>
-                      <span>{patient.age} anos</span>
-                    </div>
-                  )}
-                  
-                  {patient.weight && (
-                    <div className="flex items-center gap-2">
-                      <Scale className="w-4 h-4 text-muted-foreground" />
-                      <span className="font-medium">Peso:</span>
-                      <span>{patient.weight} kg</span>
-                    </div>
-                  )}
-                  
-                  {patient.height && (
-                    <div className="flex items-center gap-2">
-                      <Ruler className="w-4 h-4 text-muted-foreground" />
-                      <span className="font-medium">Altura:</span>
-                      <span>{patient.height} cm</span>
-                    </div>
-                  )}
-                  
-                  {patient.bmi && (
-                    <div className="flex items-center gap-2">
-                      <Activity className="w-4 h-4 text-muted-foreground" />
-                      <span className="font-medium">IMC:</span>
-                      <span>{patient.bmi}</span>
-                    </div>
-                  )}
-                  
-                  <div className="flex items-center gap-2">
-                    <Activity className="w-4 h-4 text-muted-foreground" />
-                    <span className="font-medium">Status:</span>
-                    <Badge className={getStatusColor(patient.status || 'active')}>
-                      {patient.status || 'Ativo'}
-                    </Badge>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Anamnese Inicial e Recordatório 24h */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {patient.anamnese_inicial && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <FileText className="w-5 h-5" />
-                    Anamnese Inicial
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-sm leading-relaxed bg-muted/30 p-4 rounded-lg">
-                    {patient.anamnese_inicial.split('\n').map((paragraph, index) => (
-                      <p key={index} className="mb-2 last:mb-0">
-                        {paragraph}
-                      </p>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {patient.recordatorio_24h && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <Clock className="w-5 h-5" />
-                    Recordatório 24 Horas
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-sm leading-relaxed bg-muted/30 p-4 rounded-lg">
-                    {patient.recordatorio_24h.split('\n').map((entry, index) => (
-                      <div key={index} className="mb-2 last:mb-0">
-                        {entry}
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-
-          {/* Suplementos e Medicamentos */}
-          {patient.suplementos_medicamentos && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <Pill className="w-5 h-5" />
-                  Suplementos e Medicamentos
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="bg-muted/30 p-4 rounded-lg">
-                  {formatTextAsBullets(patient.suplementos_medicamentos)}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Feedbacks */}
-          {patient.feedbacks && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <MessageSquare className="w-5 h-5" />
-                  Feedbacks e Histórico
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-sm leading-relaxed bg-muted/30 p-4 rounded-lg">
-                  {patient.feedbacks.split('\n').map((feedback, index) => (
-                    <p key={index} className="mb-3 last:mb-0">
-                      {feedback}
-                    </p>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Informações Médicas */}
-          {(patient.dietaryRestrictions || patient.goals) && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Informações e Objetivos</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {patient.dietaryRestrictions && (
-                  <div>
-                    <h4 className="font-medium mb-2">Restrições Alimentares:</h4>
-                    <p className="text-sm text-muted-foreground bg-muted/30 p-3 rounded">
-                      {patient.dietaryRestrictions}
-                    </p>
-                  </div>
-                )}
-                
-                {patient.goals && (
-                  <div>
-                    <h4 className="font-medium mb-2">Objetivos:</h4>
-                    <p className="text-sm text-muted-foreground bg-muted/30 p-3 rounded">
-                      {patient.goals}
-                    </p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Observações */}
-          {patient.notes && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Observações do Nutricionista</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground bg-muted/30 p-4 rounded-lg">
-                  {patient.notes}
-                </p>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Última Consulta */}
-          {patient.lastConsultation && (
-            <div className="text-center text-sm text-muted-foreground">
-              <Separator className="mb-4" />
-              Última consulta: {formatDate(patient.lastConsultation)}
-            </div>
-          )}
-          </TabsContent>
-
-          <TabsContent value="conversation" className="mt-6">
-            <PatientConversation key={patient.id} patientId={String(patient.id)} patientName={patient.fullName} expanded={expanded} />
-          </TabsContent>
-
-          <TabsContent value="schedules" className="mt-6">
-            <PatientSchedules patient={patient} />
-          </TabsContent>
-
-          <TabsContent value="ai" className="mt-6">
-            <AIInsights patient={patient} />
-          </TabsContent>
-        </Tabs>
-      </DialogContent>
-    </Dialog>
-  );
+interface PatientDetailsDialogProps { isOpen:boolean; onClose:()=>void; patient:Patient|null; initialTab?:'info'|'conversation' }
+export default function PatientDetailsDialog({isOpen,onClose,patient:initialPatient,initialTab='info'}:PatientDetailsDialogProps) {
+  const [expanded,setExpanded]=useState(false);
+  const [tab,setTab]=useState<string>(initialTab);
+  useEffect(()=>{setExpanded(false);setTab(initialTab);},[isOpen,initialPatient?.id,initialTab]);
+  const {data:profile,isError,isLoading,refetch}=useQuery<{patient:Patient;nutrition:NutritionOverview}>({
+    queryKey:[`/api/patients/${initialPatient?.id}/profile`],enabled:isOpen&&!!initialPatient?.id,staleTime:0,refetchInterval:isOpen?60000:false,
+  });
+  const patient=profile?.patient||initialPatient;
+  if(!patient)return null;
+  const phone=patient.whatsappNumber||patient.phone;
+  const birth=patient.dateOfBirth?new Date(String(patient.dateOfBirth).slice(0,10)+'T12:00:00Z'):null;
+  const birthLabel=birth&&Number.isFinite(birth.getTime())?birth.toLocaleDateString('pt-BR',{timeZone:'America/Sao_Paulo'}):null;
+  const stage=patientStage(patient.status);
+  const stageColor=stage==='Acompanhamento'?'border-emerald-400/20 bg-emerald-400/10 text-emerald-300':stage==='Anamnese Inicial'?'border-sky-400/20 bg-sky-400/10 text-sky-300':'border-border bg-muted text-foreground/80';
+  const body='m-0 min-h-0 flex-1 overflow-y-auto p-4 outline-none sm:p-6';
+  return <Dialog open={isOpen} onOpenChange={open=>{if(!open)onClose();}}>
+    <DialogContent className={`flex flex-col gap-0 overflow-hidden p-0 ${expanded?'h-[100dvh] max-h-[100dvh] w-screen max-w-none rounded-none sm:rounded-none':'h-[92dvh] max-h-[92dvh] w-[calc(100%_-_1.5rem)] max-w-6xl rounded-2xl'}`} data-testid="patient-details-card">
+      <button type="button" onClick={()=>setExpanded(value=>!value)} aria-label={expanded?'Restaurar tamanho do card':'Expandir card para tela cheia'} title={expanded?'Restaurar tamanho':'Tela cheia'} aria-pressed={expanded} className="absolute right-12 top-3.5 z-10 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" data-testid="toggle-patient-fullscreen">{expanded?<Minimize2 className="h-4 w-4"/>:<Maximize2 className="h-4 w-4"/>}</button>
+      <header className="shrink-0 border-b border-border bg-card/30 px-5 pb-5 pt-5 sm:px-6">
+        <div className="mb-4 pr-20 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Ficha do paciente</div>
+        <div className="flex items-start gap-3 sm:gap-4"><div aria-hidden="true" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-base font-semibold text-primary">{patient.fullName?.trim().split(/\s+/).slice(0,2).map(name=>name[0]).join('')||'PA'}</div><div className="min-w-0 flex-1"><DialogHeader className="space-y-1 text-left"><DialogTitle className="break-words text-xl font-semibold tracking-tight sm:text-2xl">{patient.fullName}</DialogTitle><DialogDescription className="sr-only">Ficha nutricional, histórico de medidas e conversas de {patient.fullName}.</DialogDescription></DialogHeader><div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] text-muted-foreground">{phone&&<span className="inline-flex items-center gap-1.5" data-testid="patient-detail-whatsapp"><Phone className="h-3 w-3"/>{patientPhone(phone)}</span>}{patient.age&&<span>{patient.age} anos</span>}{patient.gender&&<span className="capitalize">{patient.gender}</span>}{birthLabel&&<span className="inline-flex items-center gap-1.5"><Calendar className="h-3 w-3"/>{birthLabel}</span>}</div>{patient.email&&<p className="mt-2 break-all text-[11px] text-muted-foreground" data-testid="patient-detail-email">{patient.email}</p>}</div><span className={`hidden shrink-0 rounded-full border px-3 py-1 text-[10px] font-medium sm:inline-flex ${stageColor}`}>{stage}</span></div><span className={`mt-3 inline-flex rounded-full border px-2.5 py-1 text-[10px] sm:hidden ${stageColor}`}>{stage}</span>
+      </header>
+      <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
+        <div className="shrink-0 border-b border-border px-3 py-3 sm:px-6"><TabsList className="flex h-auto w-full justify-start gap-1 overflow-x-auto rounded-xl p-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">{[
+          {value:'info',label:'Visão geral',icon:UserCheck},{value:'evolution',label:'Evolução',icon:ChartNoAxesCombined},{value:'conversation',label:'Conversa',icon:MessageSquare},{value:'schedules',label:'Automações',icon:CalendarClock},{value:'ai',label:'IA',icon:Sparkles},
+        ].map(item=><TabsTrigger key={item.value} value={item.value} className="min-w-fit flex-1 gap-2 px-3 py-2.5 text-xs" data-testid={`patient-tab-${item.value}`}><item.icon className="h-3.5 w-3.5 shrink-0"/>{item.label}</TabsTrigger>)}</TabsList></div>
+        {isError&&<div role="alert" className="shrink-0 border-b border-destructive/30 px-5 py-3 text-xs text-muted-foreground">Não foi possível atualizar a ficha. Exibindo os dados disponíveis. <button className="underline" onClick={()=>refetch()}>Tentar novamente</button></div>}
+        <TabsContent value="info" className={body}><PatientProfileInfo patient={patient} nutrition={profile?.nutrition} onEvolution={()=>setTab('evolution')}/></TabsContent>
+        <TabsContent value="evolution" className={body}>{profile?<NutritionDashboard data={profile.nutrition} onOpen={()=>setTab('info')} compact/>:<div role="status" className="rounded-xl border border-border p-8 text-center text-sm text-muted-foreground">{isLoading?'Carregando histórico de medidas…':'O histórico de medidas não está disponível. Tente atualizar a ficha.'}</div>}</TabsContent>
+        <TabsContent value="conversation" className={body}><PatientConversation key={patient.id} patientId={String(patient.id)} patientName={patient.fullName} expanded={expanded}/></TabsContent>
+        <TabsContent value="schedules" className={body}><PatientSchedules patient={patient}/></TabsContent>
+        <TabsContent value="ai" className={body}><AIInsights patient={patient}/></TabsContent>
+      </Tabs>
+    </DialogContent>
+  </Dialog>;
 }

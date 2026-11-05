@@ -1,6 +1,7 @@
 import OpenAI, { toFile } from "openai";
 import { ProcessedMessage } from './patient-history-directus';
 import { getAIConfig, getCompletionOptions } from './ai-config-store';
+import { readAnamnesisSections, profileSections, type AnamnesisSections } from '@shared/patient-profile';
 
 if (!process.env.OPENAI_API_KEY) {
   console.warn('[OpenAI Service] OPENAI_API_KEY not found in environment variables');
@@ -183,6 +184,7 @@ ${conversationText}`;
     goals?: string;
     anamnese?: string;
     supplements?: string;
+    dietaryRestrictions?: string;
     messages: ProcessedMessage[];
     currentMeals?: {
       breakfast?: string;
@@ -221,6 +223,7 @@ ${patientData.weight ? `- Peso: ${patientData.weight} kg` : ''}
 ${patientData.height ? `- Altura: ${patientData.height} cm` : ''}
 ${patientData.bmi ? `- IMC: ${patientData.bmi}` : ''}
 ${patientData.goals ? `- Objetivos: ${patientData.goals}` : ''}
+${patientData.dietaryRestrictions ? `- Restrições alimentares relatadas: ${patientData.dietaryRestrictions}` : '- Restrições alimentares: não informadas'}
 ${patientData.anamnese ? `\nANAMNESE:\n${patientData.anamnese}` : ''}
 ${patientData.supplements ? `\nSUPLEMENTOS/MEDICAMENTOS:\n${patientData.supplements}` : ''}
 
@@ -324,6 +327,7 @@ Por favor, crie uma sugestão de plano alimentar personalizado com 3 opções po
     Peso?: number;
     Altura?: number;
     Anamise_inicial?: string;
+    Anamnese_estruturada?: AnamnesisSections;
     Restricoes_alimentares?: string;
     Suplementos_e_medicamentos?: string;
     Metas_e_objetivos?: string;
@@ -351,6 +355,7 @@ Por favor, crie uma sugestão de plano alimentar personalizado com 3 opções po
       });
 
       const result = JSON.parse(completion.choices[0].message.content || '{}');
+      result.Anamnese_estruturada = readAnamnesisSections(result.Anamnese_estruturada);
       console.log('[OpenAI Service] Extracted patient data:', result);
       return result;
     } catch (error) {
@@ -360,7 +365,7 @@ Por favor, crie uma sugestão de plano alimentar personalizado com 3 opções po
   }
 
   async runFollowUpAgent(
-    patientData: { fullName?: string; weight?: string | null; height?: string | null; gender?: string | null; goals?: string | null; dietaryRestrictions?: string | null; suplementos_medicamentos?: string | null; medicalHistory?: string | null; anamnese_inicial?: string | null; cafe_da_manha?: string | null; almoco?: string | null; janta?: string | null },
+    patientData: { anamnesisSections?: AnamnesisSections | null; fullName?: string; weight?: string | null; height?: string | null; gender?: string | null; goals?: string | null; dietaryRestrictions?: string | null; suplementos_medicamentos?: string | null; medicalHistory?: string | null; anamnese_inicial?: string | null; cafe_da_manha?: string | null; almoco?: string | null; janta?: string | null },
     conversationHistory: { role: 'user' | 'assistant'; content: string }[],
     patientMessage: string,
     agentName?: string
@@ -372,10 +377,10 @@ DADOS DO PACIENTE:
 - Peso: ${patientData.weight || 'Não informado'} kg
 - Altura: ${patientData.height || 'Não informado'} cm
 - Sexo: ${patientData.gender || 'Não informado'}
-- Objetivos: ${patientData.goals || 'Não informado'}
-- Restrições alimentares: ${patientData.dietaryRestrictions || 'Nenhuma'}
-- Suplementos/Medicamentos: ${patientData.suplementos_medicamentos || 'Nenhum'}
-- Anamnese: ${patientData.medicalHistory || patientData.anamnese_inicial || 'Não realizada'}
+- Objetivos: ${readAnamnesisSections(patientData.anamnesisSections).objetivos || patientData.goals || 'Não informado'}
+- Restrições alimentares: ${patientData.dietaryRestrictions || 'Não informado'}
+- Suplementos/Medicamentos: ${patientData.suplementos_medicamentos || 'Não informado'}
+- Anamnese: ${profileSections(patientData.anamnesisSections, patientData.medicalHistory || patientData.anamnese_inicial).sections.map(section => section.label + ': ' + section.text).join('\n') || 'Não informada'}
 - Café da manhã: ${patientData.cafe_da_manha || 'Não informado'}
 - Almoço: ${patientData.almoco || 'Não informado'}
 - Jantar: ${patientData.janta || 'Não informado'}

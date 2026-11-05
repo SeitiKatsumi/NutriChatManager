@@ -14,8 +14,8 @@ const mocks = {
   'twilio-whatsapp-service': 'export const twilioWhatsAppService = {}',
 };
 try {
-  await build({ stdin: { contents: `export * from './shared/dashboard'; export {registerRoutes} from './server/routes'; export {storage} from './server/storage'; export {DirectusStorage} from './server/directus-storage';`, resolveDir: process.cwd() }, bundle: true, platform: 'node', format: 'esm', packages: 'external', outfile: bundle.pathname.replace(/^\/(\w:)/, '$1'), plugins: [{ name: 'mocks', setup(plugin) { plugin.onResolve({ filter: /^\.\// }, args => { const key = args.path.replace(/^\.\/(server\/)?/, ''); if (mocks[key]) return { path: key, namespace: 'mock' }; }); plugin.onLoad({ filter: /.*/, namespace: 'mock' }, args => ({ contents: mocks[args.path] })); } }] });
-  const { buildDashboard, dashboardWindow, registerRoutes, storage, DirectusStorage } = await import(bundle.href);
+  await build({ stdin: { contents: `export * from './shared/dashboard'; export {registerRoutes} from './server/routes'; export {storage} from './server/storage'; export {openaiService as ai} from './server/openai-service'; export {patientHistoryDirectus as history} from './server/patient-history-directus'; export {DirectusStorage} from './server/directus-storage';`, resolveDir: process.cwd() }, bundle: true, platform: 'node', format: 'esm', packages: 'external', outfile: bundle.pathname.replace(/^\/(\w:)/, '$1'), plugins: [{ name: 'mocks', setup(plugin) { plugin.onResolve({ filter: /^\.\// }, args => { const key = args.path.replace(/^\.\/(server\/)?/, ''); if (mocks[key]) return { path: key, namespace: 'mock' }; }); plugin.onLoad({ filter: /.*/, namespace: 'mock' }, args => ({ contents: mocks[args.path] })); } }] });
+  const { buildDashboard, dashboardWindow, registerRoutes, storage, DirectusStorage, ai, history } = await import(bundle.href);
   const now = new Date('2026-11-05T15:00:00Z');
   assert.equal(dashboardWindow(7, now).start.toISOString(), '2026-10-30T03:00:00.000Z');
   assert.equal(dashboardWindow(30, now).previousStart.toISOString(), '2026-09-07T03:00:00.000Z');
@@ -52,8 +52,8 @@ try {
   assert.equal(calls[1].searchParams.get('offset'), '1000');
   assert.deepEqual(await reader.getDashboardMessageActivity([], now, now), []);
 
-  let handlers, measurementHandlers;
-  const app = Object.fromEntries(['get', 'post', 'put', 'patch', 'delete', 'use'].map(method => [method, (path, ...callbacks) => { if (method === 'get' && path === '/api/dashboard/overview') handlers = callbacks; if(method==='post' && path==='/api/patients/:id/measurements') measurementHandlers=callbacks; }]));
+  let handlers, measurementHandlers, profileHandlers, planHandlers;
+  const app = Object.fromEntries(['get', 'post', 'put', 'patch', 'delete', 'use'].map(method => [method, (path, ...callbacks) => { if (method === 'get' && path === '/api/dashboard/overview') handlers = callbacks; if(method==='post' && path==='/api/ai/meal-plan/:patientId')planHandlers=callbacks; if(method==='get' && path==='/api/patients/:id/profile') profileHandlers=callbacks; if(method==='post' && path==='/api/patients/:id/measurements') measurementHandlers=callbacks; }]));
   await registerRoutes(app);
   const owner = 'c1cc505d-de15-47f9-bea8-330b5d696bc7';
   let reads = 0;
@@ -98,6 +98,30 @@ try {
   assert.equal(writes,0);
   assert.equal((await save()).code,201);
   assert.equal(writes,1);
+  let profileReads=0;
+  storage.getNutritionMeasurements=async ids=>{profileReads++;assert.deepEqual(ids,['1']);return [];};
+  async function profile(id='1',user={id:owner,nutritionistId:owner}){
+    let code=200,body,cache,allowed=false;
+    const req={session:{user},params:{id}};
+    const res={status(value){code=value;return this;},json(value){body=value;return this;},set(key,value){cache=value;}};
+    profileHandlers[0](req,res,()=>{allowed=true;});if(allowed)await profileHandlers.at(-1)(req,res);return {code,body,cache};
+  }
+  assert.equal((await profile('1',null)).code,401);
+  assert.equal((await profile('2')).code,403);
+  assert.equal((await profile('999')).code,404);
+  assert.equal((await profile('1&fields=*')).code,400);
+  assert.equal(profileReads,0);
+  const ownProfile=await profile();assert.equal(ownProfile.cache,'no-store');assert.equal(ownProfile.body.nutrition.patients[0].id,'1');
+  let updated;
+  reader.client={request:async(path,options)=>{updated=JSON.parse(options.body);return {data:{id:1,Nome_Completo:'QA',...updated}};}};
+  const result=await reader.updatePatient('1',{weight:'75,55',height:'177.5',anamnesisSections:{hidratacao:'2 litros por dia'}});
+  assert.equal(updated.Peso,75.55);assert.equal(updated.Altura,177.5);assert.equal(result.anamnesisSections.hidratacao,'2 litros por dia');
+  let planData;
+  storage.getPatient=async()=>({id:'1',fullName:'QA',nutritionistId:owner,cafe_da_manha:'2 ovos',almoco:'Arroz e feijão',janta:'Sopa',suplementos_medicamentos:'Suplemento relatado',dietaryRestrictions:'Alergia relatada',anamnesisSections:{objetivos:'Objetivo relatado'}});
+  history.getPatientMessages=async()=>[];
+  ai.generateMealPlan=async data=>{planData=data;return {};};
+  await planHandlers.at(-1)({params:{patientId:'1'},session:{user:{nutritionistId:owner}}},{json(){},status(){return this;}});
+  assert.equal(planData.currentMeals.breakfast,'2 ovos');assert.equal(planData.currentMeals.lunch,'Arroz e feijão');assert.equal(planData.currentMeals.dinner,'Sopa');assert.equal(planData.dietaryRestrictions,'Alergia relatada');assert.equal(planData.goals,'Objetivo relatado');
   let persisted, attempts=0;
   reader.client={request:async(path,options={})=>{
     if(options.method==='POST'){attempts++;persisted=JSON.parse(options.body);throw new Error('Unknown network outcome');}

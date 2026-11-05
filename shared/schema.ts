@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { anamnesisSectionsSchema } from './patient-profile';
 import { pgTable, serial, text, integer, real, timestamp, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 
@@ -96,6 +97,7 @@ export const patientSchema = z.object({
   notes: z.string().optional().nullable(),
   // Campos coletados pela IA
   anamnese_inicial: z.string().optional().nullable(), // Anamnese feita pelo agente de IA
+  anamnesisSections: anamnesisSectionsSchema.optional().nullable(),
   suplementos_medicamentos: z.string().optional().nullable(), // Informações sobre suplementos e medicamentos
   feedbacks: z.string().optional().nullable(), // Resumo completo dos últimos dias e histórico
   recordatorio_24h: z.string().optional().nullable(), // Recordatório 24 horas com campos de cada hora

@@ -152,6 +152,7 @@ Extraia os seguintes campos (use null se não encontrado):
 - Sexo: "masculino", "feminino" ou "outro"
 - Peso: peso em kg (número)
 - Altura: altura em cm (número)
+- Anamnese_estruturada: objeto JSON com os campos objetivos, saude, atividade_fisica, hidratacao, sono, estresse, alcool, preferencias e rotina_alimentar. Cada campo deve conter texto curto, em frases separadas por \n. Inclua apenas informações explicitamente relatadas pelo PACIENTE. Preserve números, unidades, negações e incertezas. Omita campos sem informação; nunca deduza diagnósticos, adesão, riscos ou resultados. Não transforme perguntas ou sugestões do assistente em fatos do paciente.
 - Anamise_inicial: resumo completo e bem redigido da anamnese incluindo histórico de saúde, condições, medicações, hábitos, estilo de vida, rotina de exercícios, qualidade do sono, nível de estresse e consumo de álcool. Escreva em texto corrido, de forma profissional.
 - Restricoes_alimentares: alergias, intolerâncias e restrições alimentares
 - Suplementos_e_medicamentos: suplementos e medicamentos em uso
@@ -165,7 +166,7 @@ Extraia os seguintes campos (use null se não encontrado):
 
 Responda APENAS com o JSON, sem explicações.`,
     model: 'gpt-6-luna',
-    max_tokens: 1500,
+    max_tokens: 2400,
     temperature: 0.1,
   },
   mealplan: {

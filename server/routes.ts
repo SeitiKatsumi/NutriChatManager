@@ -17,6 +17,8 @@ import Stripe from "stripe";
 import { SINGLE_NUTRITIONIST_ID } from "@shared/clinic-mode";
 import { requireClinicAuth, disableBilling } from "./clinic-access";
 import { buildDashboard, dashboardWindow, dashboardDate } from "@shared/dashboard";
+import { buildNutrition } from '@shared/nutrition';
+import { profileSections, readAnamnesisSections } from '@shared/patient-profile';
 
 // Extend session type to include user
 declare module 'express-session' {
@@ -1238,7 +1240,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`[AI Insights] Returning cached analysis for patient ${patientId} (age: ${Math.round(cacheAge / 60000)} min)`);
           try {
             const cachedInsights = JSON.parse(patient.ultimaAnaliseIA);
-            return res.json({ ...cachedInsights, cached: true, cacheAge: Math.round(cacheAge / 60000) });
+            if (cachedInsights._sourceVersion === 2) return res.json({ ...cachedInsights, cached: true, cacheAge: Math.round(cacheAge / 60000) });
           } catch (parseError) {
             console.warn('[AI Insights] Failed to parse cached insights, regenerating...');
           }
@@ -1261,7 +1263,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`[AI Insights] Generating new analysis for patient ${patientId} with ${messages.length} messages`);
       
       // Generate insights with OpenAI
-      const insights = await openaiService.generateQuickInsights(messages);
+      const insights = { ...await openaiService.generateQuickInsights(messages), _sourceVersion: 2 };
       
       // Save to cache (async, don't wait)
       storage.updatePatientAICache(patientId, insights).catch(err => {
@@ -1303,17 +1305,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         weight: patient.weight,
         height: patient.height,
         bmi: patient.bmi,
-        goals: patient.goals,
-        anamnese: patient.anamnese,
-        supplements: patient.supplements,
+        goals: readAnamnesisSections(patient.anamnesisSections).objetivos || patient.goals,
+        anamnese: profileSections(patient.anamnesisSections, patient.anamnese_inicial || patient.medicalHistory).sections.map(section => `${section.label}: ${section.text}`).join('\n\n'),
+        supplements: patient.suplementos_medicamentos,
+        dietaryRestrictions: patient.dietaryRestrictions,
         messages,
         currentMeals: {
-          breakfast: patient.breakfast,
-          morningSnack: patient.morningSnack,
-          lunch: patient.lunch,
-          afternoonSnack: patient.afternoonSnack,
-          dinner: patient.dinner,
-          eveningSnack: patient.eveningSnack
+          breakfast: patient.cafe_da_manha,
+          morningSnack: patient.lanche_da_manha,
+          lunch: patient.almoco,
+          afternoonSnack: patient.lanche_da_tarde,
+          dinner: patient.janta,
+          eveningSnack: patient.ceia
         }
       };
       
@@ -3141,6 +3144,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("[Schedule Route] Error sending message:", error);
       res.status(500).json({ error: "Failed to send message" });
+    }
+  });
+
+  app.get('/api/patients/:id/profile', requireAuth, async (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    if (!/^\d+$/.test(req.params.id)) return res.status(400).json({ error:'Paciente inválido.' });
+    try {
+      const patient = await storage.getPatient(req.params.id, req.session.user.accessToken);
+      if (!patient) return res.status(404).json({ error:'Paciente não encontrado.' });
+      if (patient.nutritionistId !== req.session.user.nutritionistId) return res.status(403).json({error:'Acesso negado.'});
+      const measurements = await storage.getNutritionMeasurements([patient.id]);
+      res.json({patient,nutrition:buildNutrition([patient],measurements)});
+    } catch (error) {
+      console.error('[Patient] Could not load profile:',error);
+      res.status(503).json({error:'Não foi possível atualizar a ficha.'});
     }
   });
 
