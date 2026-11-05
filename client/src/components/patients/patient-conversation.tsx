@@ -11,7 +11,7 @@ interface ChatMessage {
   media?: { url: string; contentType: string }[];
 }
 
-export default function PatientConversation({ patientId, patientName }: { patientId: string; patientName: string }) {
+export default function PatientConversation({ patientId, patientName, expanded = false }: { patientId: string; patientName: string; expanded?: boolean }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const followLatest = useRef(true);
   const { data, isLoading, isFetching, isError, refetch } = useQuery<{ messages: ChatMessage[] }>({
@@ -47,7 +47,7 @@ export default function PatientConversation({ patientId, patientName }: { patien
       )}
       <div
         ref={scrollRef}
-        className="h-[50vh] min-h-[240px] overflow-y-auto overscroll-contain bg-background/40 p-3 sm:p-5"
+        className={`${expanded ? "h-[calc(100dvh-260px)]" : "h-[50vh]"} min-h-[240px] overflow-y-auto overscroll-contain bg-background/40 p-3 sm:p-5`}
         tabIndex={0}
         role="region"
         aria-label="Histórico de mensagens"

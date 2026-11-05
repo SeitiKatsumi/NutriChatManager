@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,7 +17,9 @@ import {
   MessageSquare,
   Activity,
   CalendarClock,
-  Sparkles
+  Sparkles,
+  Maximize2,
+  Minimize2
 } from "lucide-react";
 import { Patient } from "@shared/schema";
 import AIInsights from "./ai-insights";
@@ -36,6 +39,8 @@ export default function PatientDetailsDialog({
   patient,
   initialTab = 'info'
 }: PatientDetailsDialogProps) {
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => { setExpanded(false); }, [isOpen, patient?.id]);
   if (!patient) return null;
 
   const getStatusColor = (status: string) => {
@@ -74,9 +79,12 @@ export default function PatientDetailsDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className={expanded ? "h-[100dvh] max-h-[100dvh] w-screen max-w-none content-start overflow-y-auto rounded-none sm:rounded-none" : "max-w-4xl max-h-[90vh] overflow-y-auto"} data-testid="patient-details-card">
+        <button type="button" onClick={() => setExpanded(value => !value)} aria-label={expanded ? "Restaurar tamanho do card" : "Expandir card para tela cheia"} title={expanded ? "Restaurar tamanho" : "Tela cheia"} aria-pressed={expanded} className="absolute right-12 top-3 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" data-testid="toggle-patient-fullscreen">
+          {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+        </button>
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+          <DialogTitle className="flex items-center gap-2 pr-16">
             <UserCheck className="w-5 h-5" />
             Detalhes do Paciente
           </DialogTitle>
@@ -335,7 +343,7 @@ export default function PatientDetailsDialog({
           </TabsContent>
 
           <TabsContent value="conversation" className="mt-6">
-            <PatientConversation key={patient.id} patientId={String(patient.id)} patientName={patient.fullName} />
+            <PatientConversation key={patient.id} patientId={String(patient.id)} patientName={patient.fullName} expanded={expanded} />
           </TabsContent>
 
           <TabsContent value="schedules" className="mt-6">
