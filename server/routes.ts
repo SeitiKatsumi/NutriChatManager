@@ -683,6 +683,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         messageType: inbound.messageType,
         imageBuffer,
         audioMedia: inbound.messageType === 'audio' ? inbound.media[0] : undefined,
+        media: inbound.media,
       }).catch(err => {
         console.error('[Twilio Webhook] Error in async message handler:', err);
       });
@@ -731,10 +732,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get messages from Directus
       const messages = await storage.getPatientMessages(patientId, limit);
       
-      res.json({ messages, count: messages.length });
+      res.json({ messages: messages.map(message => ({ ...message, media: (Array.isArray(message.media) ? message.media : []).map((item: any, index: number) => ({
+        contentType: item.contentType,
+        url: `/api/messages/patient/${patientId}/${message.id}/media/${index}`,
+      })) })), count: messages.length });
     } catch (error) {
       console.error('[API] Error getting patient messages:', error);
       res.status(500).json({ error: "Failed to fetch messages" });
+    }
+  });
+
+  app.get('/api/messages/patient/:patientId/:messageId/media/:index', requireAuth, async (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    const { patientId, messageId, index } = req.params;
+    if (![patientId, messageId, index].every(value => /^\d+$/.test(value))) return res.sendStatus(400);
+    try {
+      const patient = await storage.getPatient(patientId, req.session.user.accessToken);
+      if (!patient) return res.sendStatus(404);
+      if (patient.nutritionistId !== req.session.user.nutritionistId) return res.sendStatus(403);
+      const message = await storage.getMessageMedia(messageId);
+      if (!message || String(message.patient_id) !== patientId) return res.sendStatus(404);
+      const media = Array.isArray(message.media) ? message.media[Number(index)] : undefined;
+      if (!media) return res.sendStatus(404);
+      const bytes = await twilioWhatsAppService.downloadMedia(media.url);
+      const mime = String(media.contentType || '').split(';')[0].trim().toLowerCase();
+      const inline = /^(image\/(jpeg|png|gif|webp)|audio\/(ogg|mpeg|mp3|mp4|wav|x-wav|webm)|video\/(mp4|webm))$/.test(mime);
+      res.set({ 'Content-Type': inline ? mime : 'application/octet-stream', 'X-Content-Type-Options': 'nosniff',
+        'Content-Disposition': inline ? 'inline' : 'attachment; filename="anexo"', 'Accept-Ranges': 'bytes' });
+      if (req.headers.range) {
+        const ranges = req.range(bytes.length);
+        if (!Array.isArray(ranges) || ranges.type !== 'bytes' || ranges.length !== 1) {
+          res.set('Content-Range', `bytes */${bytes.length}`);
+          return res.sendStatus(416);
+        }
+        const { start, end } = ranges[0];
+        res.set('Content-Range', `bytes ${start}-${end}/${bytes.length}`);
+        return res.status(206).send(bytes.subarray(start, end + 1));
+      }
+      res.send(bytes);
+    } catch {
+      res.status(502).json({ error: 'Mídia indisponível no provedor. Tente novamente mais tarde.' });
     }
   });
 

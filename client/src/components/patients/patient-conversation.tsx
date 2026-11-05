@@ -8,6 +8,7 @@ interface ChatMessage {
   message_body: string | null;
   from_me: boolean | null;
   date_created: string | null;
+  media?: { url: string; contentType: string }[];
 }
 
 export default function PatientConversation({ patientId, patientName }: { patientId: string; patientName: string }) {
@@ -80,6 +81,20 @@ export default function PatientConversation({ patientId, patientName }: { patien
                       {isAI ? "IA · NutriChatbot" : patientName}
                     </p>
                     <p className="whitespace-pre-wrap break-words text-sm leading-relaxed [overflow-wrap:anywhere]">{message.message_body || "[Mensagem sem texto]"}</p>
+                    {message.media?.map((media, index) => (
+                      <div key={index} className="mt-3 max-w-full">
+                        {/^image\/(jpeg|png|gif|webp)(;|$)/.test(media.contentType) ? (
+                          <a href={media.url} target="_blank" rel="noopener noreferrer" aria-label="Abrir imagem em tamanho completo">
+                            <img src={media.url} alt="Imagem enviada na conversa" loading="lazy" className="max-h-72 max-w-full rounded-lg object-contain" />
+                          </a>
+                        ) : media.contentType.startsWith('audio/') ? (
+                          <audio controls preload="none" src={media.url} className="w-64 max-w-full" aria-label="Ouvir áudio enviado">Áudio indisponível.</audio>
+                        ) : media.contentType.startsWith('video/') ? (
+                          <video controls preload="none" src={media.url} className="max-h-72 max-w-full rounded-lg" aria-label="Assistir vídeo enviado" />
+                        ) : null}
+                        <a href={media.url} target="_blank" rel="noopener noreferrer" className="mt-1 block text-xs text-primary underline">Abrir / baixar anexo</a>
+                      </div>
+                    ))}
                     <time dateTime={hasDate ? date.toISOString() : undefined} className="mt-2 block text-right text-[11px] text-muted-foreground">
                       {hasDate ? date.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" }) : "Horário não registrado"}
                     </time>

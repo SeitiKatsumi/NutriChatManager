@@ -1474,6 +1474,7 @@ export class DirectusStorage implements IStorage {
           patient_id: message.patient_id,
           message_body: message.message_body,
           from_me: message.from_me,
+          media: Array.isArray(message.media) ? message.media.slice(0, 10).map((item: any) => ({ url: item.url, contentType: item.contentType })) : null,
         }),
       });
 
@@ -1488,6 +1489,11 @@ export class DirectusStorage implements IStorage {
   /**
    * Get WhatsApp messages for a specific patient
    */
+  async getMessageMedia(messageId: string): Promise<any> {
+    const response = await this.client.request(`/items/whatsapp_messages/${encodeURIComponent(messageId)}?fields=id,patient_id,media`);
+    return response.data;
+  }
+
   async getPatientMessages(patientId: string, limit: number = 200): Promise<any[]> {
     try {
       console.log(`[DirectusStorage] Getting messages for patient ${patientId}, limit: ${limit}`);

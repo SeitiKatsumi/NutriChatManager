@@ -25,6 +25,7 @@ export interface IncomingWhatsAppMessage {
   messageType: 'text' | 'image' | 'audio' | 'video' | 'document';
   imageBuffer?: Buffer;
   audioMedia?: TwilioInboundMedia;
+  media?: TwilioInboundMedia[];
   timestamp?: number;
 }
 
@@ -87,7 +88,7 @@ export class WhatsAppMessageHandler {
   }
 
   async handleIncomingMessage(message: IncomingWhatsAppMessage): Promise<void> {
-    const { instanceName, senderNumber, messageBody, messageType, imageBuffer, audioMedia } = message;
+    const { instanceName, senderNumber, messageBody, messageType, imageBuffer, audioMedia, media } = message;
     const channelIdentity = instanceName || 'twilio-global-whatsapp';
 
     console.log(`[MessageHandler] Processing message from ${senderNumber} via ${channelIdentity}`);
@@ -113,7 +114,7 @@ export class WhatsAppMessageHandler {
       const lockKey = `${nutritionistId}:${cleanNumber}`;
 
       await this.withPatientLock(lockKey, async () => {
-        await this.processMessage(nutritionist, cleanNumber, channelIdentity, messageBody, messageType, imageBuffer, resolvedPatient, audioMedia);
+        await this.processMessage(nutritionist, cleanNumber, channelIdentity, messageBody, messageType, imageBuffer, resolvedPatient, audioMedia, media);
       });
 
     } catch (error) {
@@ -129,7 +130,8 @@ export class WhatsAppMessageHandler {
     messageType: 'text' | 'image' | 'audio' | 'video' | 'document',
     imageBuffer?: Buffer,
     resolvedPatient?: Patient,
-    audioMedia?: TwilioInboundMedia
+    audioMedia?: TwilioInboundMedia,
+    media?: TwilioInboundMedia[]
   ): Promise<void> {
       const nutritionistId = nutritionist.id;
 
@@ -185,6 +187,7 @@ export class WhatsAppMessageHandler {
           patient_id: activePatient.id,
           message_body: messageBody || '[Imagem]',
           from_me: false,
+          media,
           message_type: 'image',
         });
         try {
@@ -198,6 +201,7 @@ export class WhatsAppMessageHandler {
           patient_id: activePatient.id,
           message_body: messageBody || '[Imagem sem dados]',
           from_me: false,
+          media,
           message_type: 'image',
         });
         aiResponse = 'Recebi sua imagem, mas não consegui processá-la. Pode tentar enviar novamente?';
@@ -206,6 +210,7 @@ export class WhatsAppMessageHandler {
           patient_id: activePatient.id,
           message_body: '[Áudio]',
           from_me: false,
+          media,
           message_type: 'audio',
         });
         aiResponse = 'Não consegui entender este áudio. Pode reenviar uma gravação mais clara ou enviar a mensagem em texto?';
@@ -216,6 +221,7 @@ export class WhatsAppMessageHandler {
           patient_id: activePatient.id,
           message_body: transcript ? `[Áudio transcrito]\n${transcript}` : messageBody || `[${messageType}]`,
           from_me: false,
+          media,
           message_type: messageType,
         });
         this.addToCache(activePatient.id, 'user', patientMessage || `[${messageType}]`);
