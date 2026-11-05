@@ -27,12 +27,14 @@ interface PatientDetailsDialogProps {
   isOpen: boolean;
   onClose: () => void;
   patient: Patient | null;
+  initialTab?: 'info' | 'conversation';
 }
 
 export default function PatientDetailsDialog({ 
   isOpen, 
   onClose, 
-  patient 
+  patient,
+  initialTab = 'info'
 }: PatientDetailsDialogProps) {
   if (!patient) return null;
 
@@ -80,7 +82,7 @@ export default function PatientDetailsDialog({
           </DialogTitle>
         </DialogHeader>
 
-        <Tabs key={patient.id} defaultValue="info" className="w-full">
+        <Tabs key={`${patient.id}-${initialTab}`} defaultValue={initialTab} className="w-full">
           <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4">
             <TabsTrigger value="info" className="gap-2 px-2">
               <UserCheck className="h-4 w-4 shrink-0" />

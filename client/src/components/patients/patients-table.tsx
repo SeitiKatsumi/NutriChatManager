@@ -1,556 +1,88 @@
-import { useEffect, useState } from "react";
-import { sortPatients, formatLastInteraction } from "@/lib/patient-order";
-import { 
-  Search, 
-  Trash2, 
-  Edit, 
-  MoreHorizontal, 
-  ChevronDown,
-  UserCheck,
-  Clock,
-  XCircle,
-  Eye,
-  Phone,
-  Mail,
-  Calendar
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Badge } from "@/components/ui/badge";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useEffect, useState } from 'react';
+import { Search, MoreHorizontal, MessageSquare, FileText, Phone, Pencil, Trash2, Users, ArrowUpDown, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { sortPatients, formatLastInteraction, patientStage, patientPhone } from '@/lib/patient-order';
 
 interface PatientsTableProps {
-  patients: any[];
-  isLoading: boolean;
-  searchTerm: string;
-  onSearchChange: (term: string) => void;
-  selectedStatus: string;
-  onStatusChange: (status: string) => void;
-  onDelete: (id: string, name: string) => void;
-  onEdit: (patient: any) => void;
-  onView: (patient: any) => void;
+  patients: any[]; totalCount: number; stages: string[]; isLoading: boolean;
+  searchTerm: string; onSearchChange: (term: string) => void;
+  selectedStatus: string; onStatusChange: (status: string) => void;
+  onDelete: (id: string, name: string) => void; onEdit: (patient: any) => void;
+  onView: (patient: any, tab?: 'info' | 'conversation') => void;
 }
 
-export default function PatientsTable({
-  patients,
-  isLoading,
-  searchTerm,
-  onSearchChange,
-  selectedStatus,
-  onStatusChange,
-  onDelete,
-  onEdit,
-  onView,
-}: PatientsTableProps) {
-  const [currentPage, setCurrentPage] = useState(1);
-  const [sortOrder, setSortOrder] = useState('interaction-desc');
-  useEffect(() => { setCurrentPage(1); }, [sortOrder, searchTerm, selectedStatus]);
-  const itemsPerPage = 10;
-  const isMobile = useIsMobile();
-
-  const getStatusColor = (status: string) => {
-    const colors: Record<string, string> = {
-      active: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-      inactive: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-      completed: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-    };
-    return colors[status] || "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200";
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'active':
-        return <UserCheck className="w-3 h-3" />;
-      case 'inactive':
-        return <XCircle className="w-3 h-3" />;
-      case 'completed':
-        return <Clock className="w-3 h-3" />;
-      default:
-        return <UserCheck className="w-3 h-3" />;
-    }
-  };
-
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'active':
-        return 'Ativo';
-      case 'inactive':
-        return 'Inativo';
-      case 'completed':
-        return 'Concluído';
-      default:
-        return 'Ativo';
-    }
-  };
-
-  const totalPages = Math.ceil(patients.length / itemsPerPage);
-  const startIndex = (Math.min(currentPage, Math.max(1, totalPages)) - 1) * itemsPerPage;
-  const paginatedPatients = sortPatients(patients, sortOrder).slice(startIndex, startIndex + itemsPerPage);
-
-  // Mobile Patient Card Component
-  const PatientCard = ({ patient }: { patient: any }) => (
-    <Card className="mb-4">
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center space-x-3 flex-1">
-            <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-              <UserCheck className="w-5 h-5 text-primary" />
-            </div>
-            <div className="flex-1">
-              <div className="font-medium text-foreground" data-testid={`patient-name-${patient.id}`}>
-                {patient.fullName}
-              </div>
-              {patient.dateOfBirth && (
-                <div className="text-sm text-muted-foreground flex items-center gap-1">
-                  <Calendar className="w-3 h-3" />
-                  {new Date().getFullYear() - new Date(patient.dateOfBirth).getFullYear()} anos
-                </div>
-              )}
-            </div>
-          </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button 
-                variant="ghost" 
-                size="sm"
-                data-testid={`patient-actions-${patient.id}`}
-              >
-                <MoreHorizontal className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem 
-                onClick={() => onView(patient)}
-                data-testid={`view-patient-${patient.id}`}
-              >
-                <Eye className="w-4 h-4 mr-2" />
-                Visualizar
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                onClick={() => onEdit(patient)}
-                data-testid={`edit-patient-${patient.id}`}
-              >
-                <Edit className="w-4 h-4 mr-2" />
-                Editar
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem 
-                onClick={() => onDelete(patient.id, patient.fullName)}
-                className="text-destructive focus:text-destructive"
-                data-testid={`delete-patient-${patient.id}`}
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                Remover
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-        
-        <div className="mt-3 space-y-2">
-          {/* Contact Information */}
-          <div className="flex flex-col space-y-1">
-            {patient.whatsappNumber && (
-              <div className="flex items-center text-sm text-muted-foreground" data-testid={`patient-whatsapp-${patient.id}`}>
-                <Phone className="w-3 h-3 mr-2" />
-                {patient.whatsappNumber}
-              </div>
-            )}
-            {patient.phone && (
-              <div className="flex items-center text-sm text-muted-foreground" data-testid={`patient-phone-${patient.id}`}>
-                <Phone className="w-3 h-3 mr-2" />
-                {patient.phone}
-              </div>
-            )}
-            {patient.email && (
-              <div className="flex items-center text-sm text-muted-foreground" data-testid={`patient-email-${patient.id}`}>
-                <Mail className="w-3 h-3 mr-2" />
-                {patient.email}
-              </div>
-            )}
-          </div>
-          
-          {/* Physical Information & Status */}
-          <div className="flex items-center justify-between mt-3 pt-2 border-t border-border">
-            <div className="flex items-center space-x-4 text-sm">
-              {patient.weight && (
-                <span className="text-foreground">{patient.weight} kg</span>
-              )}
-              {patient.height && (
-                <span className="text-muted-foreground">{patient.height} cm</span>
-              )}
-            </div>
-            <Badge 
-              className={`${getStatusColor(patient.status || 'active')} inline-flex items-center gap-1`}
-              data-testid={`patient-status-${patient.id}`}
-            >
-              {getStatusIcon(patient.status || 'active')}
-              {getStatusLabel(patient.status || 'active')}
-            </Badge>
-          </div>
-          
-          {/* Last Consultation */}
-          <div className="text-xs text-muted-foreground pt-1" data-testid={`last-interaction-${patient.id}`}>
-            Última interação: {formatLastInteraction(patient.lastInteractionAt)}
-          </div>
-          <div className="text-xs text-muted-foreground pt-1">
-            Última consulta: {patient.lastConsultation 
-              ? new Date(patient.lastConsultation).toLocaleDateString('pt-BR')
-              : 'Nunca'
-            }
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-
+export default function PatientsTable({ patients, totalCount, stages, isLoading, searchTerm, onSearchChange, selectedStatus, onStatusChange, onDelete, onEdit, onView }: PatientsTableProps) {
+  const [page, setPage] = useState(1);
+  const [order, setOrder] = useState('interaction-desc');
+  useEffect(() => { setPage(1); }, [searchTerm, selectedStatus, order]);
+  const pages = Math.max(1, Math.ceil(patients.length / 10));
+  const current = Math.min(page, pages);
+  const visible = sortPatients(patients, order).slice((current - 1) * 10, current * 10);
+  const filtered = !!searchTerm || (!!selectedStatus && selectedStatus !== 'all');
+  const selectClass = 'h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
   return (
-    <Card>
-      <CardContent className="p-6">
-        {/* Filters */}
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex w-full flex-wrap items-center gap-3 lg:w-auto">
-            <div className="relative">
-              <Input
-                placeholder="Buscar por nome, email ou telefone..."
-                value={searchTerm}
-                onChange={(e) => onSearchChange(e.target.value)}
-                className={`pl-10 ${isMobile ? 'w-full' : 'w-80'}`}
-                data-testid="input-search-patients"
-              />
-              <Search className="absolute left-3 top-3.5 w-4 h-4 text-muted-foreground" />
-            </div>
-            <Select value={selectedStatus} onValueChange={onStatusChange}>
-              <SelectTrigger className={`${isMobile ? 'w-full' : 'w-48'}`} data-testid="select-status-filter">
-                <SelectValue placeholder="Filtrar por status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os Status</SelectItem>
-                <SelectItem value="active">Ativos</SelectItem>
-                <SelectItem value="inactive">Inativos</SelectItem>
-                <SelectItem value="completed">Concluídos</SelectItem>
-              </SelectContent>
-            </Select>
-            <label className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-              Ordenar por
-              <select aria-label="Ordenar pacientes por" value={sortOrder} onChange={event => setSortOrder(event.target.value)} className="h-10 max-w-full rounded-md border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" data-testid="select-patient-order">
-                <option value="interaction-desc">Última interação: mais recente</option>
-                <option value="interaction-asc">Última interação: mais antiga</option>
-                <option value="name-asc">Nome: A–Z</option>
-                <option value="name-desc">Nome: Z–A</option>
-                <option value="created-desc">Cadastro: mais recente</option>
-                <option value="created-asc">Cadastro: mais antigo</option>
-              </select>
-            </label>
-          </div>
-          <div className="text-sm text-muted-foreground">
-            {patients.length} paciente(s) total
-          </div>
+    <section className="overflow-hidden rounded-xl border border-border bg-card" aria-label="Lista de pacientes">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-4">
+        <div><h2 className="font-semibold">Sua carteira de pacientes</h2><p className="mt-1 text-xs text-muted-foreground">Acesse a conversa, consulte a ficha ou continue o contato.</p></div>
+        <span role="status" className="text-xs text-muted-foreground">{patients.length} de {totalCount} pacientes</span>
+      </div>
+      <div className="grid gap-3 border-b border-border p-4 sm:grid-cols-2 lg:grid-cols-[minmax(220px,1fr)_210px_260px]">
+        <label className="relative block"><span className="sr-only">Buscar pacientes</span><Search aria-hidden="true" className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+          <Input value={searchTerm} onChange={e => onSearchChange(e.target.value)} placeholder="Buscar por nome ou WhatsApp" className="pl-9" data-testid="input-search-patients" />
+        </label>
+        <select aria-label="Filtrar por etapa" value={selectedStatus || 'all'} onChange={e => onStatusChange(e.target.value)} className={selectClass} data-testid="select-status-filter">
+          <option value="all">Todas as etapas</option><option value="__no_interaction">Sem conversa registrada</option>
+          {stages.map(stage => <option key={stage} value={stage}>{stage}</option>)}
+        </select>
+        <label className="flex items-center gap-2 sm:col-span-2 lg:col-span-1"><ArrowUpDown aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <select aria-label="Ordenar pacientes por" value={order} onChange={e => setOrder(e.target.value)} className={selectClass} data-testid="select-patient-order">
+            <option value="interaction-desc">Interação: mais recente</option><option value="interaction-asc">Interação: mais antiga</option>
+            <option value="name-asc">Nome: A–Z</option><option value="name-desc">Nome: Z–A</option>
+            <option value="created-desc">Cadastro: mais recente</option><option value="created-asc">Cadastro: mais antigo</option>
+          </select>
+        </label>
+        {filtered && <Button variant="ghost" size="sm" onClick={() => { onSearchChange(''); onStatusChange('all'); }} className="w-fit gap-2 text-muted-foreground"><X className="h-3 w-3" />Limpar filtros</Button>}
+      </div>
+      <div role="table" aria-label="Pacientes e acompanhamento">
+        <div role="row" className="hidden grid-cols-[minmax(180px,1.2fr)_minmax(150px,1fr)_minmax(160px,1fr)_auto] gap-4 border-b border-border bg-background/30 px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground lg:grid">
+          <div role="columnheader">Paciente / contato</div><div role="columnheader">Etapa do atendimento</div><div role="columnheader">Última interação</div><div role="columnheader" className="w-[260px]">Acesso rápido</div>
         </div>
-
-        {/* Desktop Table / Mobile Cards */}
-        {isMobile ? (
-          /* Mobile Cards Layout */
-          <div className="space-y-4">
-            {isLoading ? (
-              // Loading skeleton for mobile cards
-              Array.from({ length: 3 }).map((_, i) => (
-                <Card key={i} className="animate-pulse">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center space-x-3 flex-1">
-                        <div className="w-10 h-10 bg-muted rounded-full" />
-                        <div className="space-y-2">
-                          <div className="h-4 bg-muted rounded w-32" />
-                          <div className="h-3 bg-muted rounded w-20" />
-                        </div>
-                      </div>
-                      <div className="w-8 h-8 bg-muted rounded" />
-                    </div>
-                    <div className="mt-3 space-y-2">
-                      <div className="h-3 bg-muted rounded w-40" />
-                      <div className="h-3 bg-muted rounded w-32" />
-                      <div className="flex justify-between items-center pt-2">
-                        <div className="h-3 bg-muted rounded w-20" />
-                        <div className="h-5 bg-muted rounded-full w-16" />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
-            ) : paginatedPatients.length > 0 ? (
-              paginatedPatients.map((patient: any) => (
-                <PatientCard key={patient.id} patient={patient} />
-              ))
-            ) : (
-              <Card>
-                <CardContent className="py-12 text-center">
-                  <div className="text-muted-foreground">
-                    <UserCheck className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                    <p className="text-lg mb-2">Nenhum paciente encontrado</p>
-                    <p className="text-sm">
-                      {searchTerm || selectedStatus !== "all"
-                        ? "Tente ajustar os filtros de busca"
-                        : "Adicione seu primeiro paciente para começar"
-                      }
-                    </p>
+        <div role="rowgroup" className="divide-y divide-border">
+          {isLoading ? <div role="status" className="p-10 text-center text-sm text-muted-foreground">Carregando pacientes...</div> : visible.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 p-12 text-center"><Users className="h-9 w-9 text-muted-foreground" /><p className="font-medium">{filtered ? 'Nenhum paciente com esses filtros' : 'Sua carteira começa aqui'}</p><p className="text-sm text-muted-foreground">{filtered ? 'Tente outro nome, telefone ou etapa.' : 'Adicione um paciente para iniciar o acompanhamento.'}</p></div>
+          ) : visible.map(patient => {
+            const stage = patientStage(patient.status);
+            const phone = String(patient.whatsappNumber || patient.phone || '').replace(/\D/g, '');
+            const color = stage === 'Acompanhamento' ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300' : stage === 'Anamnese Inicial' ? 'border-sky-400/25 bg-sky-400/10 text-sky-300' : stage === 'Pausado' ? 'border-border bg-muted text-muted-foreground' : 'border-amber-400/25 bg-amber-400/10 text-amber-200';
+            return (
+              <div key={patient.id} role="row" className="grid items-center gap-4 px-5 py-3 transition-colors hover:bg-background/20 sm:grid-cols-2 lg:grid-cols-[minmax(180px,1.2fr)_minmax(150px,1fr)_minmax(160px,1fr)_auto]" data-testid={`patient-row-${patient.id}`}>
+                <div role="cell" className="flex min-w-0 items-center gap-3">
+                  <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/15 bg-primary/5 text-sm font-semibold text-primary">{patient.fullName?.trim().slice(0, 2).toUpperCase() || 'PA'}</span>
+                  <div className="min-w-0"><button onClick={() => onView(patient)} className="block max-w-full truncate text-left text-sm font-semibold hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" title={patient.fullName} data-testid={`patient-name-${patient.id}`}>{patient.fullName}</button>
+                    <p className="mt-1 text-xs text-muted-foreground">{patientPhone(patient.whatsappNumber || patient.phone)}</p>
                   </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        ) : (
-          /* Desktop Table Layout */
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left py-3 px-4 font-medium text-foreground">
-                    Paciente
-                  </th>
-                  <th className="text-left py-3 px-4 font-medium text-foreground">
-                    Contato
-                  </th>
-                  <th className="text-left py-3 px-4 font-medium text-foreground">
-                    Informações
-                  </th>
-                  <th className="text-left py-3 px-4 font-medium text-foreground">
-                    Status
-                  </th>
-                  <th className="text-left py-3 px-4 font-medium text-foreground">
-                    Última interação
-                  </th>
-                  <th className="text-left py-3 px-4 font-medium text-foreground">
-                    Última Consulta
-                  </th>
-                  <th className="text-center py-3 px-4 font-medium text-foreground">
-                    Ações
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {isLoading ? (
-                  // Loading skeleton
-                  Array.from({ length: 5 }).map((_, i) => (
-                    <tr key={i} className="border-b border-border animate-pulse">
-                      <td className="py-4 px-4">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-8 h-8 bg-muted rounded-full" />
-                          <div className="space-y-2">
-                            <div className="h-4 bg-muted rounded w-32" />
-                            <div className="h-3 bg-muted rounded w-24" />
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className="space-y-2">
-                          <div className="h-3 bg-muted rounded w-40" />
-                          <div className="h-3 bg-muted rounded w-32" />
-                        </div>
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className="space-y-2">
-                          <div className="h-3 bg-muted rounded w-20" />
-                          <div className="h-3 bg-muted rounded w-16" />
-                        </div>
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className="h-5 bg-muted rounded-full w-16" />
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className="h-3 bg-muted rounded w-20" />
-                      </td>
-                      <td className="py-4 px-4 text-center">
-                        <div className="h-8 w-8 bg-muted rounded mx-auto" />
-                      </td>
-                    </tr>
-                  ))
-                ) : paginatedPatients.length > 0 ? (
-                  paginatedPatients.map((patient: any) => (
-                    <tr key={patient.id} className="border-b border-border hover:bg-muted/50">
-                      <td className="py-4 px-4">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
-                            <UserCheck className="w-4 h-4 text-primary" />
-                          </div>
-                          <div>
-                            <div className="font-medium text-foreground" data-testid={`patient-name-${patient.id}`}>
-                              {patient.fullName}
-                            </div>
-                            {patient.dateOfBirth && (
-                              <div className="text-sm text-muted-foreground">
-                                {new Date().getFullYear() - new Date(patient.dateOfBirth).getFullYear()} anos
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className="space-y-1">
-                          {patient.email && (
-                            <div className="text-sm text-foreground" data-testid={`patient-email-${patient.id}`}>
-                              {patient.email}
-                            </div>
-                          )}
-                          {patient.phone && (
-                            <div className="text-sm text-muted-foreground" data-testid={`patient-phone-${patient.id}`}>
-                              {patient.phone}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className="space-y-1">
-                          {patient.weight && (
-                            <div className="text-sm text-foreground">
-                              {patient.weight} kg
-                            </div>
-                          )}
-                          {patient.height && (
-                            <div className="text-sm text-muted-foreground">
-                              {patient.height} cm
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-4 px-4">
-                        <Badge 
-                          className={`${getStatusColor(patient.status || 'active')} inline-flex items-center gap-1`}
-                          data-testid={`patient-status-${patient.id}`}
-                        >
-                          {getStatusIcon(patient.status || 'active')}
-                          {getStatusLabel(patient.status || 'active')}
-                        </Badge>
-                      </td>
-                      <td className="py-4 px-4 text-sm text-muted-foreground" data-testid={`last-interaction-${patient.id}`}>
-                        {formatLastInteraction(patient.lastInteractionAt)}
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className="text-sm text-muted-foreground">
-                          {patient.lastConsultation
-                            ? new Date(patient.lastConsultation).toLocaleDateString('pt-BR')
-                            : 'Nunca'
-                          }
-                        </div>
-                      </td>
-                      <td className="py-4 px-4 text-center">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              data-testid={`patient-actions-${patient.id}`}
-                            >
-                              <MoreHorizontal className="w-4 h-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem 
-                              onClick={() => onView(patient)}
-                              data-testid={`view-patient-${patient.id}`}
-                            >
-                              <Eye className="w-4 h-4 mr-2" />
-                              Visualizar
-                            </DropdownMenuItem>
-                            <DropdownMenuItem 
-                              onClick={() => onEdit(patient)}
-                              data-testid={`edit-patient-${patient.id}`}
-                            >
-                              <Edit className="w-4 h-4 mr-2" />
-                              Editar
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem 
-                              onClick={() => onDelete(patient.id, patient.fullName)}
-                              className="text-destructive focus:text-destructive"
-                              data-testid={`delete-patient-${patient.id}`}
-                            >
-                              <Trash2 className="w-4 h-4 mr-2" />
-                              Remover
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={7} className="py-12 text-center">
-                      <div className="text-muted-foreground">
-                        <UserCheck className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                        <p className="text-lg mb-2">Nenhum paciente encontrado</p>
-                        <p className="text-sm">
-                          {searchTerm || selectedStatus !== "all"
-                            ? "Tente ajustar os filtros de busca"
-                            : "Adicione seu primeiro paciente para começar"
-                          }
-                        </p>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between mt-6">
-            <div className="text-sm text-muted-foreground">
-              Mostrando {startIndex + 1} a {Math.min(startIndex + itemsPerPage, patients.length)} de {patients.length} pacientes
-            </div>
-            <div className="flex items-center space-x-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-                data-testid="previous-page-patients"
-              >
-                Anterior
-              </Button>
-              <div className="flex items-center space-x-1">
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                  <Button
-                    key={page}
-                    variant={currentPage === page ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setCurrentPage(page)}
-                    className="w-8 h-8 p-0"
-                    data-testid={`page-${page}-patients`}
-                  >
-                    {page}
-                  </Button>
-                ))}
+                </div>
+                <div role="cell"><span className={`inline-flex max-w-full rounded-full border px-2.5 py-1 text-xs font-medium ${color}`} data-testid={`patient-status-${patient.id}`}>{stage}</span></div>
+                <div role="cell" data-testid={`last-interaction-${patient.id}`}><p className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground lg:hidden">Última interação</p><p className="text-xs text-foreground/80">{formatLastInteraction(patient.lastInteractionAt)}</p><p className="mt-1 text-[11px] text-muted-foreground">{patient.lastInteractionAt ? 'Mensagem no WhatsApp' : 'Ainda sem histórico de mensagens'}</p></div>
+                <div role="cell" className="flex flex-wrap items-center gap-2 sm:justify-end lg:w-[260px]">
+                  <Button size="sm" variant="outline" className="gap-1.5 border-primary/25 text-primary hover:bg-primary/10" onClick={() => onView(patient, 'conversation')} data-testid={`conversation-patient-${patient.id}`}><MessageSquare className="h-3.5 w-3.5" />Conversa</Button>
+                  <Button size="sm" variant="ghost" className="gap-1.5" onClick={() => onView(patient)} data-testid={`view-patient-${patient.id}`}><FileText className="h-3.5 w-3.5" />Ficha</Button>
+                  <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" aria-label={`Mais ações para ${patient.fullName}`} data-testid={`patient-actions-${patient.id}`}><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {/^\d{10,15}$/.test(phone) && <DropdownMenuItem asChild><a href={`https://wa.me/${phone.length <= 11 ? '55' : ''}${phone}`} target="_blank" rel="noopener noreferrer"><Phone className="mr-2 h-4 w-4" />Abrir WhatsApp</a></DropdownMenuItem>}
+                      <DropdownMenuItem onClick={() => onEdit(patient)} data-testid={`edit-patient-${patient.id}`}><Pencil className="mr-2 h-4 w-4" />Editar cadastro</DropdownMenuItem>
+                      <DropdownMenuSeparator /><DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(patient.id, patient.fullName)} data-testid={`delete-patient-${patient.id}`}><Trash2 className="mr-2 h-4 w-4" />Remover paciente</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-                data-testid="next-page-patients"
-              >
-                Próxima
-              </Button>
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+            );
+          })}
+        </div>
+      </div>
+      {pages > 1 && <div className="flex items-center justify-between gap-3 border-t border-border p-4 text-xs text-muted-foreground"><span>Página {current} de {pages}</span><div className="flex gap-2"><Button variant="outline" size="sm" disabled={current === 1} onClick={() => setPage(current - 1)}>Anterior</Button><Button variant="outline" size="sm" disabled={current === pages} onClick={() => setPage(current + 1)}>Próxima</Button></div></div>}
+    </section>
   );
 }
