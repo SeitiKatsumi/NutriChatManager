@@ -711,7 +711,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/messages/patient/:patientId", requireAuth, requireActiveSubscription, async (req, res) => {
     try {
       const { patientId } = req.params;
-      const limit = req.query.limit ? parseInt(req.query.limit as string) : 200;
+      if (!/^\d+$/.test(patientId)) {
+        return res.status(400).json({ error: "Invalid patient ID" });
+      }
+      const limit = req.query.limit === undefined ? 200 : Number(req.query.limit);
+      if (!Number.isInteger(limit) || (limit !== -1 && (limit < 1 || limit > 1000))) {
+        return res.status(400).json({ error: "Invalid message limit" });
+      }
+      const patient = await storage.getPatient(patientId, req.session.user.accessToken);
+      if (!patient) return res.status(404).json({ error: "Patient not found" });
+      if (patient.nutritionistId !== req.session.user.nutritionistId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      res.set('Cache-Control', 'no-store');
       
       console.log(`[API] Getting messages for patient ${patientId}, limit: ${limit}`);
       

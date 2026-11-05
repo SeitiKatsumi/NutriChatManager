@@ -21,6 +21,7 @@ import {
 import { Patient } from "@shared/schema";
 import AIInsights from "./ai-insights";
 import PatientSchedules from "./patient-schedules";
+import PatientConversation from "./patient-conversation";
 
 interface PatientDetailsDialogProps {
   isOpen: boolean;
@@ -79,11 +80,15 @@ export default function PatientDetailsDialog({
           </DialogTitle>
         </DialogHeader>
 
-        <Tabs defaultValue="info" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="info" className="gap-2">
-              <UserCheck className="h-4 w-4" />
+        <Tabs key={patient.id} defaultValue="info" className="w-full">
+          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4">
+            <TabsTrigger value="info" className="gap-2 px-2">
+              <UserCheck className="h-4 w-4 shrink-0" />
               Informações
+            </TabsTrigger>
+            <TabsTrigger value="conversation" className="gap-2 px-2" data-testid="patient-tab-conversation">
+              <MessageSquare className="h-4 w-4 shrink-0" />
+              Conversa
             </TabsTrigger>
             <TabsTrigger value="schedules" className="gap-2">
               <CalendarClock className="h-4 w-4" />
@@ -325,6 +330,10 @@ export default function PatientDetailsDialog({
               Última consulta: {formatDate(patient.lastConsultation)}
             </div>
           )}
+          </TabsContent>
+
+          <TabsContent value="conversation" className="mt-6">
+            <PatientConversation key={patient.id} patientId={String(patient.id)} patientName={patient.fullName} />
           </TabsContent>
 
           <TabsContent value="schedules" className="mt-6">

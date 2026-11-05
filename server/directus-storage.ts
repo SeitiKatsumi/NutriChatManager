@@ -1486,7 +1486,7 @@ export class DirectusStorage implements IStorage {
       console.log(`[DirectusStorage] Getting messages for patient ${patientId}, limit: ${limit}`);
       
       const response = await this.client.request(
-        `/items/whatsapp_messages?filter[patient_id][_eq]=${patientId}&sort=-date_created&limit=${limit}`
+        `/items/whatsapp_messages?filter[patient_id][_eq]=${encodeURIComponent(patientId)}&sort=-date_created,-id&limit=${limit}`
       );
 
       const messages = response.data || [];
