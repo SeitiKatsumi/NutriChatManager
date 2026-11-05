@@ -682,6 +682,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         messageBody: inbound.body || (inbound.media.length ? `[${inbound.messageType}]` : ''),
         messageType: inbound.messageType,
         imageBuffer,
+        audioMedia: inbound.messageType === 'audio' ? inbound.media[0] : undefined,
       }).catch(err => {
         console.error('[Twilio Webhook] Error in async message handler:', err);
       });

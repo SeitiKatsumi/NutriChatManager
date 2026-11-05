@@ -8,7 +8,7 @@ const { outputFiles } = await build({
   bundle: true, write: false, platform: 'node', format: 'esm',
   plugins: [{ name: 'offline-openai', setup(b) {
     b.onResolve({ filter: /^openai$/ }, () => ({ path: 'openai', namespace: 'offline' }));
-    b.onLoad({ filter: /.*/, namespace: 'offline' }, () => ({ contents: `export default class OpenAI {
+    b.onLoad({ filter: /.*/, namespace: 'offline' }, () => ({ contents: `export async function toFile() { throw new Error('Audio is tested separately'); } export default class OpenAI {
       chat = { completions: { create: async (request) => {
         globalThis.lunaTestCalls.push(request);
         return { choices: [{ message: { content: request.response_format ? '{}' : 'Resposta sintética de teste.' } }] };

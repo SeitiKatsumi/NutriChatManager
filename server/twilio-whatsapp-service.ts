@@ -36,8 +36,9 @@ function cleanWhatsAppNumber(value: string): string {
 
 function inferMessageType(contentType: string | undefined): MessageType {
   if (!contentType) return "text";
+  contentType = contentType.split(';')[0].trim().toLowerCase();
   if (contentType.startsWith("image/")) return "image";
-  if (contentType.startsWith("audio/")) return "audio";
+  if (contentType.startsWith("audio/") || contentType === "application/ogg") return "audio";
   if (contentType.startsWith("video/")) return "video";
   return "document";
 }
@@ -147,11 +148,16 @@ export class TwilioWhatsAppService {
   }
 
   async downloadMedia(mediaUrl: string): Promise<Buffer> {
+    const url = new URL(mediaUrl);
+    if (url.protocol !== 'https:' || !(url.hostname === 'api.twilio.com' || url.hostname.endsWith('.twilio.com'))) {
+      throw new Error('Invalid Twilio media URL');
+    }
     if (!this.accountSid || !this.authToken) {
       throw new Error("Twilio credentials are not configured");
     }
 
     const response = await fetch(mediaUrl, {
+      signal: AbortSignal.timeout(30000),
       headers: {
         Authorization: `Basic ${Buffer.from(`${this.accountSid}:${this.authToken}`).toString("base64")}`,
       },
@@ -161,7 +167,25 @@ export class TwilioWhatsAppService {
       throw new Error(`Failed to download Twilio media (${response.status})`);
     }
 
-    return Buffer.from(await response.arrayBuffer());
+    const maxBytes = 25 * 1024 * 1024;
+    if (Number(response.headers.get('content-length')) > maxBytes || !response.body) {
+      throw new Error('Twilio media is empty or exceeds 25 MB');
+    }
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    const reader = response.body.getReader();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.length;
+      if (size > maxBytes) {
+        await reader.cancel();
+        throw new Error('Twilio media exceeds 25 MB');
+      }
+      chunks.push(value);
+    }
+    if (!size) throw new Error('Twilio media is empty');
+    return Buffer.concat(chunks);
   }
 
   async sendWhatsAppText(to: string, text: string, options: TwilioSendOptions = {}) {

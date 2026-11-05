@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import OpenAI, { toFile } from "openai";
 import { ProcessedMessage } from './patient-history-directus';
 import { getAIConfig, getCompletionOptions } from './ai-config-store';
 
@@ -20,6 +20,28 @@ export interface AIResponse {
 }
 
 export class OpenAIService {
+  async transcribeAudio(audio: Buffer, contentType: string): Promise<string> {
+    if (!audio.length || audio.length > 25 * 1024 * 1024) {
+      throw new Error('Áudio vazio ou maior que 25 MB.');
+    }
+    const mime = contentType.split(';')[0].trim().toLowerCase();
+    const extensions: Record<string, string> = {
+      'audio/ogg': 'ogg', 'application/ogg': 'ogg', 'audio/mpeg': 'mp3',
+      'audio/mp3': 'mp3', 'audio/mp4': 'm4a', 'audio/m4a': 'm4a',
+      'audio/x-m4a': 'm4a', 'audio/wav': 'wav', 'audio/x-wav': 'wav',
+      'audio/webm': 'webm', 'audio/flac': 'flac', 'audio/x-flac': 'flac',
+    };
+    const extension = extensions[mime];
+    if (!extension) throw new Error('Formato de áudio não suportado para transcrição.');
+    const result = await openai.audio.transcriptions.create({
+      model: 'gpt-transcribe',
+      file: await toFile(audio, `whatsapp-audio.${extension}`, { type: mime }),
+      response_format: 'json',
+    }, { timeout: 60000, maxRetries: 1 });
+    const text = result.text.trim();
+    if (!text) throw new Error('Não foi possível identificar fala no áudio.');
+    return text;
+  }
   
   async askAboutPatient(
     messages: ProcessedMessage[],

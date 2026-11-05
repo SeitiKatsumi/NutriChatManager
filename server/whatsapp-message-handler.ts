@@ -1,6 +1,6 @@
 import { storage } from './storage';
 import { openaiService } from './openai-service';
-import { twilioWhatsAppService } from './twilio-whatsapp-service';
+import { twilioWhatsAppService, type TwilioInboundMedia } from './twilio-whatsapp-service';
 import type { Patient, WhatsappMessage } from '@shared/schema';
 import { randomUUID } from 'crypto';
 import { SINGLE_NUTRITIONIST_ID } from '@shared/clinic-mode';
@@ -24,6 +24,7 @@ export interface IncomingWhatsAppMessage {
   messageBody: string;
   messageType: 'text' | 'image' | 'audio' | 'video' | 'document';
   imageBuffer?: Buffer;
+  audioMedia?: TwilioInboundMedia;
   timestamp?: number;
 }
 
@@ -86,7 +87,7 @@ export class WhatsAppMessageHandler {
   }
 
   async handleIncomingMessage(message: IncomingWhatsAppMessage): Promise<void> {
-    const { instanceName, senderNumber, messageBody, messageType, imageBuffer } = message;
+    const { instanceName, senderNumber, messageBody, messageType, imageBuffer, audioMedia } = message;
     const channelIdentity = instanceName || 'twilio-global-whatsapp';
 
     console.log(`[MessageHandler] Processing message from ${senderNumber} via ${channelIdentity}`);
@@ -112,7 +113,7 @@ export class WhatsAppMessageHandler {
       const lockKey = `${nutritionistId}:${cleanNumber}`;
 
       await this.withPatientLock(lockKey, async () => {
-        await this.processMessage(nutritionist, cleanNumber, channelIdentity, messageBody, messageType, imageBuffer, resolvedPatient);
+        await this.processMessage(nutritionist, cleanNumber, channelIdentity, messageBody, messageType, imageBuffer, resolvedPatient, audioMedia);
       });
 
     } catch (error) {
@@ -127,7 +128,8 @@ export class WhatsAppMessageHandler {
     messageBody: string,
     messageType: 'text' | 'image' | 'audio' | 'video' | 'document',
     imageBuffer?: Buffer,
-    resolvedPatient?: Patient
+    resolvedPatient?: Patient,
+    audioMedia?: TwilioInboundMedia
   ): Promise<void> {
       const nutritionistId = nutritionist.id;
 
@@ -166,6 +168,16 @@ export class WhatsAppMessageHandler {
       }
 
       let aiResponse: string;
+      let transcript: string | undefined;
+      if (messageType === 'audio' && audioMedia) {
+        try {
+          const audio = await twilioWhatsAppService.downloadMedia(audioMedia.url);
+          transcript = await openaiService.transcribeAudio(audio, audioMedia.contentType);
+        } catch (error) {
+          console.error('[MessageHandler] Audio transcription failed:', error instanceof Error ? error.message : 'Unknown error');
+        }
+      }
+      const patientMessage = transcript || messageBody;
 
       if (messageType === 'image' && imageBuffer) {
         console.log(`[MessageHandler] Processing food image for patient ${activePatient.id}`);
@@ -189,24 +201,24 @@ export class WhatsAppMessageHandler {
           message_type: 'image',
         });
         aiResponse = 'Recebi sua imagem, mas não consegui processá-la. Pode tentar enviar novamente?';
-      } else if (messageType === 'audio') {
+      } else if (messageType === 'audio' && !transcript) {
         await storage.saveWhatsappMessage({
           patient_id: activePatient.id,
           message_body: '[Áudio]',
           from_me: false,
           message_type: 'audio',
         });
-        aiResponse = 'Desculpe, ainda não consigo processar áudios. Pode enviar sua mensagem em texto? 😊';
+        aiResponse = 'Não consegui entender este áudio. Pode reenviar uma gravação mais clara ou enviar a mensagem em texto?';
       } else {
         const conversationHistory = await this.buildConversationHistory(activePatient.id);
 
         await storage.saveWhatsappMessage({
           patient_id: activePatient.id,
-          message_body: messageBody || `[${messageType}]`,
+          message_body: transcript ? `[Áudio transcrito]\n${transcript}` : messageBody || `[${messageType}]`,
           from_me: false,
           message_type: messageType,
         });
-        this.addToCache(activePatient.id, 'user', messageBody || `[${messageType}]`);
+        this.addToCache(activePatient.id, 'user', patientMessage || `[${messageType}]`);
 
         let etapas = activePatient.status || '';
         const cachedStage = this.patientStageCache.get(activePatient.id);
@@ -223,7 +235,7 @@ export class WhatsAppMessageHandler {
           aiResponse = await this.handleAnamnesis(
             activePatient,
             conversationHistory,
-            messageBody,
+            patientMessage,
             isNewPatient,
             agentName,
             customGreeting
@@ -232,7 +244,7 @@ export class WhatsAppMessageHandler {
           aiResponse = await this.handleFollowUp(
             activePatient,
             conversationHistory,
-            messageBody,
+            patientMessage,
             agentName
           );
         }
