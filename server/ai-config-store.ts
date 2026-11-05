@@ -1,5 +1,7 @@
 export type AgentType = 'anamnesis' | 'followup' | 'extraction' | 'mealplan' | 'insights' | 'food_analysis' | 'ask_patient';
 
+import type { ReasoningEffort } from 'openai/resources/shared';
+
 export interface AIConfigData {
   agent_type: AgentType;
   system_prompt: string;
@@ -7,6 +9,15 @@ export interface AIConfigData {
   max_tokens: number;
   temperature: number;
   updated_at: Date;
+}
+
+export function getCompletionOptions(config: AIConfigData) {
+  const { model, temperature, max_tokens } = config;
+  // ponytail: preserve response budgets and latency without extra reasoning tokens.
+  return model === 'gpt-6-luna'
+    // SDK 5.20 predates 'none'; the current API accepts it (verified by a live request).
+    ? { model, temperature, reasoning_effort: 'none' as ReasoningEffort, max_completion_tokens: max_tokens }
+    : { model, temperature, max_tokens };
 }
 
 const DEFAULT_CONFIGS: Record<AgentType, { system_prompt: string; model: string; max_tokens: number; temperature: number }> = {
@@ -98,7 +109,7 @@ Mensagem de finalização:
 "Perfeito! Obrigado por compartilhar tudo com tanta sinceridade. Agora o nutricionista vai analisar essas informações para montar algo que combine com você. Qualquer coisa, tô por aqui!
 
 Se quiser falar com a equipe da clínica, é só mandar uma mensagem por aqui: https://wa.me/5527999742520"`,
-    model: 'gpt-4o-mini',
+    model: 'gpt-6-luna',
     max_tokens: 500,
     temperature: 0.7,
   },
@@ -120,7 +131,7 @@ Quando o assunto envolver nutrição:
 4. Se algo exigir prescrição ou diagnóstico clínico, oriente o paciente a procurar um profissional de saúde.
 
 Fora isso? Seja você mesmo: ágil nas respostas, envolvente nas conversas, e sem enrolação.`,
-    model: 'gpt-4o-mini',
+    model: 'gpt-6-luna',
     max_tokens: 500,
     temperature: 0.7,
   },
@@ -153,7 +164,7 @@ Extraia os seguintes campos (use null se não encontrado):
 - Ceia: alimentos detalhados e organizados com quantidades
 
 Responda APENAS com o JSON, sem explicações.`,
-    model: 'gpt-4o-mini',
+    model: 'gpt-6-luna',
     max_tokens: 1500,
     temperature: 0.1,
   },
@@ -179,7 +190,7 @@ FORMATO DE RESPOSTA (JSON) — cada refeição deve ser um array com EXATAMENTE 
   "eveningSnack": ["Opção 1: ...", "Opção 2: ...", "Opção 3: ..."],
   "generalNotes": "Observações gerais, dicas de hidratação e suplementação"
 }`,
-    model: 'gpt-4o-mini',
+    model: 'gpt-6-luna',
     max_tokens: 2500,
     temperature: 0.7,
   },
@@ -193,7 +204,7 @@ Responda em JSON com:
   "patientMood": "positive|neutral|negative|mixed",
   "recommendations": ["recomendação1", "recomendação2"]
 }`,
-    model: 'gpt-4o-mini',
+    model: 'gpt-6-luna',
     max_tokens: 800,
     temperature: 0.3,
   },
@@ -207,7 +218,7 @@ Responda em JSON com:
 
 Responda sempre em português brasileiro de forma clara e objetiva. Use um tom amigável.
 Se a imagem não contiver comida, diga isso educadamente.`,
-    model: 'gpt-4o-mini',
+    model: 'gpt-6-luna',
     max_tokens: 800,
     temperature: 0.3,
   },
@@ -227,7 +238,7 @@ FORMATO DA RESPOSTA:
 - Seja conciso mas completo
 - Destaque padrões importantes
 - Inclua recomendações quando apropriado`,
-    model: 'gpt-4o-mini',
+    model: 'gpt-6-luna',
     max_tokens: 800,
     temperature: 0.3,
   },
@@ -317,6 +328,7 @@ export function getAgentTypeLabel(agentType: AgentType): string {
 export const VALID_AGENT_TYPES: AgentType[] = ['anamnesis', 'followup', 'extraction', 'mealplan', 'insights', 'food_analysis', 'ask_patient'];
 
 export const AVAILABLE_MODELS = [
+  'gpt-6-luna',
   'gpt-4o-mini',
   'gpt-4o',
   'gpt-4.1',

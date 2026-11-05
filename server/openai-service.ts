@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import { ProcessedMessage } from './patient-history-directus';
-import { getAIConfig } from './ai-config-store';
+import { getAIConfig, getCompletionOptions } from './ai-config-store';
 
 if (!process.env.OPENAI_API_KEY) {
   console.warn('[OpenAI Service] OPENAI_API_KEY not found in environment variables');
@@ -49,13 +49,11 @@ PERGUNTA: ${question}
 Por favor, analise a conversa e responda à pergunta fornecendo insights úteis para o nutricionista.`;
 
       const response = await openai.chat.completions.create({
-        model: config.model,
+        ...getCompletionOptions(config),
         messages: [
           { role: "system", content: config.system_prompt },
           { role: "user", content: userPrompt }
-        ],
-        temperature: config.temperature,
-        max_tokens: config.max_tokens
+        ]
       });
 
       const answer = response.choices[0].message.content || "Desculpe, não consegui processar sua pergunta.";
@@ -129,11 +127,9 @@ CONVERSA:
 ${conversationText}`;
 
       const response = await openai.chat.completions.create({
-        model: config.model,
+        ...getCompletionOptions(config),
         messages: [{ role: "user", content: prompt }],
-        response_format: { type: "json_object" },
-        temperature: config.temperature,
-        max_tokens: config.max_tokens
+        response_format: { type: "json_object" }
       });
 
       const result = JSON.parse(response.choices[0].message.content || '{}');
@@ -228,14 +224,12 @@ ${currentMealsInfo}
 Por favor, crie uma sugestão de plano alimentar personalizado com 3 opções por refeição para este paciente, considerando todas as informações fornecidas, especialmente seus objetivos, gostos e desgostos mencionados nas conversas.`;
 
       const response = await openai.chat.completions.create({
-        model: config.model,
+        ...getCompletionOptions(config),
         messages: [
           { role: "system", content: config.system_prompt },
           { role: "user", content: userPrompt }
         ],
-        response_format: { type: "json_object" },
-        temperature: config.temperature,
-        max_tokens: config.max_tokens
+        response_format: { type: "json_object" }
       });
 
       const result = JSON.parse(response.choices[0].message.content || '{}');
@@ -286,10 +280,8 @@ Por favor, crie uma sugestão de plano alimentar personalizado com 3 opções po
       }
 
       const completion = await openai.chat.completions.create({
-        model: config.model,
-        messages,
-        temperature: config.temperature,
-        max_tokens: config.max_tokens
+        ...getCompletionOptions(config),
+        messages
       });
 
       const responseText = completion.choices[0].message.content || '';
@@ -328,14 +320,12 @@ Por favor, crie uma sugestão de plano alimentar personalizado com 3 opções po
       const config = await getAIConfig('extraction');
 
       const completion = await openai.chat.completions.create({
-        model: config.model,
+        ...getCompletionOptions(config),
         messages: [
           { role: 'system', content: config.system_prompt },
           { role: 'user', content: conversationText }
         ],
-        response_format: { type: 'json_object' },
-        temperature: config.temperature,
-        max_tokens: config.max_tokens
+        response_format: { type: 'json_object' }
       });
 
       const result = JSON.parse(completion.choices[0].message.content || '{}');
@@ -381,10 +371,8 @@ DADOS DO PACIENTE:
       ];
 
       const completion = await openai.chat.completions.create({
-        model: config.model,
-        messages,
-        temperature: config.temperature,
-        max_tokens: config.max_tokens
+        ...getCompletionOptions(config),
+        messages
       });
 
       return completion.choices[0].message.content || 'Desculpe, não consegui processar sua mensagem.';
@@ -401,7 +389,7 @@ DADOS DO PACIENTE:
       const dataUrl = `data:image/jpeg;base64,${base64Image}`;
 
       const completion = await openai.chat.completions.create({
-        model: config.model,
+        ...getCompletionOptions(config),
         messages: [
           {
             role: 'system',
@@ -425,9 +413,7 @@ DADOS DO PACIENTE:
               { type: 'image_url', image_url: { url: dataUrl, detail: 'high' } }
             ]
           }
-        ],
-        max_tokens: config.max_tokens,
-        temperature: config.temperature
+        ]
       });
 
       return completion.choices[0].message.content || 'Não foi possível analisar a imagem.';
