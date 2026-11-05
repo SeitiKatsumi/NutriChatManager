@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Users, ClipboardList, Activity, MessageSquare, RefreshCw } from "lucide-react";
+import { Plus, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -81,12 +81,6 @@ export default function Patients() {
 
   const filteredPatients = patients.filter(patient => matchesPatient(patient, searchTerm, selectedStatus));
   const stages = Array.from(new Set(patients.map(patient => patientStage(patient.status)))).sort((a, b) => a.localeCompare(b, 'pt-BR'));
-  const summaries = [
-    {label:'Todos os pacientes', value:'all', count:patients.length, icon:Users, note:'Sua carteira completa'},
-    {label:'Anamnese inicial', value:'Anamnese Inicial', count:patients.filter(p=>patientStage(p.status)==='Anamnese Inicial').length, icon:ClipboardList, note:'Coleta de informações'},
-    {label:'Em acompanhamento', value:'Acompanhamento', count:patients.filter(p=>patientStage(p.status)==='Acompanhamento').length, icon:Activity, note:'Evolução e rotina alimentar'},
-    {label:'Sem conversa', value:'__no_interaction', count:patients.filter(p=>!p.lastInteractionAt).length, icon:MessageSquare, note:'Nenhuma interação registrada'},
-  ];
 
   return (
     <main className="p-6">
@@ -109,14 +103,6 @@ export default function Patients() {
 
 
 
-        <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {summaries.map(item => { const selected = (selectedStatus || 'all') === item.value; return (
-            <button key={item.value} onClick={() => setSelectedStatus(item.value)} aria-pressed={selected} className={`rounded-xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? 'border-primary/45 bg-primary/5' : 'border-border bg-card hover:border-primary/30'}`}>
-              <div className="flex items-center justify-between gap-2"><span className="text-xs text-muted-foreground">{item.label}</span><item.icon aria-hidden="true" className={`h-4 w-4 ${selected ? 'text-primary' : 'text-muted-foreground'}`} /></div>
-              <p className="mt-3 text-2xl font-semibold tracking-tight">{isLoading ? '—' : item.count}</p><p className="mt-1 text-[11px] text-muted-foreground">{item.note}</p>
-            </button>
-          ); })}
-        </div>
         {error && <div role="alert" className="mb-4 rounded-lg border border-destructive/40 p-4 text-sm">Não foi possível carregar os pacientes. Use Atualizar para tentar novamente.</div>}
         <PatientsTable
           patients={filteredPatients}
