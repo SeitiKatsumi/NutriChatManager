@@ -55,11 +55,11 @@ export default function PatientsTable({ patients, totalCount, stages, isLoading,
           ) : visible.map(patient => {
             const stage = patientStage(patient.status);
             const phone = String(patient.whatsappNumber || patient.phone || '').replace(/\D/g, '');
-            const color = 'border-border bg-background/30 text-foreground/80';
+            const color = stage === 'Acompanhamento' ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300' : stage === 'Anamnese Inicial' ? 'border-sky-400/25 bg-sky-400/10 text-sky-300' : stage === 'Pausado' ? 'border-border bg-muted text-muted-foreground' : 'border-amber-400/25 bg-amber-400/10 text-amber-200';
             return (
               <div key={patient.id} role="row" className="grid items-center gap-4 px-5 py-3 transition-colors hover:bg-background/20 sm:grid-cols-2 lg:grid-cols-[minmax(180px,1.2fr)_minmax(150px,1fr)_minmax(160px,1fr)_auto]" data-testid={`patient-row-${patient.id}`}>
                 <div role="cell" className="flex min-w-0 items-center gap-3">
-                  <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-background/40 text-sm font-semibold text-muted-foreground">{patient.fullName?.trim().slice(0, 2).toUpperCase() || 'PA'}</span>
+                  <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/15 bg-primary/5 text-sm font-semibold text-primary">{patient.fullName?.trim().slice(0, 2).toUpperCase() || 'PA'}</span>
                   <div className="min-w-0"><button onClick={() => onView(patient)} className="block max-w-full truncate text-left text-sm font-semibold hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" title={patient.fullName} data-testid={`patient-name-${patient.id}`}>{patient.fullName}</button>
                     <p className="mt-1 text-xs text-muted-foreground">{patientPhone(patient.whatsappNumber || patient.phone)}</p>
                   </div>
@@ -67,7 +67,7 @@ export default function PatientsTable({ patients, totalCount, stages, isLoading,
                 <div role="cell"><span className={`inline-flex max-w-full rounded-full border px-2.5 py-1 text-xs font-medium ${color}`} data-testid={`patient-status-${patient.id}`}>{stage}</span></div>
                 <div role="cell" data-testid={`last-interaction-${patient.id}`}><p className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground lg:hidden">Última interação</p><p className="text-xs text-foreground/80">{formatLastInteraction(patient.lastInteractionAt)}</p><p className="mt-1 text-[11px] text-muted-foreground">{patient.lastInteractionAt ? 'Mensagem no WhatsApp' : 'Ainda sem histórico de mensagens'}</p></div>
                 <div role="cell" className="flex flex-wrap items-center gap-2 sm:justify-end lg:w-[260px]">
-                  <Button size="sm" variant="outline" className="gap-1.5 border-border text-foreground/90 hover:bg-background/40" onClick={() => onView(patient, 'conversation')} data-testid={`conversation-patient-${patient.id}`}><MessageSquare className="h-3.5 w-3.5" />Conversa</Button>
+                  <Button size="sm" variant="outline" className="gap-1.5 border-primary/25 text-primary hover:bg-primary/10" onClick={() => onView(patient, 'conversation')} data-testid={`conversation-patient-${patient.id}`}><MessageSquare className="h-3.5 w-3.5" />Conversa</Button>
                   <Button size="sm" variant="ghost" className="gap-1.5" onClick={() => onView(patient)} data-testid={`view-patient-${patient.id}`}><FileText className="h-3.5 w-3.5" />Ficha</Button>
                   <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8" aria-label={`Mais ações para ${patient.fullName}`} data-testid={`patient-actions-${patient.id}`}><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
