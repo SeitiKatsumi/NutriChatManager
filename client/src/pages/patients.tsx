@@ -20,6 +20,8 @@ export default function Patients() {
 
   const { data: patients = [], isLoading, error } = useQuery<any[]>({
     queryKey: ["/api/patients"],
+    staleTime: 0,
+    refetchInterval: 15000,
   });
 
 

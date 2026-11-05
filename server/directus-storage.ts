@@ -927,7 +927,14 @@ export class DirectusStorage implements IStorage {
       const response = await client.request(`/items/${PATIENTS_COLLECTION}?filter[Nutricionista_responsavel][_eq]=${encodedId}&fields=${fields}`);
       const patients = response.data || [];
       console.log(`[Directus] Found ${patients.length} patients for nutritionist`);
-      return patients.map(transformPatientFromDirectus);
+      if (!patients.length) return [];
+      const ids = patients.map((patient: any) => patient.id).join(',');
+      const history = await client.request(`/items/whatsapp_messages?aggregate[max]=date_created&groupBy[]=patient_id&filter[patient_id][_in]=${encodeURIComponent(ids)}&limit=-1`);
+      const lastInteractions = new Map((history.data || []).map((row: any) => [String(row.patient_id), row.max?.date_created || null]));
+      return patients.map((patient: any) => ({
+        ...transformPatientFromDirectus(patient),
+        lastInteractionAt: lastInteractions.get(String(patient.id)) || null,
+      }));
     } catch (error: any) {
       console.error('Error getting patients by nutritionist:', error);
       console.error('Error details:', {

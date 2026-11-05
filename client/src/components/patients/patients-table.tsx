@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { sortPatients, formatLastInteraction } from "@/lib/patient-order";
 import { 
   Search, 
   Trash2, 
@@ -57,6 +58,8 @@ export default function PatientsTable({
   onView,
 }: PatientsTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
+  const [sortOrder, setSortOrder] = useState('interaction-desc');
+  useEffect(() => { setCurrentPage(1); }, [sortOrder, searchTerm, selectedStatus]);
   const itemsPerPage = 10;
   const isMobile = useIsMobile();
 
@@ -96,8 +99,8 @@ export default function PatientsTable({
   };
 
   const totalPages = Math.ceil(patients.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedPatients = patients.slice(startIndex, startIndex + itemsPerPage);
+  const startIndex = (Math.min(currentPage, Math.max(1, totalPages)) - 1) * itemsPerPage;
+  const paginatedPatients = sortPatients(patients, sortOrder).slice(startIndex, startIndex + itemsPerPage);
 
   // Mobile Patient Card Component
   const PatientCard = ({ patient }: { patient: any }) => (
@@ -201,6 +204,9 @@ export default function PatientsTable({
           </div>
           
           {/* Last Consultation */}
+          <div className="text-xs text-muted-foreground pt-1" data-testid={`last-interaction-${patient.id}`}>
+            Última interação: {formatLastInteraction(patient.lastInteractionAt)}
+          </div>
           <div className="text-xs text-muted-foreground pt-1">
             Última consulta: {patient.lastConsultation 
               ? new Date(patient.lastConsultation).toLocaleDateString('pt-BR')
@@ -216,8 +222,8 @@ export default function PatientsTable({
     <Card>
       <CardContent className="p-6">
         {/* Filters */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 space-y-4 md:space-y-0">
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+          <div className="flex w-full flex-wrap items-center gap-3 lg:w-auto">
             <div className="relative">
               <Input
                 placeholder="Buscar por nome, email ou telefone..."
@@ -239,6 +245,17 @@ export default function PatientsTable({
                 <SelectItem value="completed">Concluídos</SelectItem>
               </SelectContent>
             </Select>
+            <label className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+              Ordenar por
+              <select aria-label="Ordenar pacientes por" value={sortOrder} onChange={event => setSortOrder(event.target.value)} className="h-10 max-w-full rounded-md border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" data-testid="select-patient-order">
+                <option value="interaction-desc">Última interação: mais recente</option>
+                <option value="interaction-asc">Última interação: mais antiga</option>
+                <option value="name-asc">Nome: A–Z</option>
+                <option value="name-desc">Nome: Z–A</option>
+                <option value="created-desc">Cadastro: mais recente</option>
+                <option value="created-asc">Cadastro: mais antigo</option>
+              </select>
+            </label>
           </div>
           <div className="text-sm text-muted-foreground">
             {patients.length} paciente(s) total
@@ -313,6 +330,9 @@ export default function PatientsTable({
                   </th>
                   <th className="text-left py-3 px-4 font-medium text-foreground">
                     Status
+                  </th>
+                  <th className="text-left py-3 px-4 font-medium text-foreground">
+                    Última interação
                   </th>
                   <th className="text-left py-3 px-4 font-medium text-foreground">
                     Última Consulta
@@ -416,9 +436,12 @@ export default function PatientsTable({
                           {getStatusLabel(patient.status || 'active')}
                         </Badge>
                       </td>
+                      <td className="py-4 px-4 text-sm text-muted-foreground" data-testid={`last-interaction-${patient.id}`}>
+                        {formatLastInteraction(patient.lastInteractionAt)}
+                      </td>
                       <td className="py-4 px-4">
                         <div className="text-sm text-muted-foreground">
-                          {patient.lastConsultation 
+                          {patient.lastConsultation
                             ? new Date(patient.lastConsultation).toLocaleDateString('pt-BR')
                             : 'Nunca'
                           }
@@ -466,7 +489,7 @@ export default function PatientsTable({
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center">
+                    <td colSpan={7} className="py-12 text-center">
                       <div className="text-muted-foreground">
                         <UserCheck className="w-12 h-12 mx-auto mb-4 opacity-50" />
                         <p className="text-lg mb-2">Nenhum paciente encontrado</p>
