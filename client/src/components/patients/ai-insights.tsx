@@ -199,7 +199,7 @@ export default function AIInsights({ patient }: AIInsightsProps) {
           {insights && !loadingInsights && (
             <div className="flex items-center gap-2">
               {insights.cached && (
-                <Badge variant="outline" className="text-xs bg-blue-50 dark:bg-blue-950 text-[#595959] dark:text-blue-200" data-testid="cache-indicator">
+                <Badge variant="outline" className="text-xs bg-muted text-foreground" data-testid="cache-indicator">
                   <Clock className="w-3 h-3 mr-1" />
                   Cache ({insights.cacheAge || 0} min)
                 </Badge>
@@ -360,10 +360,10 @@ export default function AIInsights({ patient }: AIInsightsProps) {
 
           {/* Exibir Plano Alimentar Gerado */}
           {mealPlanMutation.data && showMealPlan && (
-            <Card className="bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800" data-testid="meal-plan-result">
+            <Card className="bg-card border-primary/20" data-testid="meal-plan-result">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="font-semibold tracking-tight text-base flex items-center gap-2 text-[#000000] dark:text-green-100">
+                  <CardTitle className="font-semibold tracking-tight text-base flex items-center gap-2 text-foreground">
                     <UtensilsCrossed className="w-4 h-4 text-green-600" />
                     Sugestão de Plano Alimentar Personalizado
                   </CardTitle>
@@ -385,7 +385,7 @@ export default function AIInsights({ patient }: AIInsightsProps) {
                     if (skip && allSkip) return null;
                     return (
                       <div>
-                        <h4 className="font-semibold text-sm mb-3 flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                        <h4 className="font-semibold text-sm mb-3 flex items-center gap-2 text-foreground">
                           <span className="w-2 h-2 bg-green-600 rounded-full" />
                           {title}
                         </h4>
@@ -395,7 +395,7 @@ export default function AIInsights({ patient }: AIInsightsProps) {
                               <span className="shrink-0 w-6 h-6 rounded-full bg-green-600 text-white text-xs font-bold flex items-center justify-center mt-0.5">
                                 {idx + 1}
                               </span>
-                              <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300">
+                              <p className="text-sm leading-relaxed text-foreground">
                                 {option.replace(/^Opção\s*\d+:\s*/i, '')}
                               </p>
                             </div>
@@ -419,12 +419,12 @@ export default function AIInsights({ patient }: AIInsightsProps) {
 
                 {/* Observações Gerais */}
                 {mealPlanMutation.data.generalNotes && (
-                  <div className="pt-3 border-t border-green-200 dark:border-green-800">
-                    <h4 className="font-semibold text-sm mb-2 flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                  <div className="pt-3 border-t border-border">
+                    <h4 className="font-semibold text-sm mb-2 flex items-center gap-2 text-foreground">
                       <Lightbulb className="w-4 h-4 text-green-600" />
                       Observações e Recomendações
                     </h4>
-                    <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300" data-testid="meal-general-notes">
+                    <p className="text-sm leading-relaxed text-foreground" data-testid="meal-general-notes">
                       {mealPlanMutation.data.generalNotes}
                     </p>
                   </div>
@@ -464,7 +464,7 @@ export default function AIInsights({ patient }: AIInsightsProps) {
 
         {/* Perguntas Rápidas */}
         <div>
-          <h3 className="font-medium mb-3 dark:text-gray-200 text-[#fdffff]">Perguntas Rápidas</h3>
+          <h3 className="font-medium mb-3 text-foreground">Perguntas Rápidas</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {quickQuestions.map((quickQ, index) => (
               <Button
@@ -486,7 +486,7 @@ export default function AIInsights({ patient }: AIInsightsProps) {
 
         {/* Campo de Pergunta */}
         <div>
-          <h3 className="font-medium mb-3 dark:text-gray-200 text-[#fafbfd]">Faça uma Pergunta Específica</h3>
+          <h3 className="font-medium mb-3 text-foreground">Faça uma Pergunta Específica</h3>
           <div className="flex gap-2">
             <Input
               placeholder="Ex: Como o paciente reagiu às últimas orientações?"
@@ -521,7 +521,7 @@ export default function AIInsights({ patient }: AIInsightsProps) {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="prose prose-sm max-w-none">
+              <div className="max-w-none text-foreground">
                 <div className="whitespace-pre-wrap leading-relaxed" data-testid="ai-response-text">
                   <ReadableText text={askMutation.data.answer}/>
                 </div>
