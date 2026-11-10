@@ -310,8 +310,9 @@ Por favor, crie uma sugestão de plano alimentar personalizado com 3 opções po
       });
 
       const responseText = completion.choices[0].message.content || '';
-      const isComplete = responseText.includes('[ANAMNESE_COMPLETA]');
-      const cleanResponse = responseText.replace('[ANAMNESE_COMPLETA]', '').trim();
+      const completionMarker = /\[\s*ANAMNESE_COMPLETA\s*\]|\*\*ANAMNESE_COMPLETA\*\*/gi;
+      const isComplete = completionMarker.test(responseText);
+      const cleanResponse = responseText.replace(completionMarker, '').trim();
 
       return { response: cleanResponse, isComplete };
     } catch (error) {

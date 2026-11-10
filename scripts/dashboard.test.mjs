@@ -51,6 +51,10 @@ try {
   assert.equal(calls[0].searchParams.get('fields'), 'id,patient_id,from_me,date_created');
   assert.equal(calls[1].searchParams.get('offset'), '1000');
   assert.deepEqual(await reader.getDashboardMessageActivity([], now, now), []);
+  await reader.getPatientMessages('1',200,200);
+  assert.equal(calls.at(-1).searchParams.get('filter[patient_id][_eq]'),'1');
+  assert.equal(calls.at(-1).searchParams.get('limit'),'200');
+  assert.equal(calls.at(-1).searchParams.get('offset'),'200');
 
   let handlers, measurementHandlers, profileHandlers, planHandlers;
   const app = Object.fromEntries(['get', 'post', 'put', 'patch', 'delete', 'use'].map(method => [method, (path, ...callbacks) => { if (method === 'get' && path === '/api/dashboard/overview') handlers = callbacks; if(method==='post' && path==='/api/ai/meal-plan/:patientId')planHandlers=callbacks; if(method==='get' && path==='/api/patients/:id/profile') profileHandlers=callbacks; if(method==='post' && path==='/api/patients/:id/measurements') measurementHandlers=callbacks; }]));

@@ -13,7 +13,7 @@ export interface IStorage {
 
   // WhatsApp Messages (Directus collection)
   saveWhatsappMessage(message: InsertWhatsappMessage): Promise<WhatsappMessage>;
-  getPatientMessages(patientId: string, limit?: number): Promise<WhatsappMessage[]>;
+  getPatientMessages(patientId: string, limit?: number, offset?: number): Promise<WhatsappMessage[]>;
 
   // Patient lookup by WhatsApp number
   getPatientByWhatsapp(whatsappNumber: string, nutritionistId: string): Promise<Patient | undefined>;
@@ -135,7 +135,7 @@ export class MemStorage implements IStorage {
     throw new Error('WhatsApp messages are only supported in DirectusStorage');
   }
 
-  async getPatientMessages(patientId: string, limit?: number): Promise<WhatsappMessage[]> {
+  async getPatientMessages(patientId: string, limit?: number, offset?: number): Promise<WhatsappMessage[]> {
     throw new Error('WhatsApp messages are only supported in DirectusStorage');
   }
 

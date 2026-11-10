@@ -8,7 +8,7 @@ globalThis.audioTest = { transcript: 'No almoço comi arroz, feijão e frango.',
 const originalFetch = globalThis.fetch;
 try {
   await build({
-    stdin: { contents: `export {whatsappMessageHandler as handler} from './server/whatsapp-message-handler'; export {storage} from './server/storage'; export {PatientHistoryDirectusService} from './server/patient-history-directus'; export {openaiService as ai} from './server/openai-service'; export {twilioWhatsAppService as twilio} from './server/twilio-whatsapp-service';`, resolveDir: process.cwd() },
+    stdin: { contents: `export {whatsappMessageHandler as handler, WhatsAppMessageHandler} from './server/whatsapp-message-handler'; export {storage} from './server/storage'; export {PatientHistoryDirectusService} from './server/patient-history-directus'; export {openaiService as ai} from './server/openai-service'; export {twilioWhatsAppService as twilio} from './server/twilio-whatsapp-service';`, resolveDir: process.cwd() },
     bundle: true, platform: 'node', format: 'esm', packages: 'external', outfile: path.pathname.replace(/^\/([A-Z]:)/, '$1'),
     plugins: [{ name: 'offline', setup(b) {
       b.onResolve({ filter: /^(\.\/storage|\.\/server\/storage)$/ }, () => ({ path: 'storage', namespace: 'offline' }));
@@ -28,7 +28,7 @@ try {
         }` }));
     } }],
   });
-  const { handler, storage, ai, twilio } = await import(path.href);
+  const { handler, WhatsAppMessageHandler, storage, ai, twilio } = await import(path.href);
   const state = globalThis.audioTest, saved = [], sent = [];
   process.env.TWILIO_ACCOUNT_SID = 'ACoffline'; process.env.TWILIO_AUTH_TOKEN = 'offline';
   globalThis.fetch = async () => new Response(Buffer.from('OggSsynthetic'), { headers: { 'content-length': '13' } });
@@ -73,6 +73,15 @@ try {
   assert.equal(extracted.Anamnese_estruturada.hidratacao,'Bebe 2 litros por dia');
   assert.equal(extracted.Anamnese_estruturada.sono,undefined);assert.equal(extracted.Anamnese_estruturada.extra,undefined);
   assert.match(state.chat.at(-1).messages[0].content,/Anamnese_estruturada/);
+  assert.match(state.chat.at(-1).messages[0].content,/Não realiza a refeição/);
+  const runAnamnesisAgent=ai.runAnamnesisAgent.bind(ai);
+  for(const marker of ['[ANAMNESE_COMPLETA]','**ANAMNESE_COMPLETA**','[ anamnese_completa ]']){
+    state.responseContent=marker+'\nResumo final.';
+    const result=await runAnamnesisAgent([],'Não faço ceia');
+    assert.equal(result.isComplete,true);assert.equal(result.response,'Resumo final.');
+  }
+  state.responseContent='O que você come no almoço?';
+  assert.equal((await runAnamnesisAgent([],'Oi')).isComplete,false);
   let profileUpdate;
   storage.updatePatient=async(id,update)=>{profileUpdate=update;return update;};
   ai.runAnamnesisAgent=async()=>({isComplete:true,response:'Obrigado'});
@@ -82,6 +91,46 @@ try {
   assert.equal(profileUpdate.anamnesisSections.sono,'7 horas');
   assert.equal(profileUpdate.anamnesisSections.hidratacao,'2 litros');
   assert.equal(profileUpdate.anamnesisSections.objetivos,'Melhorar FTP');
+  const oldHistory=Array.from({length:260},(_,index)=>({id:index,from_me:index%2===1,message_body:index===0?'Meu nome é Paciente Exemplo.':`Relato de demonstração ${index}`,date_created:new Date(1700000000000+index*1000)}));
+  const pages=[];
+  storage.getPatientMessages=async(id,limit,offset=0)=>{pages.push({limit,offset});return [...oldHistory].reverse().slice(offset,offset+limit);};
+  const fullHistory=await handler.buildConversationHistory('long-history',null);
+  assert.equal(fullHistory.length,260);assert.equal(fullHistory[0].content,oldHistory[0].message_body);
+  assert.deepEqual(pages,[{limit:200,offset:0},{limit:200,offset:200}]);
+  assert.equal((await handler.buildConversationHistory('long-history',50)).length,50);
+  storage.getPatientMessages=async()=>{throw new Error('Offline history unavailable');};
+  await assert.rejects(()=>handler.buildConversationHistory('long-history',null));
+  const completeData={Nome_Completo:'Paciente Exemplo',Data_de_nascimento:'1990-01-01',Sexo:'feminino',Peso:65,Altura:163,Anamise_inicial:'Relato de demonstração.',Cafe_da_manha:'Ovos',Lanche_da_manha:'Não realiza a refeição',Almoco:'Arroz e feijão',Lanche_da_tarde:'Fruta',Janta:'Ovos',Ceia:'Não realiza a refeição'};
+  let currentPatient={id:'handoff-patient',nutritionistId:patient.nutritionistId,fullName:'Paciente 5511999990001',status:'Anamnese Inicial'};
+  storage.getPatientByWhatsappAny=async()=>currentPatient;
+  storage.getPatient=async()=>currentPatient;
+  storage.getPatientMessages=async(id,limit,offset=0)=>[...oldHistory].reverse().slice(offset,offset+limit);
+  storage.updatePatient=async(id,update)=>{currentPatient={...currentPatient,...update};return currentPatient;};
+  ai.runAnamnesisAgent=runAnamnesisAgent;
+  ai.extractPatientData=async history=>{assert.equal(history[0].content,oldHistory[0].message_body);return completeData;};
+  state.responseContent='**ANAMNESE_COMPLETA**\nObrigado. Seus dados foram registrados.';
+  await handler.handleIncomingMessage({senderNumber:'5511999990001',messageBody:'Não faço ceia',messageType:'text'});
+  assert.equal(currentPatient.status,'Acompanhamento');
+  assert.equal(currentPatient.lanche_da_manha,'Não realiza a refeição');
+  assert.equal(currentPatient.ceia,'Não realiza a refeição');
+  assert.doesNotMatch(sent.at(-1),/ANAMNESE_COMPLETA/);
+  let followupCalls=0;
+  ai.runFollowUpAgent=async()=>{followupCalls++;return 'Seguimos com o acompanhamento.';};
+  ai.runAnamnesisAgent=async()=>{throw new Error('Completed anamnesis must not restart');};
+  const restartedHandler=new WhatsAppMessageHandler();
+  await restartedHandler.handleIncomingMessage({senderNumber:'5511999990001',messageBody:'Olá novamente',messageType:'text'});
+  assert.equal(followupCalls,1);assert.equal(sent.at(-1),'Seguimos com o acompanhamento.');
+  ai.runAnamnesisAgent=async()=>({isComplete:true,response:'Anamnese concluída.'});
+  ai.extractPatientData=async()=>({...completeData,Ceia:null});
+  let incompleteUpdate;
+  storage.updatePatient=async(id,update)=>{incompleteUpdate=update;return update;};
+  const missingReply=await handler.handleAnamnesis({...patient,status:'Anamnese Inicial'},[],'Ainda não informei a ceia',false);
+  assert.match(missingReply,/preciso completar: ceia/);assert.equal(incompleteUpdate.status,undefined);
+  ai.extractPatientData=async()=>completeData;
+  storage.updatePatient=async()=>undefined;
+  const failedSave=await handler.handleAnamnesis({...patient,id:'failed-save'},[],'Tudo informado',false);
+  assert.match(failedSave,/não consegui confirmar o registro/);assert.equal(handler.patientStageCache.has('failed-save'),false);
+  console.log('Anamnesis checks passed: paginated full history, completion marker variants, skipped meals, required ceia, confirmed save and follow-up after restart (offline).');
   console.log('WhatsApp audio: Ogg/Opus parsing, authenticated download, transcription, Luna response, chat history and failure/size/URL handling passed (offline).');
 } finally {
   globalThis.fetch = originalFetch;

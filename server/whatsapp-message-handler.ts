@@ -217,7 +217,7 @@ export class WhatsAppMessageHandler {
         });
         aiResponse = 'Não consegui entender este áudio. Pode reenviar uma gravação mais clara ou enviar a mensagem em texto?';
       } else {
-        const conversationHistory = await this.buildConversationHistory(activePatient.id);
+        const conversationHistory = await this.buildConversationHistory(activePatient.id, activePatient.status === 'Anamnese Inicial' ? null : 50);
 
         await storage.saveWhatsappMessage({
           patient_id: activePatient.id,
@@ -371,11 +371,13 @@ export class WhatsAppMessageHandler {
 
         updateData.status = 'Acompanhamento';
 
-        await storage.updatePatient(patient.id, updateData);
+        const updatedPatient = await storage.updatePatient(patient.id, updateData);
+        if (updatedPatient?.status !== 'Acompanhamento') throw new Error('Não foi possível confirmar a mudança para acompanhamento.');
         this.patientStageCache.set(patient.id, { stage: 'Acompanhamento', updatedAt: Date.now() });
         console.log(`[MessageHandler] Patient ${patient.id} updated with anamnesis data, stage set to Acompanhamento (cached)`);
       } catch (extractErr) {
         console.error('[MessageHandler] Error extracting/saving anamnesis data:', extractErr);
+        return 'Recebi suas respostas, mas não consegui confirmar o registro da anamnese agora. Pode me enviar uma mensagem novamente em alguns instantes para eu tentar concluir, sem repetir as perguntas?';
       }
     }
 
@@ -446,6 +448,7 @@ export class WhatsAppMessageHandler {
       [!!(extractedData.Almoco || updateData.almoco || patient.almoco), 'almoço'],
       [!!(extractedData.Lanche_da_tarde || updateData.lanche_da_tarde || patient.lanche_da_tarde), 'lanche da tarde'],
       [!!(extractedData.Janta || updateData.janta || patient.janta), 'jantar'],
+      [!!(extractedData.Ceia || updateData.ceia || patient.ceia), 'ceia'],
     ];
 
     return required.filter(([hasValue]) => !hasValue).map(([, label]) => label);
@@ -516,10 +519,16 @@ export class WhatsAppMessageHandler {
 
   private async buildConversationHistory(
     patientId: string,
-    limit: number = 50
+    limit: number | null = 50
   ): Promise<{ role: 'user' | 'assistant'; content: string }[]> {
     try {
-      const directusMessages = await storage.getPatientMessages(patientId, limit);
+      // Anamnesis needs the initial answers too; follow-up keeps its recent-message window.
+      const directusMessages: WhatsappMessage[] = [];
+      for (let offset = 0; ; offset += 200) {
+        const batch = await storage.getPatientMessages(patientId, limit ?? 200, offset);
+        directusMessages.push(...batch);
+        if (limit !== null || batch.length < 200) break;
+      }
 
       const directusHistory: { role: 'user' | 'assistant'; content: string; timestamp: number }[] = [];
       if (directusMessages && directusMessages.length > 0) {
@@ -548,13 +557,14 @@ export class WhatsAppMessageHandler {
 
       merged.sort((a, b) => a.timestamp - b.timestamp);
 
-      const result = merged.slice(-limit).map(m => ({ role: m.role, content: m.content }));
+      const result = (limit === null ? merged : merged.slice(-limit)).map(m => ({ role: m.role, content: m.content }));
 
       console.log(`[MessageHandler] Built history for patient ${patientId}: ${directusHistory.length} from Directus, ${cached.length} from cache, ${result.length} merged`);
 
       return result;
     } catch (error) {
       console.error('[MessageHandler] Error building conversation history:', error);
+      if (limit === null) throw error;
       const cached = this.conversationCache.get(patientId) || [];
       if (cached.length > 0) {
         console.log(`[MessageHandler] Falling back to cache: ${cached.length} messages`);
