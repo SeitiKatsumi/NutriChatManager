@@ -391,8 +391,8 @@ export default function AIInsights({ patient }: AIInsightsProps) {
                         </h4>
                         <div className="space-y-2" data-testid={testId}>
                           {options.map((option, idx) => (
-                            <div key={idx} className="flex gap-2 items-start bg-white dark:bg-green-900/20 rounded-md p-2 border border-green-100 dark:border-green-800">
-                              <span className="shrink-0 w-6 h-6 rounded-full bg-green-600 text-white text-xs font-bold flex items-center justify-center mt-0.5">
+                            <div key={idx} className="flex gap-2 items-start bg-background text-foreground rounded-md p-2 border border-border">
+                              <span className="shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center mt-0.5">
                                 {idx + 1}
                               </span>
                               <p className="text-sm leading-relaxed text-foreground">
